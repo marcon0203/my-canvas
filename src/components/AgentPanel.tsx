@@ -2,7 +2,8 @@ import { useEffect, useRef, useState } from 'react';
 import { Icon } from '@/ui/Icon';
 import { useUi } from '@/store/ui';
 import { useAgent } from '@/store/agent';
-import { skillsFor } from '@/domain/agent/skills';
+import { personaById, skillsOf } from '@/domain/agent/roster';
+import type { Persona } from '@/domain/agent/roster';
 import type { AgentMessage, Proposal } from '@/domain/agent/types';
 
 /**
@@ -19,6 +20,8 @@ export function AgentPanel() {
   const stop = useAgent((s) => s.stop);
   const reset = useAgent((s) => s.reset);
   const syncStep = useAgent((s) => s.syncStep);
+  const agentId = useAgent((s) => s.agentId);
+  const persona = personaById(agentId);
   const [draft, setDraft] = useState('');
   const logRef = useRef<HTMLDivElement>(null);
 
@@ -42,7 +45,11 @@ export function AgentPanel() {
   return (
     <aside className="agent">
       <div className="agent__h">
-        <span style={{ fontSize: 14, fontWeight: 600 }}>Agent</span>
+        <span className={`aface aface--${persona.id}`} aria-hidden><Icon name={persona.icon} /></span>
+        <span className="agent__who">
+          <span className="agent__name">{persona.name}</span>
+          <span className="agent__role">{persona.en}</span>
+        </span>
         <div className="spacer" />
         <button className="tbtn" title="新会话" onClick={reset}><Icon name="plus" />New</button>
         <button className="tbtn" title="会话历史" aria-label="会话历史" style={{ padding: '0 8px' }}
@@ -54,13 +61,16 @@ export function AgentPanel() {
           ? messages.map((m) => <MessageView key={m.id} msg={m} />)
           : (
             <>
-              <div className="agent__hi">Hi~ I am your AI assistant</div>
-              <div className="agent__lead">Based on the Skills combination,<br />I can help you:</div>
-              {skillsFor(step).map((sk) => (
-                <button key={sk.kind + sk.name} className="skill" onClick={() => send(sk.name, sk.kind)}>
+              <div className="agent__hi">{persona.tagline}</div>
+              <div className="agent__lead">{persona.greeting}</div>
+              {skillsOf(persona).map((sk) => (
+                <button key={sk.kind} className="skill" onClick={() => send(sk.name, sk.kind)}>
                   <Icon name={sk.icon} />{sk.name}
                 </button>
               ))}
+              <p className="agent__note">
+                别的活儿也可以直接说 —— 不归我管的，我转给对的那位。
+              </p>
             </>
           )}
       </div>
@@ -91,13 +101,38 @@ export function AgentPanel() {
 
 function MessageView({ msg }: { msg: AgentMessage }) {
   if (msg.who === 'me') return <div className="amsg amsg--me">{msg.text}</div>;
+  const who = msg.agentId ? personaById(msg.agentId) : undefined;
   return (
     <div className="amsg amsg--ai">
+      {who && <SpeakerTag p={who} />}
       {!!msg.steps?.length && <StepList steps={msg.steps} done={msg.stepDone ?? 0} />}
       {msg.text
         ? <div className="amsg__body">{renderRich(msg.text)}{msg.streaming && <span className="caret" />}</div>
         : msg.streaming && !msg.steps?.length ? <span className="caret" /> : null}
+      {msg.handoff && <HandoffCard to={personaById(msg.handoff.to)} />}
       {msg.proposal && <ProposalCard msgId={msg.id} p={msg.proposal} verdict={msg.verdict ?? 'pending'} />}
+    </div>
+  );
+}
+
+/** 说话的是谁 —— 一轮会话里可能换人（转交） */
+function SpeakerTag({ p }: { p: Persona }) {
+  return (
+    <div className="aspeak">
+      <span className={`aface aface--${p.id}`} aria-hidden><Icon name={p.icon} /></span>
+      <span className="aspeak__n">{p.name}</span>
+      <span className="aspeak__r">{p.tagline}</span>
+    </div>
+  );
+}
+
+/** 转交卡：活儿交给了谁，界面同时跳到它的主场 */
+function HandoffCard({ to }: { to: Persona }) {
+  return (
+    <div className="ahand">
+      <Icon name="right" />
+      <span className={`aface aface--${to.id}`} aria-hidden><Icon name={to.icon} /></span>
+      <span className="ahand__t">转交给 <strong>{to.name}</strong> · {to.tagline}</span>
     </div>
   );
 }

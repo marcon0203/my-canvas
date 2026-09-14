@@ -1,6 +1,8 @@
 import { create } from 'zustand';
 import { runAgent } from '@/api/agent';
 import type { AgentContext } from '@/domain/agent/context';
+import type { AgentId } from '@/domain/agent/roster';
+import { personaById, personaForStep } from '@/domain/agent/roster';
 import type { AgentMessage, IntentKind, Proposal } from '@/domain/agent/types';
 import { useProject } from './project';
 import { useUi } from './ui';
@@ -8,6 +10,9 @@ import { useUi } from './ui';
 /**
  * Agent 会话态：消息、流式进度、待采纳产物。不进撤销历史 ——
  * 撤销的粒度是「采纳的那份产物」，由 project.applyAgentPatch 记一条。
+ *
+ * 一个环节一位 Agent（见 domain/agent/roster）。当班的接不了的活儿会转交，
+ * 转交 = 跳到接手方的主场环节 + 由它重跑同一句输入。
  */
 
 export interface AgentState {
@@ -16,7 +21,10 @@ export interface AgentState {
   runningId: number | null;
   /** 这轮会话属于哪个环节 —— 换环节开新会话 */
   step: string;
-  send: (text: string, kind?: IntentKind) => void;
+  /** 当班的 Agent */
+  agentId: AgentId;
+  /** relay=true 时不再冒一次用户气泡：转交是同一个请求换人接，不是新请求 */
+  send: (text: string, kind?: IntentKind, relayed?: boolean) => void;
   /** 环节变了就清空。send 会先认领当前环节，所以「跳页并发起」不会被清掉 */
   syncStep: (step: string) => void;
   stop: () => void;
@@ -29,7 +37,7 @@ let seq = 1;
 let abort: AbortController | null = null;
 
 /** 从两个 store 组装 Agent 看到的项目快照 */
-function snapshot(input: string): AgentContext {
+function snapshot(input: string, agentId: AgentId): AgentContext {
   const p = useProject.getState();
   const u = useUi.getState();
   return {
@@ -41,6 +49,7 @@ function snapshot(input: string): AgentContext {
       shotId: u.shotSel, blockId: u.blockEdit,
     },
     input,
+    agentId,
   };
 }
 
@@ -48,25 +57,28 @@ export const useAgent = create<AgentState>((set, get) => ({
   messages: [],
   runningId: null,
   step: '',
+  agentId: 'writer',
 
   syncStep: (step) => {
     if (get().step === step) return;
     get().stop();
-    set({ messages: [], runningId: null, step });
+    set({ messages: [], runningId: null, step, agentId: personaForStep(step).id });
   },
 
-  send: (text, kind) => {
+  send: (text, kind, relayed = false) => {
     get().stop();
     const meId = seq++;
     const aiId = seq++;
     // 认领当前环节：随后 AgentPanel 的 syncStep 就不会把这轮清掉
     const step = useUi.getState().step;
+    const sameSession = get().step === step;
+    const agentId = sameSession ? get().agentId : personaForStep(step).id;
     set((s) => ({
-      step,
+      step, agentId,
       messages: [
-        ...(s.step === step ? s.messages : []),
-        { id: meId, who: 'me', text },
-        { id: aiId, who: 'ai', text: '', streaming: true, stepDone: 0 },
+        ...(sameSession ? s.messages : []),
+        ...(relayed ? [] : [{ id: meId, who: 'me' as const, text }]),
+        { id: aiId, who: 'ai', agentId, text: '', streaming: true, stepDone: 0 },
       ],
       runningId: aiId,
     }));
@@ -78,8 +90,11 @@ export const useAgent = create<AgentState>((set, get) => ({
       messages: s.messages.map((m) => (m.id === aiId ? fn(m) : m)),
     }));
 
+    // 转交后要接着跑的那一轮
+    let relay: { text: string; kind: IntentKind } | null = null;
+
     void (async () => {
-      for await (const ev of runAgent(snapshot(text), kind, ctrl.signal)) {
+      for await (const ev of runAgent(snapshot(text, agentId), kind, ctrl.signal)) {
         switch (ev.t) {
           case 'plan':
             patch((m) => ({ ...m, steps: ev.plan.steps }));
@@ -93,6 +108,16 @@ export const useAgent = create<AgentState>((set, get) => ({
           case 'delta':
             patch((m) => ({ ...m, text: m.text + ev.text }));
             break;
+          case 'handoff': {
+            patch((m) => ({ ...m, handoff: ev.handoff }));
+            const to = personaById(ev.handoff.to);
+            const nextStep = to.steps[0]!;
+            // 跳到接手方的主场，再由它重跑同一句输入 —— 转交不是把活儿丢掉
+            useUi.getState().setStep(nextStep as ReturnType<typeof useUi.getState>['step']);
+            set({ step: nextStep, agentId: to.id });
+            relay = { text, kind: ev.handoff.kind };
+            break;
+          }
           case 'done':
             patch((m) => ({ ...m, streaming: false }));
             set({ runningId: null });
@@ -103,6 +128,7 @@ export const useAgent = create<AgentState>((set, get) => ({
             break;
         }
       }
+      if (relay && !ctrl.signal.aborted) get().send(relay.text, relay.kind, true);
     })();
   },
 
@@ -124,7 +150,8 @@ export const useAgent = create<AgentState>((set, get) => ({
 
   reset: () => {
     get().stop();
-    set({ messages: [], runningId: null, step: useUi.getState().step });
+    const step = useUi.getState().step;
+    set({ messages: [], runningId: null, step, agentId: personaForStep(step).id });
   },
 }));
 

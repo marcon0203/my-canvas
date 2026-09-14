@@ -1,6 +1,7 @@
 import type { Asset, AssetGroup } from '@/domain/assets/model';
 import type { Shot } from '@/domain/shots/model';
 import type { Act, DocBlock } from '@/domain/story/model';
+import type { AgentId } from './roster';
 
 /**
  * Agent 的可执行意图。技能卡与自由输入都归一到这张表，
@@ -74,11 +75,22 @@ export interface Plan {
   readonly blocked?: string;
 }
 
+/** 转交：当班 Agent 接不了，交给对的那位 */
+export interface Handoff {
+  readonly from: AgentId;
+  readonly to: AgentId;
+  readonly kind: IntentKind;
+}
+
 /** 一条消息。run 消息承载步骤卡与产物卡 */
 export interface AgentMessage {
   readonly id: number;
   readonly who: 'me' | 'ai';
+  /** 哪位 Agent 说的 —— 一条会话里可能有多位，转交后由新人接着说 */
+  readonly agentId?: AgentId;
   readonly text: string;
+  /** 这轮是一次转交，不是一次执行 */
+  readonly handoff?: Handoff;
   /** ai 消息：这轮跑了哪些步骤，以及跑到第几步 */
   readonly steps?: readonly PlanStep[];
   readonly stepDone?: number;

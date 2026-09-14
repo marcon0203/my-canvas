@@ -18,6 +18,7 @@ function ctx(input = '', over: Partial<AgentContext> = {}): AgentContext {
     acts: p.acts, blocks: p.blocks, assets: p.assets, shots: p.shots,
     sel: { step: 'outline', beatId: 'b3', assetId: 'c1', shotId: 's1-1', blockId: null },
     input,
+    agentId: 'writer',
     ...over,
   };
 }

@@ -1,7 +1,8 @@
 import type { AgentContext } from '@/domain/agent/context';
 import { plan } from '@/domain/agent/plans';
 import { route } from '@/domain/agent/router';
-import type { IntentKind, Plan } from '@/domain/agent/types';
+import { canHandle, ownerOf, personaById } from '@/domain/agent/roster';
+import type { Handoff, IntentKind, Plan } from '@/domain/agent/types';
 
 /**
  * Agent 传输层：本地模拟一次流式应答。
@@ -15,6 +16,8 @@ export type AgentEvent =
   | { t: 'delta'; text: string }
   /** 产物在正文说完之后才交付 —— 先解释，再给东西 */
   | { t: 'proposal'; proposal: NonNullable<Plan['proposal']> }
+  /** 当班 Agent 接不了，交给对的那位 */
+  | { t: 'handoff'; handoff: Handoff }
   | { t: 'done' }
   | { t: 'aborted' };
 
@@ -45,6 +48,28 @@ export async function* runAgent(
   signal: AbortSignal,
 ): AsyncGenerator<AgentEvent> {
   const resolved = kind ?? route(ctx.input).kind;
+  const me = personaById(ctx.agentId);
+
+  // 接不了就转交 —— 当班的先说一句，再把人交出去，不假装自己会
+  if (!canHandle(me, resolved)) {
+    const to = ownerOf(resolved)!;
+    const handoff: Handoff = { from: me.id, to: to.id, kind: resolved };
+    const line = me.handoff.replace('%s', `**${to.name}**`);
+    yield { t: 'plan', plan: { kind: resolved, steps: [], reply: line } };
+    try {
+      for (let i = 0; i < line.length; i += CHARS_PER_TICK) {
+        await sleep(TICK_MS, signal);
+        yield { t: 'delta', text: line.slice(i, i + CHARS_PER_TICK) };
+      }
+    } catch (e) {
+      if (e === ABORT) { yield { t: 'aborted' }; return; }
+      throw e;
+    }
+    yield { t: 'handoff', handoff };
+    yield { t: 'done' };
+    return;
+  }
+
   const p = plan(resolved, ctx);
   // 先只下发步骤：产物等正文说完再交付
   yield { t: 'plan', plan: { ...p, proposal: undefined } };

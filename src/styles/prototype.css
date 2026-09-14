@@ -783,6 +783,45 @@ body { background: var(--color-bg-canvas); overflow: hidden; }
 .tbtn--pri { background: var(--color-accent); color: var(--color-on-accent); border-color: var(--color-accent); }
 .tbtn--pri:hover { background: var(--color-accent-hover); border-color: var(--color-accent-hover); }
 
+/* ---- Agent 班底：一个环节一位，各有专长 ---- */
+.aface {
+  display: inline-flex; align-items: center; justify-content: center; flex: 0 0 auto;
+  width: 22px; height: 22px; border-radius: var(--radius-full);
+  background: var(--color-bg-muted); color: var(--color-text-secondary);
+}
+.aface svg { width: 12px; height: 12px; }
+/* 五位各占一条 data 色，与画布/图表同一套取色 */
+.aface--writer   { background: var(--color-data-1-soft); color: var(--color-data-1); }
+.aface--art      { background: var(--color-data-2-soft); color: var(--color-data-2); }
+.aface--dp       { background: var(--color-data-3-soft); color: var(--color-data-3); }
+.aface--editor   { background: var(--color-data-4-soft); color: var(--color-data-4); }
+.aface--producer { background: var(--color-data-5-soft); color: var(--color-data-5); }
+
+.agent__who { display: flex; align-items: baseline; gap: var(--space-2); min-width: 0; }
+.agent__name { font-size: 14px; font-weight: 600; color: var(--color-text-primary); }
+.agent__role { font-size: 11px; color: var(--color-text-tertiary); }
+.agent__note {
+  margin: var(--space-4) 0 0; font-size: 11px; line-height: 1.6;
+  color: var(--color-text-tertiary);
+}
+
+.aspeak { display: flex; align-items: center; gap: var(--space-2); margin-bottom: var(--space-2); min-width: 0; }
+.aspeak__n { font-size: 12px; font-weight: 600; color: var(--color-text-primary); flex: 0 0 auto; }
+.aspeak__r {
+  font-size: 11px; color: var(--color-text-tertiary);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+
+.ahand {
+  display: flex; align-items: center; gap: var(--space-2);
+  margin-top: var(--space-3); padding: var(--space-2) var(--space-3);
+  border: 1px dashed var(--color-border-default); border-radius: var(--radius-card);
+  background: var(--color-bg-muted);
+}
+.ahand > svg { width: 12px; height: 12px; color: var(--color-text-tertiary); flex: 0 0 auto; }
+.ahand__t { font-size: 12px; color: var(--color-text-secondary); overflow-wrap: anywhere; }
+.ahand__t strong { color: var(--color-text-primary); }
+
 /* ==========================================================================
    首页 —— macOS 大标题 + Apple TV 式 Hero 卡 + 彩色模式卡
    ========================================================================== */

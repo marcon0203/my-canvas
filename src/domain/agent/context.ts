@@ -1,6 +1,7 @@
 import type { Asset, AssetGroup } from '@/domain/assets/model';
 import type { Shot } from '@/domain/shots/model';
 import type { Act, DocBlock } from '@/domain/story/model';
+import type { AgentId } from './roster';
 
 /**
  * Agent 看到的项目快照 —— 只读。
@@ -28,6 +29,8 @@ export interface AgentContext {
   };
   /** 用户这一轮说了什么（技能卡触发时为空） */
   readonly input: string;
+  /** 当班的是哪位 Agent */
+  readonly agentId: AgentId;
 }
 
 export const ctxAssets = (c: AgentContext): Asset[] =>

@@ -109,7 +109,8 @@ describe('store/agent', () => {
   });
 
   it('换环节开新会话，但「跳页并直接发起」的那轮要保住', async () => {
-    useAgent.getState().send('算一下成本');
+    // 用当班（摄影指导）自己能接的活儿，免得被转交搅进来 —— 转交另有用例覆盖
+    useAgent.getState().send('补写提示词');
     await settle();
     expect(useAgent.getState().messages.length).toBe(2);
 
@@ -121,5 +122,55 @@ describe('store/agent', () => {
     useAgent.getState().syncStep('assets');                      // 面板随后同步
     expect(useAgent.getState().messages.length).toBe(2);         // 这轮没被清掉
     useAgent.getState().stop();
+  });
+});
+
+describe('store/agent · 转交', () => {
+  it('问错人不会卡住：当班的说一句，转给对的那位，并跳到它的主场', async () => {
+    useUi.setState({ step: 'outline' });          // 编剧当班
+    useAgent.getState().reset();
+    expect(useAgent.getState().agentId).toBe('writer');
+
+    useAgent.getState().send('批量转视频');        // 这是摄影指导的活儿
+    await settle();
+
+    const msgs = useAgent.getState().messages;
+    const handed = msgs.find((m) => m.handoff);
+    expect(handed?.handoff).toMatchObject({ from: 'writer', to: 'dp', kind: 'video.batch' });
+    expect(handed?.agentId).toBe('writer');       // 转交的话是编剧说的
+
+    // 转交后：当班换人、界面跳到分镜、并且真的把活儿干了
+    expect(useAgent.getState().agentId).toBe('dp');
+    expect(useUi.getState().step).toBe('storyboard');
+    const last = [...useAgent.getState().messages].reverse().find((m) => m.who === 'ai')!;
+    expect(last.agentId).toBe('dp');
+    expect(last.proposal).toBeTruthy();
+  });
+
+  it('转交不丢上下文：交接前后的消息都留在同一条会话里', async () => {
+    useUi.setState({ step: 'outline' });
+    useAgent.getState().reset();
+    useAgent.getState().send('批量转视频');
+    await settle();
+    const msgs = useAgent.getState().messages;
+    expect(msgs.filter((m) => m.who === 'ai').map((m) => m.agentId)).toEqual(['writer', 'dp']);
+    // 同一个请求换人接，用户那句话只该冒一次泡
+    expect(msgs.filter((m) => m.who === 'me')).toHaveLength(1);
+  });
+
+  it('当班的自己能接的活儿不转交', async () => {
+    useUi.setState({ step: 'outline' });
+    useAgent.getState().reset();
+    useAgent.getState().send('延展这一场的剧情走向', 'outline.expand');
+    await settle();
+    expect(useAgent.getState().messages.some((m) => m.handoff)).toBe(false);
+    expect(useAgent.getState().agentId).toBe('writer');
+  });
+
+  it('换环节自动换当班的 Agent', () => {
+    useAgent.getState().syncStep('assets');
+    expect(useAgent.getState().agentId).toBe('art');
+    useAgent.getState().syncStep('editing');
+    expect(useAgent.getState().agentId).toBe('editor');
   });
 });
