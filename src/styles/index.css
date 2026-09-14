@@ -1,0 +1,7 @@
+/* 引入顺序即分层顺序，不要调换 */
+@import "./tokens.primitive.css";
+@import "tailwindcss";
+@import "./tokens.semantic.css";
+@import "./tokens.component.css";
+@import "./base.css";
+@import "./prototype.css";

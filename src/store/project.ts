@@ -1,0 +1,251 @@
+import { create } from 'zustand';
+import { immer } from 'zustand/middleware/immer';
+import { useShallow } from 'zustand/react/shallow';
+import { temporal } from 'zundo';
+import type { Asset, AssetView, Rig, CineKey } from '@/domain/assets/model';
+import { defaultRig, lockAsset, unlockAsset, viewRig } from '@/domain/assets/model';
+import type { Shot, Verdict } from '@/domain/shots/model';
+import { addShot as addShotAt } from '@/domain/shots/model';
+import type { Intent } from '@/domain/prompt/vocabulary';
+import { applyIntentToView, RIG_COPY_KEYS } from '@/domain/prompt/apply';
+import type { ProjectBootstrap } from '@/api/mock';
+import type { Act, DocBlock } from '@/mock/project';
+
+export type AssetGroup = '角色' | '场景' | '道具';
+
+/** 项目内容态：全部可撤销（产品无确认闸口，靠历史兜底） */
+export interface ProjectState {
+  proj: string;
+  credits: number;
+  style: string;
+  ratio: string;
+  stylePrompt: string;
+  styles: string[];
+  acts: Act[];
+  alts: Record<string, string[]>;
+  blocks: DocBlock[];
+  assets: Record<AssetGroup, Asset[]>;
+  shots: Shot[];
+  /** 服务端能力配置（mock 下发） */
+  models: string[];
+  ratios: string[];
+  /** 总览画布 PIN */
+  pins: { id: string; n: string }[];
+  /** 积分预算（消耗 = 预算 - 余额） */
+  budget: number;
+  /** 已注入的项目 ID（切换项目时以此判断是否需要重新拉取） */
+  hydratedFor?: string;
+  /* ---- 内容变更 ---- */
+  hydrate: (b: ProjectBootstrap) => void;
+  spend: (n: number) => void;
+  setStyle: (s: string) => void;
+  updateBlock: (id: string, body: string) => void;
+  setViewStyle: (assetId: string, viewName: string, style: string) => void;
+  genAssetView: (assetId: string, viewName: string) => void;
+  lockAsset: (assetId: string) => void;
+  unlockAsset: (assetId: string) => void;
+  addAssetView: (assetId: string, name: string, style: string, prompt: string) => void;
+  applyRigToPeers: (assetId: string, viewName: string) => void;
+  patchViewRig: (assetId: string, viewName: string, patch: Partial<Rig>) => void;
+  setViewGen: (assetId: string, viewName: string, gen: boolean) => void;
+  patchShotRig: (shotId: string, patch: Partial<Rig>) => void;
+  applyIntentToAssetView: (assetId: string, viewName: string, it: Intent) => void;
+  setShotField: (shotId: string, patch: Partial<Pick<Shot, 'own' | 'model' | 'batch' | 'ratio' | 'style' | 'dur' | 'desc' | 'custom' | 'ejected' | 'keyIdx' | 'vid'>>) => void;
+  toggleShotRef: (shotId: string, aid: string) => void;
+  setShotRefImg: (shotId: string, ref: string) => void;
+  commitRun: (shotId: string) => void;
+  setVerdict: (shotId: string, v: Verdict, extraTakes?: number) => void;
+  genKey: (shotId: string) => void;
+  genAllKeys: () => void;
+  batchVidStart: () => void;
+  batchVidDone: () => void;
+  expandAlts: (beatId: string, alts: string[]) => void;
+  addShot: (sceneKey: string) => string | undefined;
+  deleteShot: (id: string) => void;
+  batchRef: () => void;
+}
+
+/** 深比较（跳过长字符串：dataURL 姿态图不进历史判断） */
+const contentEqual = (a: ProjectState, b: ProjectState): boolean => {
+  const strip = (x: unknown) => JSON.stringify(x, (_k, v) =>
+    typeof v === 'string' && v.length > 512 ? '<long>' : v);
+  return strip([a.blocks, a.assets, a.shots, a.acts, a.alts]) === strip([b.blocks, b.assets, b.shots, b.acts, b.alts]);
+};
+
+export const useProject = create<ProjectState>()(
+  temporal(
+    immer((set) => ({
+      proj: '',
+      credits: 0,
+      style: '',
+      ratio: '9:16',
+      stylePrompt: '',
+      styles: [],
+      acts: [],
+      alts: {},
+      blocks: [],
+      assets: { 角色: [], 场景: [], 道具: [] },
+      shots: [],
+      models: [],
+      ratios: [],
+      pins: [],
+      budget: 0,
+
+      hydrate: (b) => set((s) => {
+        s.proj = b.project.proj;
+        s.credits = b.project.credits;
+        s.style = b.project.style;
+        s.ratio = b.project.ratio;
+        s.stylePrompt = b.project.stylePrompt;
+        s.styles = [...b.project.styles];
+        s.acts = b.project.acts;
+        s.blocks = b.project.blocks;
+        s.assets = b.project.assets;
+        s.shots = b.project.shots;
+        s.models = [...b.config.models];
+        s.ratios = [...b.config.ratios];
+        s.pins = [...b.project.pins];
+        s.budget = b.project.budget;
+        s.hydratedFor = b.project.id;
+      }),
+
+      spend: (n) => set((s) => { s.credits = Math.max(0, s.credits - n); }),
+      setStyle: (v) => set((s) => { s.style = v; }),
+      updateBlock: (id, body) => set((s) => { const b = s.blocks.find((x) => x.id === id); if (b) b.body = body; }),
+
+      setViewStyle: (assetId, viewName, style) => set((s) => {
+        findView(s.assets, assetId, viewName)!.style = style;
+      }),
+      genAssetView: (assetId, viewName) => set((s) => {
+        const v = findView(s.assets, assetId, viewName)!;
+        v.gen = true;
+        v.redo += 1;
+        s.credits = Math.max(0, s.credits - 2);
+      }),
+      setViewGen: (assetId, viewName, gen) => set((s) => {
+        findView(s.assets, assetId, viewName)!.gen = gen;
+      }),
+
+      lockAsset: (assetId) => set((s) => {
+        const a = findAsset(s.assets, assetId)!;
+        lockAsset(a);
+        for (const shot of s.shots) {
+          if (shot.refs.includes(a.aid)) shot.refVer[a.aid] = a.ver;
+        }
+      }),
+      unlockAsset: (assetId) => set((s) => { unlockAsset(findAsset(s.assets, assetId)!); }),
+
+      addAssetView: (assetId, name, style, prompt) => set((s) => {
+        const a = findAsset(s.assets, assetId)!;
+        a.views.push({ name, style, gen: true, redo: 0, prompt, rig: defaultRig(name) });
+        s.credits = Math.max(0, s.credits - 2);
+      }),
+
+      applyRigToPeers: (assetId, viewName) => set((s) => {
+        const a = findAsset(s.assets, assetId)!;
+        const src = viewRig(a.views.find((x) => x.name === viewName)!);
+        for (const peer of a.views) {
+          if (peer.name === viewName) continue;
+          const r = viewRig(peer);
+          for (const k of RIG_COPY_KEYS) (r[k] as unknown) = src[k];
+        }
+      }),
+
+      patchViewRig: (assetId, viewName, patch) => set((s) => {
+        Object.assign(viewRig(findView(s.assets, assetId, viewName)!), patch);
+      }),
+      patchShotRig: (shotId, patch) => set((s) => {
+        Object.assign(s.shots.find((x) => x.id === shotId)!.rig, patch);
+      }),
+      applyIntentToAssetView: (assetId, viewName, it) => set((s) => {
+        applyIntentToView(findView(s.assets, assetId, viewName)!, it);
+      }),
+
+      setShotField: (shotId, patch) => set((s) => {
+        Object.assign(s.shots.find((x) => x.id === shotId)!, patch);
+      }),
+      toggleShotRef: (shotId, aid) => set((s) => {
+        const shot = s.shots.find((x) => x.id === shotId)!;
+        const i = shot.refs.indexOf(aid);
+        if (i >= 0) {
+          shot.refs.splice(i, 1);
+          delete shot.refVer[aid];
+        } else {
+          shot.refs.push(aid);
+          const a = allAssets(s.assets).find((x) => x.aid === aid);
+          shot.refVer[aid] = a ? Math.max(1, a.ver) : 1;
+        }
+      }),
+      setShotRefImg: (shotId, ref) => set((s) => {
+        const shot = s.shots.find((x) => x.id === shotId)!;
+        if (ref) shot.refImg = ref;
+        else delete shot.refImg;
+      }),
+
+      commitRun: (shotId) => set((s) => {
+        const shot = s.shots.find((x) => x.id === shotId)!;
+        shot.takes += 2;
+        shot.key = true;
+      }),
+      setVerdict: (shotId, v, extraTakes = 0) => set((s) => {
+        const shot = s.shots.find((x) => x.id === shotId)!;
+        shot.verdict = v;
+        if (v === 'ok') { shot.vid = 'ok'; shot.key = true; if (!shot.takes) shot.takes = 4; }
+        if (extraTakes) shot.takes += extraTakes;
+      }),
+
+      genKey: (shotId) => set((s) => {
+        const shot = s.shots.find((x) => x.id === shotId)!;
+        shot.key = true;
+        shot.takes += 2;
+        s.credits = Math.max(0, s.credits - 2);
+      }),
+      genAllKeys: () => set((s) => {
+        for (const shot of s.shots) shot.key = true;
+        s.credits = Math.max(0, s.credits - 10);
+      }),
+      batchVidStart: () => set((s) => {
+        for (const shot of s.shots) {
+          if (shot.vid === 'none') { shot.vid = 'run'; shot.takes += 4; }
+        }
+        s.credits = Math.max(0, s.credits - 24);
+      }),
+      batchVidDone: () => set((s) => {
+        for (const shot of s.shots) {
+          if (shot.vid === 'run') { shot.vid = 'ok'; shot.key = true; }
+        }
+      }),
+
+      expandAlts: (beatId, alts) => set((s) => { s.alts[beatId] = alts; }),
+      addShot: (sceneKey) => {
+        let id: string | undefined;
+        set((s) => { id = addShotAt(s.shots, sceneKey).id; });
+        return id;
+      },
+      deleteShot: (id) => set((s) => {
+        const i = s.shots.findIndex((x) => x.id === id);
+        if (i >= 0) s.shots.splice(i, 1);
+      }),
+      batchRef: () => set((s) => {
+        for (const a of allAssets(s.assets)) {
+          for (const v of a.views) v.gen = true;
+        }
+        s.credits = Math.max(0, s.credits - 18);
+      }),
+    })),
+    { limit: 50, equality: (past, current) => contentEqual(past as ProjectState, current as ProjectState) },
+  ),
+);
+
+/* ---- 内部查找 ---- */
+type Assets = Record<AssetGroup, Asset[]>;
+export const allAssets = (assets: Assets): Asset[] => [...assets.角色, ...assets.场景, ...assets.道具];
+const findAsset = (assets: Assets, id: string): Asset | undefined => allAssets(assets).find((a) => a.id === id);
+const findView = (assets: Assets, assetId: string, viewName: string): AssetView | undefined =>
+  findAsset(assets, assetId)?.views.find((x) => x.name === viewName);
+
+/** 便捷 hooks（树/检查器共用）。allAssets 每次建新数组，必须配 useShallow，否则无限重渲染 */
+export const useAssetList = (): Asset[] => useProject(useShallow((s) => allAssets(s.assets)));
+export const useAssetById = (id: string): Asset | undefined => useAssetList().find((a) => a.id === id);
+export const useAssetByAid = (aid: string): Asset | undefined => useAssetList().find((a) => a.aid === aid);
+export type { Asset, AssetView, Rig, CineKey, Shot };

@@ -1,0 +1,115 @@
+/* ==========================================================================
+   第 1 层 · 原始值 PRIMITIVE
+   取自 asset-locking-studio 原型（Apple 系统色体系）。
+   纯数值，不带任何含义。业务代码与组件一律不得直接引用本层。
+   ========================================================================== */
+:root {
+  /* -- 强调蓝（iOS System Blue，唯一强调色）---------------------------- */
+  --blue-50:  rgba(0, 122, 255, .10);
+  --blue-100: rgba(0, 122, 255, .14);
+  --blue-500: #007AFF;
+  --blue-600: #0062D9;
+  --blue-700: #004FB8;
+  --blue-dark-500: #0A84FF;   /* 深色模式下的蓝，对比度更高 */
+  --blue-dark-400: #409CFF;
+
+  /* -- 中性阶（Apple 灰。描边刻意用半透明黑，叠在任何底色上都自然）------ */
+  --neutral-0:   #FFFFFF;
+  --neutral-25:  #F7F7F9;
+  --neutral-50:  #F5F5F7;
+  --neutral-100: #E9E9EB;
+  --neutral-150: rgba(0, 0, 0, .08);
+  --neutral-200: rgba(0, 0, 0, .12);
+  --neutral-300: rgba(0, 0, 0, .22);
+  --neutral-400: #AEAEB2;
+  --neutral-500: #6E6E73;
+  --neutral-600: #48484A;
+  --neutral-700: #3A3A3C;
+  --neutral-900: #1D1D1F;
+
+  /* -- 数据编码色（图表与分类标识，不承载交互语义）--------------------- */
+  --coral-50:  rgba(255, 149, 0, .14);
+  --coral-100: rgba(255, 149, 0, .22);
+  --coral-400: #FFB340;  --coral-500: #FF9500;  --coral-600: #C77400;
+  --amber-50:  rgba(255, 204, 0, .16);
+  --amber-100: rgba(255, 204, 0, .26);
+  --amber-400: #FFD426;  --amber-500: #FFCC00;  --amber-600: #B8860B;
+  --cyan-50:   rgba(90, 200, 250, .16);
+  --cyan-400:  #7DD8FC;  --cyan-500:  #5AC8FA;  --cyan-600:  #2596C4;
+  --purple-50:  rgba(175, 82, 222, .13);
+  --purple-500: #AF52DE;
+  --teal-50:   rgba(48, 176, 199, .14);   /* 【新增】提示词片段需要第 5 个分类色 */
+  --teal-500:  #30B0C7;
+
+  /* -- 状态色 ---------------------------------------------------------- */
+  --green-50: rgba(52, 199, 89, .14);  --green-500: #34C759;  --green-600: #248A3D;
+  --red-50:   rgba(255, 59, 48, .12);  --red-500:   #FF3B30;  --red-600:   #D92D20;
+  /* 深色模式下的状态色（iOS Dark 变体） */
+  --green-dark-500: #30D158;
+  --red-dark-500:   #FF453A;
+  --coral-dark-500: #FF9F0A;
+
+  /* -- 影棚色（3D 场景，浅色影棚，取自原型硬编码值）--------------------- */
+  --studio-bg:    #F5F5F7;
+  --studio-floor: #ECECF0;
+  --studio-prop:  #DCDCE4;
+  --studio-mark:  #D8D8DE;
+  --studio-label: #1D1D1F;
+  --model-base:   #F3F3F5;
+  --model-mid:    #E0E0E5;
+  --model-shade:  #AEAEB4;
+
+  /* -- 灯光色片（3D 场景）----------------------------------------------- */
+  --light-warm:    #F2B679;
+  --light-neutral: #FFF3DC;
+  --light-cool:    #9AC4E8;
+  --gel-amber:   #FFB14E;  --gel-sunset:  #FF7A45;  --gel-magenta: #FF5FA2;
+  --gel-cyan:    #4FD1D9;  --gel-blue:    #4A7CFF;  --gel-violet:  #9B6BFF;
+  --gel-mint:    #5FD68B;  --gel-red:     #E8384F;
+
+  /* -- 圆角刻度（比后台系统更收敛，无外壳圆角）-------------------------- */
+  --r-shell:     0;
+  --r-card:   12px;
+  --r-tile:   10px;
+  --r-control:10px;
+  --r-chip:    7px;
+  --r-xs:      5px;
+  --r-full:  999px;
+
+  /* -- 间距刻度，基准 4px ----------------------------------------------- */
+  --s-1:  4px;   --s-2:  8px;   --s-3: 12px;  --s-4: 16px;
+  --s-5: 20px;   --s-6: 24px;   --s-8: 32px;  --s-10: 40px;  --s-12: 48px;
+
+  /* -- 字号与行高 ------------------------------------------------------- */
+  --fs-axis:      11px;  --lh-axis:      16px;
+  --fs-caption:   12px;  --lh-caption:   16px;
+  --fs-label:     13px;  --lh-label:     18px;
+  --fs-body:      14px;  --lh-body:      20px;
+  --fs-title:     16px;  --lh-title:     24px;
+  --fs-metric-sm: 20px;  --lh-metric-sm: 28px;
+  --fs-metric:    24px;  --lh-metric:    32px;
+
+  --fw-regular: 400;  --fw-medium: 500;  --fw-semibold: 600;  --fw-bold: 700;
+  --tracking-tight: -0.02em;
+  --tracking-normal: 0;
+  --tracking-wide: 0.04em;
+
+  --font-sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display",
+               "Helvetica Neue", "PingFang SC", "Microsoft YaHei", sans-serif;
+  --font-mono: ui-monospace, "SF Mono", "Cascadia Mono", Menlo, monospace;
+
+  /* -- 阴影（克制：外壳与主按钮都不用阴影，分区靠描边）------------------ */
+  --sh-card:   0 1px 2px rgba(0, 0, 0, .04);
+  --sh-raised: 0 10px 30px rgba(0, 0, 0, .12);
+  --sh-shell:  none;
+  --sh-accent: none;
+  --sh-focus:  0 0 0 3px rgba(0, 122, 255, .32);
+
+  /* -- 动效 -------------------------------------------------------------- */
+  --dur-fast: 120ms;
+  --dur-base: 180ms;
+  --ease-standard: cubic-bezier(.2, 0, .2, 1);
+
+  /* -- 层级 -------------------------------------------------------------- */
+  --z-sticky: 10;  --z-dropdown: 100;  --z-modal: 200;  --z-toast: 300;
+}

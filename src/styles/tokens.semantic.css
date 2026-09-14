@@ -1,0 +1,193 @@
+/* ==========================================================================
+   第 2 层 · 语义 SEMANTIC
+   映射关系取自 asset-locking-studio 原型。组件只引用这一层。
+     A. @theme —— 生成 Tailwind 工具类（bg-surface / text-ink / rounded-card …）
+     B. 兼容别名 —— 保留原型里的 --color-bg-* 等名字，迁移期两套并存
+   ========================================================================== */
+@theme {
+  /* -- 表面 --------------------------------------------------- bg-* ---- */
+  --color-canvas:  var(--neutral-0);     /* 原型里画布是纯白，不是浅灰 */
+  --color-surface: var(--neutral-0);
+  --color-sidebar: var(--neutral-50);
+  --color-muted:   var(--neutral-100);
+  --color-hover:   rgba(0, 0, 0, .045);
+  --color-overlay: rgba(0, 0, 0, .40);
+
+  /* -- 文字 ------------------------------------------------- text-* ---- */
+  --color-ink:          var(--neutral-900);
+  --color-ink-muted:    var(--neutral-500);
+  --color-ink-faint:    var(--neutral-400);
+  --color-ink-disabled: rgba(0, 0, 0, .20);
+  --color-ink-inverse:  var(--neutral-0);
+
+  /* -- 描边（半透明黑，叠在任何底色上都自然）------------- border-* ---- */
+  --color-line-soft:   var(--neutral-150);
+  --color-line:        var(--neutral-200);
+  --color-line-strong: var(--neutral-300);
+  --color-line-focus:  var(--blue-500);
+
+  /* -- 强调 -------------------------------------------------------------- */
+  --color-accent:        var(--blue-500);
+  --color-accent-hover:  var(--blue-600);
+  --color-accent-active: var(--blue-700);
+  --color-accent-soft:   var(--blue-100);
+  --color-accent-subtle: var(--blue-50);
+  --color-on-accent:     var(--neutral-0);
+
+  /* -- 状态（warning 走 coral 而非 amber，与原型一致）--------------------- */
+  --color-success:    var(--green-500);
+  --color-success-bg: var(--green-50);
+  --color-error:      var(--red-600);
+  --color-error-bg:   var(--red-50);
+  --color-warning:    var(--coral-600);
+  --color-warning-bg: var(--coral-50);
+  --color-info:       var(--blue-500);
+  --color-info-bg:    var(--blue-50);
+
+  /* -- 数据编码：提示词片段来源上色也用这一组 ---------------------------- */
+  --color-data-1:      var(--blue-500);    /* 镜头 */
+  --color-data-1-soft: rgba(0, 122, 255, .12);
+  --color-data-2:      var(--coral-500);   /* 内容 */
+  --color-data-2-soft: var(--coral-50);
+  --color-data-3:      var(--green-500);   /* 环境氛围 */
+  --color-data-3-soft: var(--green-50);
+  --color-data-4:      var(--purple-500);  /* 资产 */
+  --color-data-4-soft: var(--purple-50);
+  --color-data-5:      var(--teal-500);    /* 【新增】画风 */
+  --color-data-5-soft: var(--teal-50);
+  --color-chart-grid:  rgba(0, 0, 0, .06);
+  --color-chart-axis:  var(--neutral-400);
+  --color-chart-track: var(--neutral-100);
+
+  /* -- 3D 场景（浅色影棚，供 useSceneColors 读取）------------------------ */
+  --color-scene-bg:    var(--studio-bg);
+  --color-scene-floor: var(--studio-floor);
+  --color-scene-prop:  var(--studio-prop);
+  --color-scene-mark:  var(--studio-mark);
+  --color-scene-label: var(--studio-label);
+  --color-gizmo-cam:   var(--blue-dark-500);
+  --color-gizmo-light: var(--neutral-0);
+  --color-model-base:  var(--model-base);
+  --color-model-mid:   var(--model-mid);
+  --color-model-shade: var(--model-shade);
+
+  /* -- 圆角 ----------------------------------------------- rounded-* ---- */
+  --radius-shell:   var(--r-shell);
+  --radius-card:    var(--r-card);
+  --radius-tile:    var(--r-tile);
+  --radius-control: var(--r-control);
+  --radius-chip:    var(--r-chip);
+  --radius-xs:      var(--r-xs);
+
+  /* -- 间距（p-4 = 16px，与刻度对齐）-------------------------------------- */
+  --spacing: 4px;
+
+  /* -- 字体 -------------------------------------------------------------- */
+  --font-sans: var(--font-sans);
+  --font-mono: var(--font-mono);
+
+  --text-axis:      var(--fs-axis);       --text-axis--line-height:      var(--lh-axis);
+  --text-caption:   var(--fs-caption);    --text-caption--line-height:   var(--lh-caption);
+  --text-label:     var(--fs-label);      --text-label--line-height:     var(--lh-label);
+  --text-body:      var(--fs-body);       --text-body--line-height:      var(--lh-body);
+  --text-title:     var(--fs-title);      --text-title--line-height:     var(--lh-title);
+  --text-metric-sm: var(--fs-metric-sm);  --text-metric-sm--line-height: var(--lh-metric-sm);
+  --text-metric:    var(--fs-metric);     --text-metric--line-height:    var(--lh-metric);
+
+  /* -- 阴影 -------------------------------------------------- shadow-* -- */
+  --shadow-card:   var(--sh-card);
+  --shadow-raised: var(--sh-raised);
+  --shadow-shell:  var(--sh-shell);
+  --shadow-accent: var(--sh-accent);
+  --shadow-focus:  var(--sh-focus);
+
+  --ease-standard: var(--ease-standard);
+}
+
+/* --------------------------------------------------------------------------
+   B. 兼容别名：原型与设计系统用的是这一套名字，迁移期两套并存。
+   全部迁到 Tailwind 工具类之后，这一段可以整块删掉。
+   -------------------------------------------------------------------------- */
+:root {
+  --color-bg-canvas:  var(--color-canvas);
+  --color-bg-surface: var(--color-surface);
+  --color-bg-sidebar: var(--color-sidebar);
+  --color-bg-muted:   var(--color-muted);
+  --color-bg-hover:   var(--color-hover);
+  --color-bg-overlay: var(--color-overlay);
+
+  --color-text-primary:   var(--color-ink);
+  --color-text-secondary: var(--color-ink-muted);
+  --color-text-tertiary:  var(--color-ink-faint);
+  --color-text-disabled:  var(--color-ink-disabled);
+  --color-text-inverse:   var(--color-ink-inverse);
+
+  --color-border-subtle:  var(--color-line-soft);
+  --color-border-default: var(--color-line);
+  --color-border-strong:  var(--color-line-strong);
+  --color-border-focus:   var(--color-line-focus);
+
+  /* 主按钮是纯色，没有渐变 —— 与原型一致 */
+  --gradient-accent: var(--color-accent);
+  --gradient-chart-area: linear-gradient(180deg, rgba(0, 122, 255, .16) 0%, rgba(0, 122, 255, 0) 100%);
+
+  --duration-fast: var(--dur-fast);
+  --duration-base: var(--dur-base);
+}
+
+/* --------------------------------------------------------------------------
+   深色模式（取自原型，iOS Dark 体系：画布纯黑，卡片抬到 #1C1C1E）
+   落地前仍需跑一遍 WCAG 对比度检查。
+   -------------------------------------------------------------------------- */
+[data-theme="dark"] {
+  --color-canvas:  #000000;
+  --color-sidebar: #1C1C1E;
+  --color-surface: #1C1C1E;
+  --color-muted:   #2C2C2E;
+  --color-hover:   rgba(255, 255, 255, .06);
+
+  --color-line-soft:   rgba(255, 255, 255, .10);
+  --color-line:        rgba(255, 255, 255, .16);
+  --color-line-strong: rgba(255, 255, 255, .28);
+
+  --color-ink:          #F5F5F7;
+  --color-ink-muted:    #98989D;
+  --color-ink-faint:    #636366;
+  --color-ink-disabled: rgba(255, 255, 255, .24);
+
+  --color-accent:        var(--blue-dark-500);
+  --color-accent-hover:  var(--blue-dark-400);
+  --color-accent-soft:   rgba(10, 132, 255, .18);
+  --color-accent-subtle: rgba(10, 132, 255, .12);
+
+  --color-success:    var(--green-dark-500);
+  --color-success-bg: rgba(48, 209, 88, .18);
+  --color-error:      var(--red-dark-500);
+  --color-error-bg:   rgba(255, 69, 58, .18);
+  --color-warning:    var(--coral-dark-500);
+  --color-warning-bg: rgba(255, 159, 10, .18);
+  --color-info-bg:    rgba(10, 132, 255, .16);
+
+  --color-chart-grid:  rgba(255, 255, 255, .08);
+  --color-chart-track: #2C2C2E;
+
+  /* 3D 影棚深色化 */
+  --color-scene-bg:    #1C1C1E;
+  --color-scene-floor: #2C2C2E;
+  --color-scene-prop:  #3A3A3C;
+  --color-scene-mark:  #48484A;
+  --color-scene-label: #F5F5F7;
+
+  --shadow-card:   none;
+  --shadow-raised: 0 12px 36px rgba(0, 0, 0, .5);
+}
+
+/* 布光台场景补充别名（three/useSceneColors 引用，深浅主题都走变量） */
+:root {
+  --color-scene-bg:    var(--studio-bg-mid, var(--neutral-200));
+  --color-scene-prop:  var(--studio-mark, var(--neutral-300));
+  --color-scene-label: var(--studio-mark, var(--neutral-400));
+  --color-model-base:  var(--model-grey);
+  --color-model-mid:   var(--model-blue);
+  --color-model-shade: var(--model-white);
+}

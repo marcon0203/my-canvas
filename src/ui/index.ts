@@ -1,0 +1,25 @@
+/** 设计系统原语统一出口：业务代码只从这里 import */
+export { Button, Spinner, type ButtonProps } from './Button';
+export { IconButton } from './IconButton';
+export { Chip, type ChipTone } from './Chip';
+export { ToggleChip } from './ToggleChip';
+export { Segmented, type SegItem } from './Segmented';
+export { Switch } from './Switch';
+export { Slider } from './Slider';
+export { Select } from './Select';
+export { Input, Textarea } from './Input';
+export { ColorSwatch, ColorPicker } from './ColorSwatch';
+export { Tooltip } from './Tooltip';
+export { Modal } from './Modal';
+export { Popover } from './Popover';
+export { Tabs } from './Tabs';
+export { Collapse } from './Collapse';
+export { TreeGroup, TreeItem } from './Tree';
+export { Panel } from './Panel';
+export { Table, Tr, Td } from './Table';
+export { Toaster } from './Toast';
+export { Meter } from './Meter';
+export { Thumbnail } from './Thumbnail';
+export { EmptyState } from './EmptyState';
+export { Skeleton } from './Skeleton';
+export { Icon } from './Icon';
