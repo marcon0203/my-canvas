@@ -2,16 +2,17 @@ import { create } from 'zustand';
 import { immer } from 'zustand/middleware/immer';
 import { useShallow } from 'zustand/react/shallow';
 import { temporal } from 'zundo';
-import type { Asset, AssetView, Rig, CineKey } from '@/domain/assets/model';
+import type { Asset, AssetGroup, AssetView, Rig, CineKey } from '@/domain/assets/model';
 import { defaultRig, lockAsset, unlockAsset, viewRig } from '@/domain/assets/model';
 import type { Shot, Verdict } from '@/domain/shots/model';
 import { addShot as addShotAt } from '@/domain/shots/model';
 import type { Intent } from '@/domain/prompt/vocabulary';
 import { applyIntentToView, RIG_COPY_KEYS } from '@/domain/prompt/apply';
 import type { ProjectBootstrap } from '@/api/mock';
-import type { Act, DocBlock } from '@/mock/project';
+import type { Act, DocBlock } from '@/domain/story/model';
+import type { ProposalPatch } from '@/domain/agent/types';
 
-export type AssetGroup = '角色' | '场景' | '道具';
+export type { AssetGroup } from '@/domain/assets/model';
 
 /** 项目内容态：全部可撤销（产品无确认闸口，靠历史兜底） */
 export interface ProjectState {
@@ -63,6 +64,8 @@ export interface ProjectState {
   addShot: (sceneKey: string) => string | undefined;
   deleteShot: (id: string) => void;
   batchRef: () => void;
+  /** Agent 产物落库：一次补丁 = 一条撤销记录，采纳错了一次 Ctrl+Z 全退回 */
+  applyAgentPatch: (patch: ProposalPatch) => void;
 }
 
 /** 深比较（跳过长字符串：dataURL 姿态图不进历史判断） */
@@ -231,6 +234,55 @@ export const useProject = create<ProjectState>()(
           for (const v of a.views) v.gen = true;
         }
         s.credits = Math.max(0, s.credits - 18);
+      }),
+
+      applyAgentPatch: (patch) => set((s) => {
+        switch (patch.t) {
+          case 'acts':
+            s.acts = patch.acts;
+            break;
+          case 'alts':
+            s.alts[patch.beatId] = patch.alts;
+            break;
+          case 'blocks':
+            s.blocks.push(...patch.blocks);
+            break;
+          case 'blockBody': {
+            const b = s.blocks.find((x) => x.id === patch.id);
+            if (b) b.body = patch.body;
+            break;
+          }
+          case 'assets':
+            for (const { group, asset } of patch.add) s.assets[group].push(asset);
+            break;
+          case 'assetViews':
+            for (const g of patch.gen) {
+              const v = findView(s.assets, g.assetId, g.viewName);
+              if (v) { v.gen = true; v.redo += 1; }
+            }
+            break;
+          case 'shots':
+            // 按场次插到该场最后一镜之后，保证分镜表顺序自然
+            for (const shot of patch.shots) {
+              const last = s.shots.map((x) => x.sceneKey).lastIndexOf(shot.sceneKey);
+              if (last === -1) s.shots.push(shot);
+              else s.shots.splice(last + 1, 0, shot);
+            }
+            break;
+          case 'shotPrompts':
+            for (const e of patch.edits) {
+              const shot = s.shots.find((x) => x.id === e.id);
+              if (shot) shot.own = e.own;
+            }
+            break;
+          case 'style':
+            s.style = patch.style;
+            s.stylePrompt = patch.stylePrompt;
+            break;
+          case 'run':
+            // 运行类产物不改内容，由 store 的既有动作执行（见 store/agent.ts）
+            break;
+        }
       }),
     })),
     { limit: 50, equality: (past, current) => contentEqual(past as ProjectState, current as ProjectState) },

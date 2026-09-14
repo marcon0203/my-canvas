@@ -4,6 +4,7 @@ import { StageBar } from '@/components/StageBar';
 import { Icon } from '@/ui/Icon';
 import { useProject } from '@/store/project';
 import { useUi } from '@/store/ui';
+import { useAgent } from '@/store/agent';
 
 const TABS = [
   { k: 'character', n: '角色小传' },
@@ -17,19 +18,18 @@ const TYPE_ICON: Record<string, string> = { character: 'users', outline: 'book',
 export function ScriptPage() {
   const blocks = useProject((s) => s.blocks);
   const updateBlock = useProject((s) => s.updateBlock);
-  const spend = useProject((s) => s.spend);
+  const sendToAgent = useAgent((s) => s.send);
   const docTab = useUi((s) => s.docTab);
   const blockEdit = useUi((s) => s.blockEdit);
   const setUi = useUi((s) => s.set);
   const setStep = useUi((s) => s.setStep);
-  const agentSay = useUi((s) => s.agentSay);
   const toast = useUi((s) => s.toast);
   const fileRef = useRef<HTMLInputElement>(null);
 
+  // 交给 Agent 真去扫剧本，而不是报一个写死的数字
   const analyze = () => {
     setStep('assets');
-    agentSay('', '已从剧本解析出 2 个角色、4 个场景、3 个道具。建议把每个形状照都生成出来、定稿后再进分镜。');
-    spend(3);
+    sendToAgent('从剧本提取角色与场景', 'assets.extract');
   };
 
   const exportScript = () => {

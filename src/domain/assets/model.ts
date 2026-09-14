@@ -81,6 +81,16 @@ export interface AssetView {
 
 export type AssetStatus = 'draft' | 'locked';
 
+/** 资产分组：树的三个顶层节点 */
+export type AssetGroup = '角色' | '场景' | '道具';
+
+export const ASSET_GROUPS: readonly AssetGroup[] = ['角色', '场景', '道具'];
+
+/** 分组 → 稳定 ID 前缀（CHAR-001 / SCENE-001 / PROP-001） */
+export const AID_PREFIX: Record<AssetGroup, string> = {
+  角色: 'CHAR', 场景: 'SCENE', 道具: 'PROP',
+};
+
 /** 资产：有稳定 ID 与版本号，定稿锁定后才能被分镜引用 */
 export interface Asset {
   id: string;                // 界面内的短 id，如 'c1'

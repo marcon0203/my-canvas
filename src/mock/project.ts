@@ -1,26 +1,13 @@
 import type { Asset } from '@/domain/assets/model';
 import type { Shot } from '@/domain/shots/model';
+import type { Act, DocBlock } from '@/domain/story/model';
 
 /**
  * Mock 数据：项目内容。与冻结原型《The Dream of Cats》逐字段对齐。
  * 这里只存数据，不含任何行为；应用经 api/mock.ts 拉取后注入 store。
  */
 
-export interface Act {
-  id: string;
-  t: string;
-  span: string;
-  beats: { id: string; k: string; t: string }[];
-}
-
-export type BlockType = 'character' | 'outline' | 'text';
-
-export interface DocBlock {
-  id: string;
-  type: BlockType;
-  label: string;
-  body: string;
-}
+export type { Act, Beat, BlockType, DocBlock } from '@/domain/story/model';
 
 export interface ProjectMock {
   /** 项目稳定 ID：路由 /project/:projectId/:step 用的就是它 */

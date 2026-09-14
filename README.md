@@ -40,6 +40,36 @@ npm run verify     # token 分层自检（需先 build）
   白模 `/Xbot.glb`（动画采样姿态 + 三档底色），取景可离屏渲 720×1280 参考图。
 - **阶段 5 · features**（已完成）：剧情大纲 / 剧本 / 资产 / 分镜 / 剪辑 / 总览画布 / 数据看板，
   外加首页。原型《The Dream of Cats》数据完整移植于 `store/seed.ts`。
+- **阶段 6 · Agent 驱动全流程**（已完成）：侧栏从"回一句固定话术"变成真能推进流水线的
+  流式 Agent —— 见下节。
+
+## Agent：流式对话驱动流水线
+
+侧栏 Agent 是产品主入口，不是装饰。一轮应答 = **步骤卡**（自己走完）→ **流式正文** →
+**产物卡**（采纳 / 丢弃）。产物只有点了「采纳」才写进项目，并记一条撤销 ——
+Agent 不背着人改东西。
+
+```
+domain/agent/   纯逻辑：skills 技能目录 / router 自由文本路由 / drafts 草稿生成 / plans 计划装配
+api/agent.ts    传输层：本地模拟流式应答（plan → step → delta → proposal → done），可中断
+store/agent.ts  会话态：消息、流式进度、采纳落库（不进撤销历史）
+```
+
+**产物全部由项目现状推导，不是写死的文案。** 「按大纲拆镜」只补没有镜头的场次；
+「补齐形状照」只挑 `gen: false` 的那几张；「提取资产」扫的是剧本正文里出现过、
+资产库里还没有的名字；成本报告用的是 `domain/metrics` 的真实记账口径。
+前置条件不满足时 Agent 明说做不了（`Plan.blocked`），不产出假产物。
+
+**意图路由的规则是「动词决定意图，主题词只加权」**——「按大纲拆镜」要落到分镜而不是大纲，
+「润色一下这段台词」要落到润色而不是写正文。接真 LLM 时 `router.ts` 换成一次
+function-calling，下游 `IntentKind` 契约不变。
+
+**产物与 3D 布光台同源。** 补形状照时每张带的是它自己那套机位与布光参数
+（就是在布光台上拖出来的那份 `Rig`），不是一个提示词套所有；补写提示词时
+每条由该镜的景别 + 引用资产描述 + 画风合成，所以提示词框里能看见每段是哪来的。
+
+流式节奏在测试环境下自动压扁（`api/agent.ts` 的 `FAST`），跑的是同一条代码路径。
+
 
 ## 原型修复对照
 
@@ -52,6 +82,8 @@ npm run verify     # token 分层自检（需先 build）
 | 专业模式「添加维度」无入口 | `ProDims` 提供「添加维度」，StageModal 也有快捷入口 |
 | 候选图网格（TakeGrid）缺失 | `components/TakeGrid`：按 ×N 生成候选，点选换关键帧 |
 | 若干死按钮（导入/导出/转场等） | 导出剧本真下载 .md、导入真读文件，其余明确 toast 占位语义 |
+| Agent 侧栏只回一句固定话术 | `domain/agent` + `api/agent` + `store/agent`，流式应答且真写项目 |
+| 「解析剧本」报写死的「2 角色 4 场景 3 道具」 | 改走 Agent 真扫剧本，报的是实际找到的 |
 
 ## Token 分层纪律
 
@@ -71,4 +103,5 @@ base.css               reset + 全局基线
   升级 React 前先确认 R3F 的 peer 范围。
 - 深色模式是推导值，落地前需单独跑 WCAG 对比度检查。
 - 生产构建单 chunk 偏大（three.js），接入真实路由懒加载时可按 route code-split。
-- `api/generation.ts` 是本地模拟的任务队列，接后端时只换 transport，生命周期语义不变。
+- `api/generation.ts` 与 `api/agent.ts` 都是本地模拟，接后端时只换 transport，生命周期语义不变。
+- Agent 的"理解"是关键词路由，不是语言模型：没覆盖到的说法会落到 chat 兜底。

@@ -3,11 +3,6 @@ import { create } from 'zustand';
 export type Step = 'outline' | 'script' | 'assets' | 'storyboard' | 'editing' | 'overview' | 'metrics';
 export type Modal = null | 'stage' | 'gear';
 
-export interface AgentMsg {
-  who: 'me' | 'ai';
-  t: string;
-}
-
 export interface Toast {
   id: number;
   text: string;
@@ -31,7 +26,6 @@ export interface UiState {
   dimPick: boolean;
   auxOpen: boolean;
   learnOpen: boolean;
-  agent: AgentMsg[];
   toasts: Toast[];
   cv: { tx: number; ty: number; zoom: number; sel: string | null; confirmDel: string | null };
   /* ---- 动作 ---- */
@@ -42,8 +36,6 @@ export interface UiState {
   selectAsset: (id: string, viewName?: string) => void;
   selectShot: (id: string) => void;
   toast: (text: string) => void;
-  agentSay: (me: string, ai?: string) => void;
-  agentReset: () => void;
   openModal: (m: Modal) => void;
 }
 
@@ -66,12 +58,11 @@ export const useUi = create<UiState>((set) => ({
   dimPick: false,
   auxOpen: false,
   learnOpen: false,
-  agent: [],
   toasts: [],
   cv: { tx: 20, ty: 10, zoom: 0.85, sel: null, confirmDel: null },
 
   setRoute: (route) => set({ route }),
-  setStep: (step) => set({ step, agent: [] }),
+  setStep: (step) => set({ step }),
   set: (k, v) => set({ [k]: v } as Partial<UiState>),
   selectNode: (id) => set({ nodeSel: id }),
   selectAsset: (id, viewName) => set((s) => ({
@@ -84,20 +75,6 @@ export const useUi = create<UiState>((set) => ({
     set((s) => ({ toasts: [...s.toasts, { id, text }] }));
     setTimeout(() => set((s) => ({ toasts: s.toasts.filter((t) => t.id !== id) })), 2400);
   },
-  agentSay: (me, ai) => set((s) => ({
-    agent: [...s.agent, { who: 'me', t: me }, ...(ai ? [{ who: 'ai' as const, t: ai }] : [])],
-  })),
-  agentReset: () => set({ agent: [] }),
   openModal: (modal) => set({ modal }),
 }));
 
-/** 每个 flow 环节 Agent 建议的技能 */
-export const SKILLS: Record<string, [string, string][]> = {
-  outline: [['spark', 'Start from an idea'], ['map', 'Expand plot paths'], ['book', 'Draft an outline'], ['wand', 'Polish prompts']],
-  script: [['spark', 'Start from an idea'], ['text', 'Draft a Script'], ['users', 'Generate Multi-View Character'], ['wand', 'Polish prompts']],
-  assets: [['users', 'Generate Multi-View Character'], ['image', 'Batch reference images'], ['wand', 'Style transfer'], ['layers', 'Re-extract from script']],
-  storyboard: [['image', 'Generate keyframes'], ['text', 'Write shot prompts'], ['video', 'Batch to video'], ['wand', 'Polish prompts']],
-  editing: [['scissors', 'Auto-cut to music'], ['text', 'Add subtitles'], ['mic', 'Voice-over'], ['dl', 'Export MP4']],
-  overview: [['spark', 'Start from an idea'], ['layers', 'Re-extract from script'], ['video', 'Batch to video'], ['dl', 'Export MP4']],
-  metrics: [['wand', 'Polish prompts'], ['bolt', 'Cost report'], ['layers', 'Re-extract from script']],
-};
