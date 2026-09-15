@@ -97,3 +97,25 @@ describe('形状照提示词可手改', () => {
     expect(viewPromptText(v)).toBe('');
   });
 });
+
+describe('节点级画风「全局」跟项目走', () => {
+  const v = (style: string): AssetView => ({
+    name: '正面', style, gen: false, redo: 0, prompt: '正面半身', rig: defaultRig('正面'),
+  });
+
+  it('「全局」解析成项目画风，不把「全局」两个字塞进提示词', () => {
+    const p = viewPrompt(v('全局'), 'warm hand-painted, film grain');
+    expect(p).toContain('warm hand-painted');
+    expect(p).not.toContain('全局');
+  });
+
+  it('节点级画风压过项目画风', () => {
+    const p = viewPrompt(v('像素风'), 'warm hand-painted');
+    expect(p).toContain('pixel art');
+    expect(p).not.toContain('warm hand-painted');
+  });
+
+  it('词表里没有的自定义风格名原样带上', () => {
+    expect(viewPrompt(v('我的风格'), '')).toContain('我的风格');
+  });
+});

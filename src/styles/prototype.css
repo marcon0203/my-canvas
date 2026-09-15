@@ -1285,8 +1285,10 @@ details summary:hover { color: var(--color-accent); }
 .mo__box { width:100%; background:var(--color-bg-surface); border:1px solid var(--color-border-default);
   border-radius:var(--radius-card); box-shadow:var(--shadow-raised); overflow:hidden; }
 .mo__h { display:flex; align-items:baseline; gap:12px; padding:18px 20px 14px; }
-.mo__t { font-size:17px; font-weight:600; }
-.mo__s { font-size:12px; color:var(--color-text-tertiary); }
+.mo__t { font-size:17px; font-weight:600; flex:0 0 auto; }
+/* 挤不下时让副标题让位，标题不折行 */
+.mo__s { font-size:12px; color:var(--color-text-tertiary);
+  min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .mo__b { display:flex; gap:24px; padding:0 20px 22px; }
 .mo__l { flex:0 0 auto; }
 .mo__r { flex:1; min-width:0; }
@@ -1450,6 +1452,11 @@ details summary:hover { color: var(--color-accent); }
 .grp__b { padding:0 14px 14px; }
 
 .mo__box--wide { max-width:1080px; }
+
+/* 表单式弹窗的内容区：.mo__box 自己不给 padding，内容得自己带 */
+.mo__form { display: flex; flex-direction: column; gap: var(--space-4); padding: 0 20px 20px; }
+.mo__field { display: flex; flex-direction: column; gap: 6px; }
+.mo__field > .sec { margin: 0; }
 .stagegrid { display:grid; grid-template-columns:1fr 1fr; gap:14px; padding:0 20px; }
 @media (max-width:900px){ .stagegrid { grid-template-columns:1fr; } .params { grid-template-columns:1fr !important; } }
 .sbox { border:1px solid var(--color-border-subtle); border-radius:var(--radius-card); overflow:hidden;

@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Canvas, useThree } from '@react-three/fiber';
 import { PerspectiveCamera } from 'three';
 import { StageScene } from './StageScene';
@@ -31,12 +31,17 @@ export function StageView({ rig, dragTarget, onDragTarget, onDrag, view, skin = 
 }) {
   return (
     <div className="relative size-full" data-stage-view>
-      <Canvas shadows camera={{ fov: 34, position: [0, 300, 300], near: 1, far: 4000 }} dpr={[1, 2]}>
+      {/* 场景是静止的，只有参数变了才需要重画 —— demand 比常驻 60fps 省一个数量级。
+          R3F 在 React 重渲染时会自动 invalidate，拖拽改 rig 就会出帧。
+          dpr 封到 1.5：两块画布同时开 2x 等于四倍片元，肉眼几乎看不出差别。 */}
+      <Canvas shadows frameloop="demand" dpr={[1, 1.5]}
+        camera={{ fov: 34, position: [0, 300, 300], near: 1, far: 4000 }}>
         <ObserverRig view={view} />
         <SceneBackground />
         <StageScene
           rig={rig}
           skin={skin}
+          shadowMap={512}
           showGizmos
           onPickCam={() => onDragTarget('cam')}
           onPickLight={() => onDragTarget('light')}
@@ -69,14 +74,33 @@ function SceneBackground() {
   return null;
 }
 
-/** DOM 拖拽层：pointer 事件换成 rig 增量，不进 WebGL 事件循环 */
+/**
+ * DOM 拖拽层：pointer 事件换成 rig 增量，不进 WebGL 事件循环。
+ *
+ * 位移按帧合并 —— 高采样率鼠标一秒能发 120+ 个 pointermove，
+ * 逐个触发「React 重渲染 + 出一帧」就会把主线程堵死。
+ * 累积增量、每帧提交一次，手感不变但工作量降到屏幕刷新率。
+ */
 function DragLayer({ dragTarget, onDrag }: {
   rig: Rig;
   dragTarget: StageDragTarget;
   onDrag: (target: StageDragTarget, dAz: number, dEl: number) => void;
 }) {
   const last = useRef<{ x: number; y: number } | null>(null);
+  const pending = useRef<{ az: number; el: number } | null>(null);
+  const raf = useRef(0);
   const [grabbing, setGrabbing] = useState(false);
+
+  // 拖到一半卸载（关弹窗）时别留下挂起的帧
+  useEffect(() => () => { if (raf.current) cancelAnimationFrame(raf.current); }, []);
+
+  const flush = () => {
+    raf.current = 0;
+    const d = pending.current;
+    pending.current = null;
+    if (d) onDrag(dragTarget, d.az, d.el);
+  };
+
   return (
     <div
       className="absolute inset-0"
@@ -91,9 +115,17 @@ function DragLayer({ dragTarget, onDrag }: {
         const dAz = (e.clientX - last.current.x) * 0.65;
         const dEl = -(e.clientY - last.current.y) * 0.45;
         last.current = { x: e.clientX, y: e.clientY };
-        onDrag(dragTarget, dAz, dEl);
+        const acc = pending.current ?? { az: 0, el: 0 };
+        acc.az += dAz;
+        acc.el += dEl;
+        pending.current = acc;
+        if (!raf.current) raf.current = requestAnimationFrame(flush);
       }}
-      onPointerUp={() => { last.current = null; setGrabbing(false); }}
+      onPointerUp={() => {
+        last.current = null;
+        setGrabbing(false);
+        if (raf.current) { cancelAnimationFrame(raf.current); flush(); }
+      }}
     />
   );
 }

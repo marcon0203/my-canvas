@@ -6,6 +6,7 @@ import { azFrag, azName, azFace, elFrag, elName, kFrag, kName, lightFrag, lightN
 import { CINE, SAY, camOrder, cineFrag, gearFrag, INTENT } from '@/domain/prompt/vocabulary';
 import { FramePreview } from '@/components/FramePreview';
 import { PromptComposer, ParamChip } from '@/components/PromptComposer';
+import { preloadWhiteModel } from '@/three/WhiteModel';
 import { Popover } from '@/ui/Popover';
 import { useProject } from '@/store/project';
 import { useUi } from '@/store/ui';
@@ -15,6 +16,8 @@ import { IntentCards } from './IntentCards';
 export function AssetInspector({ asset, view }: { asset: Asset; view: AssetView }) {
   const shots = useProject((s) => s.shots);
   const styles = useProject((s) => s.styles);
+  const stylePrompt = useProject((s) => s.stylePrompt);
+  const projectStyle = useProject((s) => s.style);
   const lockAsset = useProject((s) => s.lockAsset);
   const unlockAsset = useProject((s) => s.unlockAsset);
   const setViewStyle = useProject((s) => s.setViewStyle);
@@ -84,7 +87,9 @@ export function AssetInspector({ asset, view }: { asset: Asset; view: AssetView 
         <div className="apv__side">
           {/* 布光台入口：这张形状照怎么拍，在 3D 里拖出来 —— 它决定下面提示词的镜头语言段 */}
           <div className="rigbar">
+            {/* 指针移上来就开始取白模（2.9MB）—— 等点下去再取，第一次打开会明显顿一下 */}
             <button className="rigbar__main" onClick={() => openModal('stage')}
+              onPointerEnter={preloadWhiteModel} onFocus={preloadWhiteModel}
               title="打开 3D 布光台：拖机位、拖灯，取景实时可见">
               <span className="rigbar__cube"><Icon name="cube" /></span>
               <span className="rigbar__body">
@@ -109,8 +114,8 @@ export function AssetInspector({ asset, view }: { asset: Asset; view: AssetView 
             <span className="t-cap dim">{view.name} · 只作用于这一张</span>
           </div>
           <PromptComposer
-            value={viewPromptText(view)}
-            auto={viewPrompt(view)}
+            value={viewPromptText(view, stylePrompt)}
+            auto={viewPrompt(view, stylePrompt)}
             ejected={isViewEjected(view)}
             onChange={(custom) => {
               setViewPrompt(asset.id, view.name, custom);
@@ -125,9 +130,17 @@ export function AssetInspector({ asset, view }: { asset: Asset; view: AssetView 
             hint="改这条会脱管；不改则跟着下面的画风与镜头语言走。⌘/Ctrl + Enter 直接运行。"
             params={<>
               <Popover align="start" className="stypop"
-                trigger={() => <ParamChip label="画风" value={view.style} pick title="只作用于这一张形状照" />}>
+                trigger={() => <ParamChip label="画风" value={view.style === '全局' ? `全局 · ${projectStyle}` : view.style} pick
+                  title={view.style === '全局' ? '跟项目画风走' : '只作用于这一张形状照'} />}>
                 {(close) => (
                   <div className="styles">
+                    <button className="sty" aria-pressed={view.style === '全局'}
+                      title="跟项目画风走，项目换风格这张也跟着换"
+                      onClick={() => {
+                        setViewStyle(asset.id, view.name, '全局');
+                        toast(`「${asset.name} · ${view.name}」改为跟项目画风走`);
+                        close();
+                      }}>全局</button>
                     {styles.map((x) => (
                       <button key={x} className="sty" aria-pressed={x === view.style}
                         onClick={() => {

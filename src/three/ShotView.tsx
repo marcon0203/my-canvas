@@ -18,7 +18,7 @@ export function ShotView({ rig, pose, skin = 'grey', exportRef }: {
   exportRef?: React.MutableRefObject<(() => string | null) | undefined>;
 }) {
   return (
-    <Canvas shadows dpr={[1, 2]} gl={{ preserveDrawingBuffer: true }}
+    <Canvas shadows frameloop="demand" dpr={[1, 1.5]} gl={{ preserveDrawingBuffer: true }}
       camera={{ fov: 40, near: 1, far: 5000, position: [0, 38, 200] }}
       style={{ width: '100%', height: '100%' }}>
       <SceneBackground />

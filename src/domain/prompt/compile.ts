@@ -53,22 +53,32 @@ export function rigFrags(r: Rig): string[] {
   ].filter(Boolean);
 }
 
+/**
+ * 节点级画风 → 英文片段。'全局'（或空）表示跟项目走，
+ * 否则查词表；查不到就原样带上（自定义风格名）。
+ */
+export function styleFrag(style: string | undefined, globalStylePrompt = ''): string {
+  if (!style || style === '全局') return globalStylePrompt;
+  return STYLEMAP[style] ?? style;
+}
+
 /** 一张形状照的自动合成提示词：风格 + 形状照描述 + 镜头语言 */
-export function viewPrompt(v: AssetView): string {
-  return [STYLEMAP[v.style] ?? v.style, v.prompt, ...rigFrags(viewRig(v))]
+export function viewPrompt(v: AssetView, globalStylePrompt = ''): string {
+  return [styleFrag(v.style, globalStylePrompt), v.prompt, ...rigFrags(viewRig(v))]
     .filter(Boolean)
     .join(', ');
 }
 
 /** 实际拿去生成的那条：手改过就用手改的，否则走自动合成 */
-export const viewPromptText = (v: AssetView): string => v.custom ?? viewPrompt(v);
+export const viewPromptText = (v: AssetView, globalStylePrompt = ''): string =>
+  v.custom ?? viewPrompt(v, globalStylePrompt);
 
 /** 这张是不是已经脱管（手改过，不再跟画风/镜头语言联动） */
 export const isViewEjected = (v: AssetView): boolean => v.custom !== undefined;
 
 /** 生成一张形状照/一镜的提示词也按段落合成，供界面按来源上色 */
-export function viewSegments(v: AssetView): PromptSegment[] {
-  const segs: PromptSegment[] = [{ k: 'style', v: STYLEMAP[v.style] ?? v.style }];
+export function viewSegments(v: AssetView, globalStylePrompt = ''): PromptSegment[] {
+  const segs: PromptSegment[] = [{ k: 'style', v: styleFrag(v.style, globalStylePrompt) }];
   if (v.prompt) segs.push({ k: 'own', v: v.prompt });
   rigFrags(viewRig(v)).forEach((f) => segs.push({ k: 'ref', v: f }));
   return segs;
