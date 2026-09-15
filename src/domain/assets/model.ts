@@ -77,6 +77,11 @@ export interface AssetView {
   redo: number;              // 重摇次数
   prompt: string;            // 这张形状照的描述
   rig?: Rig;                 // 惰性创建，见 viewRig
+  /**
+   * 手改后的完整提示词。与 Shot.custom 同一语义：
+   * 有值 = 脱管（不再跟画风/镜头语言联动），清空 = 交回自动合成。
+   */
+  custom?: string;
 }
 
 export type AssetStatus = 'draft' | 'locked';

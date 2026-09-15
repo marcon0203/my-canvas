@@ -1,10 +1,10 @@
 import { useState } from 'react';
-import { Button, TreeItem } from '@/ui';
+import { Button, TreeBranch, TreeLeaf } from '@/ui';
 import { ExplorerHead } from '@/components/ExplorerHead';
 import { StageBar } from '@/components/StageBar';
 import { Icon } from '@/ui/Icon';
 import { imgUrlFor } from '@/lib/media';
-import { viewRig, type Asset, type AssetView, type Rig } from '@/domain/assets/model';
+import { ASSET_GROUPS, viewRig, type Asset, type AssetView, type Rig } from '@/domain/assets/model';
 import { useProject } from '@/store/project';
 import { useUi } from '@/store/ui';
 import { AssetInspector } from './AssetInspector';
@@ -36,8 +36,14 @@ export function AssetsPage() {
     if (a && v) useProject.getState().patchViewRig(a.id, v.name, p);
   };
 
-  /* 左树：原型 tree() 的 DOM（expl__act / expl__item--asset / expl__thumb / expl__st） */
-  const tree = (['角色', '场景', '道具'] as const).map((g) => {
+  /* 左树：资产 → 形状照。形状照属于某个资产，就长在它下面 */
+  const [openIds, setOpenIds] = useState<Record<string, boolean>>({});
+  const isOpen = (id: string) => openIds[id] ?? id === a?.id;   // 选中的那个默认展开
+  const viewThumb = (x: Asset, vv: AssetView) => (vv.gen
+    ? <img className="ph" src={imgUrlFor(x.id + String(x.ver) + vv.name + vv.style + vv.redo, 'portrait')} alt="" />
+    : <Icon name="image" />);
+
+  const tree = ASSET_GROUPS.map((g) => {
     const list = assets[g];
     return (
       <details key={g} className="expl__act" open>
@@ -49,17 +55,33 @@ export function AssetsPage() {
         <div className="expl__kids">
           {list.map((x) => {
             const gen = x.views.filter((vv) => vv.gen).length;
-            const thumb = x.views.find((vv) => vv.gen);
+            const cover = x.views.find((vv) => vv.gen);
             return (
-              <TreeItem key={x.id} asset selected={x.id === a?.id} onClick={() => selectAsset(x.id)}
-                thumb={thumb
-                  ? <img className="ph" src={imgUrlFor(x.id + String(x.ver) + thumb.name + thumb.style + thumb.redo, 'portrait')} alt="" />
-                  : <Icon name="image" />}
+              <TreeBranch key={x.id}
+                open={isOpen(x.id)}
+                onToggle={(o) => setOpenIds((m) => ({ ...m, [x.id]: o }))}
+                asset selected={x.id === a?.id}
+                onClick={() => selectAsset(x.id)}
+                thumb={cover ? viewThumb(x, cover) : <Icon name="image" />}
                 title={x.name} count={`${gen}/${x.views.length}`}
                 status={{
                   text: x.status === 'locked' ? `v${x.ver}` : '草稿',
                   color: x.status === 'locked' ? 'var(--color-success)' : 'var(--color-text-tertiary)',
-                }} />
+                }}>
+                {x.views.map((vv) => (
+                  <TreeLeaf key={vv.name}
+                    selected={x.id === a?.id && vv.name === v?.name}
+                    onClick={() => selectAsset(x.id, vv.name)}
+                    thumb={viewThumb(x, vv)}
+                    title={vv.name}
+                    dot={!vv.gen}
+                    meta={vv.style === '全局' ? undefined : vv.style} />
+                ))}
+                <button className="expl__leaf expl__leaf--add" onClick={() => { selectAsset(x.id); setAddOpen(true); }}>
+                  <span className="expl__lthumb"><Icon name="plus" /></span>
+                  <span className="expl__t">新增形状照</span>
+                </button>
+              </TreeBranch>
             );
           })}
         </div>
@@ -91,7 +113,7 @@ export function AssetsPage() {
           </div>
           <div className="expl__view">
             {a && v
-              ? <AssetInspector asset={a} view={v} onAddView={() => setAddOpen(true)} />
+              ? <AssetInspector asset={a} view={v} />
               : <div className="blk"><div className="blk__body"><p style={{ margin: 0 }} className="t-cap dim">在左侧选一个资产，这里是它的形状照。</p></div></div>}
           </div>
         </div>

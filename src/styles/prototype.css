@@ -822,6 +822,111 @@ body { background: var(--color-bg-canvas); overflow: hidden; }
 .ahand__t { font-size: 12px; color: var(--color-text-secondary); overflow-wrap: anywhere; }
 .ahand__t strong { color: var(--color-text-primary); }
 
+/* ---- 树：资产 → 形状照（形状照长在它所属的资产下面） ---- */
+.expl__row { display: flex; align-items: center; gap: 2px; }
+.expl__rowmain { flex: 1 1 auto; min-width: 0; }
+.expl__twist {
+  flex: 0 0 auto; width: 16px; height: 22px; padding: 0; border: 0; background: none;
+  display: inline-flex; align-items: center; justify-content: center;
+  color: var(--color-text-tertiary); cursor: pointer;
+}
+.expl__twist:hover { color: var(--color-text-primary); }
+.expl__twist .expl__chev { transition: transform var(--duration-fast) var(--ease-out); }
+.expl__twist[aria-expanded="false"] .expl__chev { transform: rotate(-90deg); }
+.expl__subs {
+  margin: 2px 0 6px 22px; padding-left: var(--space-2);
+  border-left: 1px solid var(--color-border-subtle);
+  display: flex; flex-direction: column; gap: 1px;
+}
+.expl__leaf {
+  display: flex; align-items: center; gap: var(--space-2);
+  padding: 3px 6px; border: 0; background: none; width: 100%;
+  border-radius: var(--radius-control); cursor: pointer; text-align: left;
+  font-family: inherit; font-size: 12px; color: var(--color-text-secondary);
+}
+.expl__leaf:hover { background: var(--color-bg-hover); color: var(--color-text-primary); }
+.expl__leaf[aria-selected="true"] { background: var(--color-accent); color: var(--color-on-accent); }
+.expl__leaf[aria-selected="true"] .expl__count { color: rgba(255, 255, 255, .7); }
+.expl__lthumb {
+  flex: 0 0 auto; width: 20px; height: 26px; border-radius: 4px; overflow: hidden;
+  background: var(--color-bg-muted); border: 1px solid var(--color-border-subtle);
+  display: inline-flex; align-items: center; justify-content: center;
+  color: var(--color-text-tertiary);
+}
+.expl__lthumb svg { width: 11px; height: 11px; }
+.expl__lthumb .ph { width: 100%; height: 100%; object-fit: cover; }
+.expl__ldot {
+  width: 5px; height: 5px; border-radius: var(--radius-full);
+  background: var(--color-warning); flex: 0 0 auto;
+}
+.expl__leaf--add { color: var(--color-text-tertiary); }
+.expl__leaf--add .expl__lthumb { border-style: dashed; }
+.expl__leaf--add:hover { color: var(--color-accent); }
+
+/* ---- 提示词编辑器：可改的提示词 + 参数条 + 自己的运行按钮 ---- */
+/* 不能 overflow:hidden —— 画风浮层要能探出框外。圆角由内部元素各自承担 */
+.pcomp {
+  border: 1px solid var(--color-border-default); border-radius: var(--radius-card);
+  background: var(--color-bg-surface);
+}
+.pcomp:focus-within { border-color: var(--color-border-strong); box-shadow: var(--shadow-focus); }
+.pcomp__in {
+  display: block; width: 100%; min-height: 96px; max-height: 220px; resize: vertical;
+  padding: var(--space-3); border: 0; background: none; color: var(--color-text-secondary);
+  font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 12px; line-height: 1.8;
+}
+.pcomp__in:focus { outline: none; color: var(--color-text-primary); }
+.pcomp__in::placeholder { color: var(--color-text-tertiary); }
+.pcomp__bar {
+  position: relative;
+  display: flex; align-items: center; gap: var(--space-2); flex-wrap: wrap;
+  padding: var(--space-2) var(--space-3); border-top: 1px solid var(--color-border-subtle);
+  background: var(--color-bg-muted);
+  border-radius: 0 0 calc(var(--radius-card) - 1px) calc(var(--radius-card) - 1px);
+}
+/* 带提示语时底部圆角归提示语那一行 */
+.pcomp:has(.pcomp__hint) .pcomp__bar { border-radius: 0; }
+.pcomp__cost {
+  display: inline-flex; align-items: center; gap: 3px;
+  font-size: 11px; color: var(--color-text-tertiary); flex: 0 0 auto;
+}
+.pcomp__cost svg { width: 11px; height: 11px; }
+.pcomp__run {
+  display: inline-flex; align-items: center; gap: 5px; flex: 0 0 auto;
+  height: 28px; padding: 0 12px; border: 0; border-radius: var(--radius-control);
+  background: var(--color-accent); color: var(--color-on-accent);
+  font-family: inherit; font-size: 12px; font-weight: 600; cursor: pointer;
+}
+.pcomp__run:hover:not(:disabled) { background: var(--color-accent-hover); }
+.pcomp__run:disabled { opacity: 0.6; cursor: default; }
+.pcomp__run svg { width: 12px; height: 12px; }
+.pcomp__spin {
+  width: 11px; height: 11px; border-radius: var(--radius-full);
+  border: 1.5px solid rgba(255, 255, 255, .45); border-top-color: var(--color-on-accent);
+  animation: agent-spin 0.7s linear infinite;
+}
+.pcomp__hint {
+  padding: 6px var(--space-3) var(--space-2); font-size: 11px; line-height: 1.6;
+  color: var(--color-text-tertiary);
+  border-radius: 0 0 calc(var(--radius-card) - 1px) calc(var(--radius-card) - 1px);
+}
+
+/* 参数：挂在输入框底下，不各占一行 */
+.pparam {
+  display: inline-flex; align-items: center; gap: 5px; flex: 0 0 auto;
+  height: 26px; padding: 0 8px; border-radius: var(--radius-control);
+  border: 1px solid var(--color-border-subtle); background: var(--color-bg-surface);
+  font-family: inherit; font-size: 12px; color: var(--color-text-primary);
+}
+button.pparam { cursor: pointer; }
+button.pparam:hover { border-color: var(--color-border-strong); }
+.pparam--static { background: none; border-style: dashed; }
+.pparam--muted { color: var(--color-text-tertiary); }
+.pparam__k { color: var(--color-text-tertiary); font-size: 11px; }
+.pparam__chev { width: 11px; height: 11px; color: var(--color-text-tertiary); }
+.stypop { width: 300px; }
+.stypop .styles { gap: 5px; }
+
 /* ==========================================================================
    首页 —— macOS 大标题 + Apple TV 式 Hero 卡 + 彩色模式卡
    ========================================================================== */

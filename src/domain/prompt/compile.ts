@@ -53,12 +53,18 @@ export function rigFrags(r: Rig): string[] {
   ].filter(Boolean);
 }
 
-/** 一张形状照的完整提示词：风格 + 形状照描述 + 镜头语言 */
+/** 一张形状照的自动合成提示词：风格 + 形状照描述 + 镜头语言 */
 export function viewPrompt(v: AssetView): string {
   return [STYLEMAP[v.style] ?? v.style, v.prompt, ...rigFrags(viewRig(v))]
     .filter(Boolean)
     .join(', ');
 }
+
+/** 实际拿去生成的那条：手改过就用手改的，否则走自动合成 */
+export const viewPromptText = (v: AssetView): string => v.custom ?? viewPrompt(v);
+
+/** 这张是不是已经脱管（手改过，不再跟画风/镜头语言联动） */
+export const isViewEjected = (v: AssetView): boolean => v.custom !== undefined;
 
 /** 生成一张形状照/一镜的提示词也按段落合成，供界面按来源上色 */
 export function viewSegments(v: AssetView): PromptSegment[] {

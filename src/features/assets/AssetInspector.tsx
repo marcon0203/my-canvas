@@ -1,21 +1,24 @@
 import { Icon } from '@/ui/Icon';
 import { imgUrlFor } from '@/lib/media';
 import { viewRig, type Asset, type AssetView, type CineKey, type Rig } from '@/domain/assets/model';
-import { viewPrompt } from '@/domain/prompt/compile';
+import { isViewEjected, viewPrompt, viewPromptText } from '@/domain/prompt/compile';
 import { azFrag, azName, azFace, elFrag, elName, kFrag, kName, lightFrag, lightName } from '@/domain/camera/naming';
 import { CINE, SAY, camOrder, cineFrag, gearFrag, INTENT } from '@/domain/prompt/vocabulary';
 import { FramePreview } from '@/components/FramePreview';
+import { PromptComposer, ParamChip } from '@/components/PromptComposer';
+import { Popover } from '@/ui/Popover';
 import { useProject } from '@/store/project';
 import { useUi } from '@/store/ui';
 import { IntentCards } from './IntentCards';
 
 /** 资产检查器：原型 apv__head/vbar/apv__card/aux/ainfo 同构；简单·专业双模式 */
-export function AssetInspector({ asset, view, onAddView }: { asset: Asset; view: AssetView; onAddView: () => void }) {
+export function AssetInspector({ asset, view }: { asset: Asset; view: AssetView }) {
   const shots = useProject((s) => s.shots);
   const styles = useProject((s) => s.styles);
   const lockAsset = useProject((s) => s.lockAsset);
   const unlockAsset = useProject((s) => s.unlockAsset);
   const setViewStyle = useProject((s) => s.setViewStyle);
+  const setViewPrompt = useProject((s) => s.setViewPrompt);
   const genAssetView = useProject((s) => s.genAssetView);
   const applyRigToPeers = useProject((s) => s.applyRigToPeers);
   const patchViewRig = useProject((s) => s.patchViewRig);
@@ -28,7 +31,6 @@ export function AssetInspector({ asset, view, onAddView }: { asset: Asset; view:
   const rig = viewRig(view);
   const users = shots.filter((s) => s.refs.includes(asset.aid)).length;
   const patch = (p: Partial<Rig>) => patchViewRig(asset.id, view.name, p);
-  const gen = asset.views.filter((x) => x.gen).length;
   const lockedA = asset.status === 'locked';
 
   return (
@@ -59,38 +61,7 @@ export function AssetInspector({ asset, view, onAddView }: { asset: Asset; view:
         )}
       </div>
 
-      {/* 形状照切换条：这一页真正的导航 */}
-      <div className="vbar">
-        <div className="vbar__h">
-          <span className="sec" style={{ margin: 0 }}>形状照</span>
-          <span className="t-cap dim">{gen}/{asset.views.length} 已生成</span>
-          <div className="spacer" />
-          <button className="tbtn" title="机位、灯光、器材套到本资产其它形状照，景别各留各的"
-            onClick={() => { applyRigToPeers(asset.id, view.name); toast('已把机位朝向、灯光和器材套到其它形状照 — 景别各留各的'); }}>
-            <Icon name="layers" />套用到其它形状照
-          </button>
-        </div>
-        <div className="apv__strip">
-          {asset.views.map((v2) => (
-            <button key={v2.name} className={v2 === view ? 'vt vt--on' : 'vt'}
-              aria-pressed={v2 === view}
-              title={`${v2.name} · ${v2.style}${v2.gen ? '' : ' · 未生成'}`}
-              onClick={() => useUi.getState().selectAsset(asset.id, v2.name)}>
-              <span className="vt__pic">
-                {v2.gen
-                  ? <img className="ph" src={imgUrlFor(asset.id + String(asset.ver) + v2.name + v2.style + v2.redo, 'portrait')} alt="" />
-                  : <Icon name="image" />}
-              </span>
-              <span className="vt__k">{v2.name}</span>
-              {v2.gen ? null : <span className="vt__dot" />}
-            </button>
-          ))}
-          <button className="vt vt--add" title="新增形状照" onClick={onAddView}>
-            <Icon name="plus" /><span className="vt__k">新增</span>
-          </button>
-        </div>
-      </div>
-
+      {/* 形状照导航在左树里（形状照挂在它所属的资产下），这里只做这一张的工作台 */}
       <div className="apv__card">
         <div className="apv__pic">
           <div className="apv__picbox">
@@ -102,36 +73,57 @@ export function AssetInspector({ asset, view, onAddView }: { asset: Asset; view:
         </div>
 
         <div className="apv__side">
-          <div className="sec" style={{ marginBottom: 8 }}>画风 · 只作用于这张</div>
-          <div className="styles" style={{ marginBottom: 16 }}>
-            {styles.map((x) => (
-              <button key={x} className="sty" aria-pressed={x === view.style}
-                onClick={() => {
-                  setViewStyle(asset.id, view.name, x);
-                  toast(`「${asset.name} · ${view.name}」的风格已切换为「${x}」`);
-                }}>{x}</button>
-            ))}
-            <button className="sty" onClick={() => toast('风格库共 56 种，这里只摆最常用的 8 种，其余在风格面板里翻')}>更多 ↗</button>
+          <div className="row" style={{ marginBottom: 6 }}>
+            <span className="sec" style={{ margin: 0 }}>生成提示词</span>
+            <div className="spacer" />
+            <span className="t-cap dim">{view.name} · 只作用于这一张</span>
           </div>
-
-          <div className="sec" style={{ marginBottom: 6 }}>生成提示词</div>
-          <div className="apv__prompt apv__prompt--big">{viewPrompt(view)}</div>
-          <div className="row" style={{ marginTop: 10, gap: 8 }}>
-            <button className="ds-btn ds-btn--primary" style={{ height: 34, fontSize: 13 }}
-              onClick={() => {
-                genAssetView(asset.id, view.name);
-                toast(`${asset.name} · ${view.name} 已重新生成（第 ${view.redo + 1} 次）`);
-              }}>
-              <Icon name="image" />{view.gen ? '重新生成这张' : '生成这张'}
-            </button>
-            <span className="t-cap dim"><Icon name="bolt" />预计 2</span>
-          </div>
+          <PromptComposer
+            value={viewPromptText(view)}
+            auto={viewPrompt(view)}
+            ejected={isViewEjected(view)}
+            onChange={(custom) => {
+              setViewPrompt(asset.id, view.name, custom);
+              toast(custom === null ? '已交回自动合成' : '提示词已手改 — 这张不再跟画风与镜头语言联动');
+            }}
+            onReset={() => { setViewPrompt(asset.id, view.name, null); toast('已交回自动合成'); }}
+            onRun={() => {
+              genAssetView(asset.id, view.name);
+              toast(`${asset.name} · ${view.name} 已生成（第 ${view.redo + 1} 次）`);
+            }}
+            cost={2}
+            hint="改这条会脱管；不改则跟着下面的画风与镜头语言走。⌘/Ctrl + Enter 直接运行。"
+            params={<>
+              <Popover align="start" className="stypop"
+                trigger={() => <ParamChip label="画风" value={view.style} pick title="只作用于这一张形状照" />}>
+                {(close) => (
+                  <div className="styles">
+                    {styles.map((x) => (
+                      <button key={x} className="sty" aria-pressed={x === view.style}
+                        onClick={() => {
+                          setViewStyle(asset.id, view.name, x);
+                          toast(`「${asset.name} · ${view.name}」的画风换成「${x}」`);
+                          close();
+                        }}>{x}</button>
+                    ))}
+                    <button className="sty" onClick={() => { toast('风格库共 56 种，这里只摆最常用的 8 种'); close(); }}>更多 ↗</button>
+                  </div>
+                )}
+              </Popover>
+              <ParamChip label="画幅" value={rig.ratio || '9:16'} title="在「镜头」里改" />
+              <ParamChip label="景别" value={rig.size} tone="muted" title="在「机位光线」里改" />
+            </>}
+          />
 
           {/* 镜头语言：辅助项，简单/专业双模式 */}
           <div className="aux">
             <div className="aux__h">
               <span className="sec" style={{ margin: 0 }}>镜头语言 · 辅助拼提示词</span>
               <div className="spacer" />
+              <button className="tbtn" title="机位、灯光、器材套到本资产其它形状照，景别各留各的"
+                onClick={() => { applyRigToPeers(asset.id, view.name); toast('已把机位朝向、灯光和器材套到其它形状照 — 景别各留各的'); }}>
+                <Icon name="layers" />套用到其它形状照
+              </button>
               <div className="seg" role="tablist" aria-label="镜头语言模式">
                 <button role="tab" aria-selected={!proMode} onClick={() => { useUi.getState().set('proMode', false); useUi.getState().set('dimPick', false); }}>简单</button>
                 <button role="tab" aria-selected={proMode} onClick={() => { useUi.getState().set('proMode', true); useUi.getState().set('dimPick', false); }}>专业</button>

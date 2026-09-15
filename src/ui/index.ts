@@ -14,7 +14,7 @@ export { Modal } from './Modal';
 export { Popover } from './Popover';
 export { Tabs } from './Tabs';
 export { Collapse } from './Collapse';
-export { TreeGroup, TreeItem } from './Tree';
+export { TreeGroup, TreeItem, TreeBranch, TreeLeaf } from './Tree';
 export { Panel } from './Panel';
 export { Table, Tr, Td } from './Table';
 export { Toaster } from './Toast';

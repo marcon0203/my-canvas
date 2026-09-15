@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { viewPrompt, compileShot, segmentsText } from './compile';import { intentPatch, gelFrag, hueName } from './vocabulary';
-import { viewRig, type Asset, type AssetView } from '@/domain/assets/model';
+import { viewPrompt, viewPromptText, isViewEjected, compileShot, segmentsText } from './compile';
+import { intentPatch, gelFrag, hueName } from './vocabulary';
+import { defaultRig, viewRig, type Asset, type AssetView } from '@/domain/assets/model';
 
 const view = (name: string, prompt: string, style = '温暖手绘'): AssetView =>
   ({ name, style, gen: true, redo: 0, prompt });
@@ -63,5 +64,36 @@ describe('prompt/vocabulary', () => {
     expect(gelFrag('amber')).toBe('warm amber gel');
     expect(gelFrag('custom', '#FF0000')).toBe('red-tinted light');
     expect(hueName('#ffffff')).toBe('neutral white light');
+  });
+});
+
+describe('形状照提示词可手改', () => {
+  const view = (): AssetView => ({
+    name: '正面', style: '温暖手绘', gen: false, redo: 0, prompt: '正面半身',
+    rig: defaultRig('正面'),
+  });
+
+  it('没手改时跟着画风与镜头语言走', () => {
+    const v = view();
+    expect(isViewEjected(v)).toBe(false);
+    expect(viewPromptText(v)).toBe(viewPrompt(v));
+    v.style = '像素风';
+    expect(viewPromptText(v)).toContain('pixel art');
+  });
+
+  it('手改后脱管：改画风不再影响这条', () => {
+    const v = view();
+    v.custom = '我自己写的提示词';
+    expect(isViewEjected(v)).toBe(true);
+    v.style = '像素风';
+    expect(viewPromptText(v)).toBe('我自己写的提示词');
+    expect(viewPrompt(v)).toContain('pixel art');   // 自动合成那条仍在，随时可交回
+  });
+
+  it('空字符串也算手改 —— 清空是一种选择，不该被当成没改', () => {
+    const v = view();
+    v.custom = '';
+    expect(isViewEjected(v)).toBe(true);
+    expect(viewPromptText(v)).toBe('');
   });
 });

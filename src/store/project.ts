@@ -49,6 +49,8 @@ export interface ProjectState {
   applyRigToPeers: (assetId: string, viewName: string) => void;
   patchViewRig: (assetId: string, viewName: string, patch: Partial<Rig>) => void;
   setViewGen: (assetId: string, viewName: string, gen: boolean) => void;
+  /** 手改形状照提示词；传 null 交回自动合成 */
+  setViewPrompt: (assetId: string, viewName: string, custom: string | null) => void;
   patchShotRig: (shotId: string, patch: Partial<Rig>) => void;
   applyIntentToAssetView: (assetId: string, viewName: string, it: Intent) => void;
   setShotField: (shotId: string, patch: Partial<Pick<Shot, 'own' | 'model' | 'batch' | 'ratio' | 'style' | 'dur' | 'desc' | 'custom' | 'ejected' | 'keyIdx' | 'vid'>>) => void;
@@ -127,6 +129,11 @@ export const useProject = create<ProjectState>()(
       }),
       setViewGen: (assetId, viewName, gen) => set((s) => {
         findView(s.assets, assetId, viewName)!.gen = gen;
+      }),
+      setViewPrompt: (assetId, viewName, custom) => set((s) => {
+        const v = findView(s.assets, assetId, viewName)!;
+        if (custom === null) delete v.custom;
+        else v.custom = custom;
       }),
 
       lockAsset: (assetId) => set((s) => {

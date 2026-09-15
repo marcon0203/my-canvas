@@ -61,3 +61,58 @@ export function TreeItem(props: TreeItemProps) {
     </div>
   );
 }
+
+export interface TreeBranchProps extends TreeItemProps {
+  open: boolean;
+  onToggle: (open: boolean) => void;
+  children: ReactNode;
+}
+
+/**
+ * 可展开的树条目：自己是一行（选中态、缩略图、计数都在），下面挂子节点。
+ * 资产 → 形状照用的就是它 —— 形状照属于某个资产，树里就该长在它下面。
+ */
+export function TreeBranch({ open, onToggle, children, ...item }: TreeBranchProps) {
+  return (
+    <div className="expl__branch">
+      <div className="expl__row">
+        <button
+          className="expl__twist"
+          aria-expanded={open}
+          aria-label={open ? '收起' : '展开'}
+          onClick={(e) => { e.stopPropagation(); onToggle(!open); }}
+        >
+          <Icon name="down" className="expl__chev" />
+        </button>
+        <span className="expl__rowmain"><TreeItem {...item} /></span>
+      </div>
+      {open && <div className="expl__subs">{children}</div>}
+    </div>
+  );
+}
+
+/** 子条目：形状照这一层。缩略图 + 名称 + 未生成标记 */
+export function TreeLeaf({ thumb, title, meta, dot, selected = false, onClick }: {
+  thumb?: ReactNode;
+  title: ReactNode;
+  meta?: ReactNode;
+  dot?: boolean;
+  selected?: boolean;
+  onClick?: () => void;
+}) {
+  return (
+    <div
+      role="button"
+      tabIndex={0}
+      aria-selected={selected}
+      className="expl__leaf"
+      onClick={onClick}
+      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onClick?.(); } }}
+    >
+      {thumb !== undefined && <span className="expl__lthumb">{thumb}</span>}
+      <span className="expl__t">{title}</span>
+      {dot && <i className="expl__ldot" title="未生成" />}
+      {meta !== undefined && <span className="expl__count">{meta}</span>}
+    </div>
+  );
+}
