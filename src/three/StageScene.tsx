@@ -48,7 +48,7 @@ export function StageScene({ rig, pose = 'stand', skin = 'blue', showGizmos = tr
         color={rig.rimHex || '#8FB8FF'}
         intensity={rig.rim ? 1.2 : 0}
       />
-      <GroundPlane />
+      <GroundPlane labels={showGizmos} />
       <WhiteModel pose={pose} skin={skin} />
       <CameraGizmo rig={rig} visible={showGizmos} onPick={onPickCam} />
       <LightGizmo rig={rig} visible={showGizmos} color={keyColor} intensity={keyIntensity} onPick={onPickLight} />

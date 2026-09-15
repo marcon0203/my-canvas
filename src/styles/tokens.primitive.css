@@ -58,6 +58,10 @@
   --model-base:   #F3F3F5;
   --model-mid:    #E0E0E5;
   --model-shade:  #AEAEB4;
+  /* 白模三档底色：布光台右侧「蓝模 / 灰模 / 白模」选的就是这三个 */
+  --model-blue:   #9FB0D4;
+  --model-grey:   #B9BAC1;
+  --model-white:  #EDEDF0;
 
   /* -- 灯光色片（3D 场景）----------------------------------------------- */
   --light-warm:    #F2B679;

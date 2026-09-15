@@ -22,11 +22,27 @@ ck(!/#[0-9a-f]{3,8}\b/i.test(comp), '组件层不应出现颜色');
 // 3. 原始层必须自给自足：不引用语义层
 ck(!/var\(--color-/.test(prim), '原始层不应反向依赖语义层');
 
-// 4. 语义层引用的每个原始变量都要存在
-const refs = [...new Set((semLight.match(/var\((--[a-z0-9-]+)\)/gi) || [])
-  .map(s => s.slice(4, -1)))].filter(v => !v.startsWith('--color-'));
-const missing = refs.filter(v => !prim.includes(v + ':'));
-ck(missing.length === 0, `语义层引用了不存在的原始变量：${missing.join(', ')}`);
+// 4. token 层引用的每个变量都要真的有人定义。
+//    只扫「深色块之前」会漏掉排在文件末尾的覆盖块 —— 曾因此把 --color-scene-bg
+//    指到不存在的 --studio-bg-mid 上，回退成 rgba(0,0,0,.12)，舞台整片黑。
+const allTokenCss = [prim, sem, comp].join('\n');
+const defined = new Set(
+  [...fs.readdirSync('src/styles').filter(f => f.endsWith('.css'))
+    .flatMap(f => strip(read('src/styles/' + f)).match(/(--[a-z0-9-]+)\s*:/gi) || [])]
+    .map(s => s.replace(/\s*:$/, '')));
+// var(--a, 兜底) 只校验第一个参数：兜底可以有，但主变量不能是笔误
+const used = [...new Set((allTokenCss.match(/var\(\s*--[a-z0-9-]+/gi) || [])
+  .map(s => s.replace(/^var\(\s*/i, '')))];
+const dangling = used.filter(v => !defined.has(v));
+ck(dangling.length === 0, `token 层引用了不存在的变量：${dangling.join(', ')}`);
+
+// 4b. 白模三档底色必须活着进产物。
+//     WhiteModel 读的是 --color-model-${skin} 这种拼出来的名字，源码里没有字面量，
+//     一旦写进 @theme 就会被 Tailwind v4 摇掉 —— 定义在源码里不等于能用，所以查产物。
+['blue', 'grey', 'white'].forEach(skin => {
+  ck(defined.has('--color-model-' + skin), `缺少白模底色 token --color-model-${skin}`);
+  ck(css.includes('--color-model-' + skin), `白模底色 --color-model-${skin} 未进产物（多半是被 @theme 摇掉了）`);
+});
 
 // 5. 三层都进了产物
 [['--blue-500','原始'],['--color-surface','语义'],['--stage-box','组件']].forEach(([v,l]) =>

@@ -59,18 +59,6 @@
   --color-chart-axis:  var(--neutral-400);
   --color-chart-track: var(--neutral-100);
 
-  /* -- 3D 场景（浅色影棚，供 useSceneColors 读取）------------------------ */
-  --color-scene-bg:    var(--studio-bg);
-  --color-scene-floor: var(--studio-floor);
-  --color-scene-prop:  var(--studio-prop);
-  --color-scene-mark:  var(--studio-mark);
-  --color-scene-label: var(--studio-label);
-  --color-gizmo-cam:   var(--blue-dark-500);
-  --color-gizmo-light: var(--neutral-0);
-  --color-model-base:  var(--model-base);
-  --color-model-mid:   var(--model-mid);
-  --color-model-shade: var(--model-shade);
-
   /* -- 圆角 ----------------------------------------------- rounded-* ---- */
   --radius-shell:   var(--r-shell);
   --radius-card:    var(--r-card);
@@ -108,6 +96,28 @@
    B. 兼容别名：原型与设计系统用的是这一套名字，迁移期两套并存。
    全部迁到 Tailwind 工具类之后，这一段可以整块删掉。
    -------------------------------------------------------------------------- */
+/* -- 3D 场景（浅色影棚，供 three/useSceneColors 读取）------------------------
+   这一组**不能放进 @theme**：Tailwind v4 会摇掉没在源码里出现过的 @theme 变量，
+   而 WhiteModel 读的是 --color-model-${skin} 这种拼出来的名字，扫不到就被删，
+   底色切换会静默变成死按钮。它们本来也不用于生成工具类，放普通 :root 即可。
+   -------------------------------------------------------------------------- */
+:root {
+  --color-scene-bg:    var(--studio-bg);
+  --color-scene-floor: var(--studio-floor);
+  --color-scene-prop:  var(--studio-prop);
+  --color-scene-mark:  var(--studio-mark);
+  --color-scene-label: var(--studio-label);
+  --color-gizmo-cam:   var(--blue-dark-500);
+  --color-gizmo-light: var(--neutral-0);
+  --color-model-base:  var(--model-base);
+  --color-model-mid:   var(--model-mid);
+  --color-model-shade: var(--model-shade);
+  /* 三档底色，键名要和 three/WhiteModel 读的 --color-model-{skin} 对上 */
+  --color-model-blue:  var(--model-blue);
+  --color-model-grey:  var(--model-grey);
+  --color-model-white: var(--model-white);
+}
+
 :root {
   --color-bg-canvas:  var(--color-canvas);
   --color-bg-surface: var(--color-surface);
@@ -182,14 +192,4 @@
 
   --shadow-card:   none;
   --shadow-raised: 0 12px 36px rgba(0, 0, 0, .5);
-}
-
-/* 布光台场景补充别名（three/useSceneColors 引用，深浅主题都走变量） */
-:root {
-  --color-scene-bg:    var(--studio-bg-mid, var(--neutral-200));
-  --color-scene-prop:  var(--studio-mark, var(--neutral-300));
-  --color-scene-label: var(--studio-mark, var(--neutral-400));
-  --color-model-base:  var(--model-grey);
-  --color-model-mid:   var(--model-blue);
-  --color-model-shade: var(--model-white);
 }
