@@ -126,6 +126,8 @@
   --color-border-default: var(--color-line);
   --color-border-strong:  var(--color-line-strong);
   --color-border-focus:   var(--color-line-focus);
+  /* frontend-design.md §5 的 border 分组里本就列了 accent 这一档，补齐 */
+  --color-border-accent:  var(--color-accent);
 
   /* 主按钮是纯色，没有渐变 —— 与原型一致 */
   --gradient-accent: var(--color-accent);

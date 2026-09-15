@@ -871,7 +871,7 @@ body { background: var(--color-bg-canvas); overflow: hidden; }
 }
 .pcomp:focus-within { border-color: var(--color-border-strong); box-shadow: var(--shadow-focus); }
 .pcomp__in {
-  display: block; width: 100%; min-height: 96px; max-height: 220px; resize: vertical;
+  display: block; width: 100%; min-height: 190px; max-height: 420px; resize: vertical;
   padding: var(--space-3); border: 0; background: none; color: var(--color-text-secondary);
   font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 12px; line-height: 1.8;
 }
@@ -926,6 +926,48 @@ button.pparam:hover { border-color: var(--color-border-strong); }
 .pparam__chev { width: 11px; height: 11px; color: var(--color-text-tertiary); }
 .stypop { width: 300px; }
 .stypop .styles { gap: 5px; }
+
+/* ---- 布光台入口：在提示词上方，3D 图标唤起 ---- */
+/* 各占一行：并排会把「斜上侧光 · 日光中性」这类值截断，而这正是要一眼看到的东西 */
+.rigbar { display: flex; flex-direction: column; gap: 6px; margin-bottom: var(--space-4); }
+.rigbar__main, .rigbar__side {
+  display: flex; align-items: center; gap: var(--space-3); min-width: 0;
+  padding: 10px var(--space-3); border-radius: var(--radius-card);
+  border: 1px solid var(--color-border-subtle); background: var(--color-bg-surface);
+  font-family: inherit; text-align: left; cursor: pointer;
+}
+.rigbar__main { border-color: var(--color-border-accent); background: var(--color-accent-subtle); }
+.rigbar__main:hover { border-color: var(--color-accent); box-shadow: var(--shadow-card); }
+.rigbar__side:hover { background: var(--color-bg-muted); border-color: var(--color-border-strong); }
+.rigbar__cube, .rigbar__ic {
+  flex: 0 0 auto; display: inline-flex; align-items: center; justify-content: center;
+  width: 34px; height: 34px; border-radius: var(--radius-control);
+}
+.rigbar__cube { background: var(--color-accent); color: var(--color-on-accent); }
+.rigbar__cube svg { width: 18px; height: 18px; }
+.rigbar__ic { background: var(--color-bg-muted); color: var(--color-text-secondary); }
+.rigbar__ic svg { width: 17px; height: 17px; }
+.rigbar__body { display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1 1 auto; }
+.rigbar__t {
+  display: flex; align-items: center; gap: 6px;
+  font-size: 13px; font-weight: 600; color: var(--color-text-primary);
+}
+.rigbar__tag {
+  font-size: 10px; font-weight: 500; letter-spacing: .02em;
+  padding: 1px 5px; border-radius: var(--radius-chip);
+  background: var(--color-accent); color: var(--color-on-accent);
+}
+.rigbar__v {
+  font-size: 12px; color: var(--color-text-secondary);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+
+/* ---- 资产身份信息：跟名称在一起，不沉到页面底部 ---- */
+.apv__meta { margin: -8px 0 16px; }
+.apv__meta .apv__desc { margin: 0 0 6px; }
+.apv__facts { display: flex; gap: var(--space-4); flex-wrap: wrap; font-size: 12px; color: var(--color-text-tertiary); }
+.apv__facts > span { display: inline-flex; align-items: center; gap: 5px; }
+.apv__facts svg { width: 12px; height: 12px; }
 
 /* ==========================================================================
    首页 —— macOS 大标题 + Apple TV 式 Hero 卡 + 彩色模式卡

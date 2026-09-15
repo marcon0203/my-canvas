@@ -61,6 +61,15 @@ export function AssetInspector({ asset, view }: { asset: Asset; view: AssetView 
         )}
       </div>
 
+      {/* 身份信息：设定 / 引用 / 音色 —— 属于这个资产本身，跟名称在一起 */}
+      <div className="apv__meta">
+        <p className="apv__desc">{asset.desc}</p>
+        <div className="apv__facts">
+          <span><Icon name="layers" />{users} 个镜头引用了 <span className="mono">{asset.aid}</span></span>
+          {asset.voice && <span><Icon name="mic" />{asset.voice}</span>}
+        </div>
+      </div>
+
       {/* 形状照导航在左树里（形状照挂在它所属的资产下），这里只做这一张的工作台 */}
       <div className="apv__card">
         <div className="apv__pic">
@@ -73,6 +82,27 @@ export function AssetInspector({ asset, view }: { asset: Asset; view: AssetView 
         </div>
 
         <div className="apv__side">
+          {/* 布光台入口：这张形状照怎么拍，在 3D 里拖出来 —— 它决定下面提示词的镜头语言段 */}
+          <div className="rigbar">
+            <button className="rigbar__main" onClick={() => openModal('stage')}
+              title="打开 3D 布光台：拖机位、拖灯，取景实时可见">
+              <span className="rigbar__cube"><Icon name="cube" /></span>
+              <span className="rigbar__body">
+                <span className="rigbar__t">机位与光线<span className="rigbar__tag">3D 布光台</span></span>
+                <span className="rigbar__v">{rig.size} · {azName(rig.az)} · {elName(rig.el)} → {azFace(rig.az)} ｜ {lightName(rig.lightAz, rig.lightEl)} · {kName(rig.kelvin)}</span>
+              </span>
+              <span className="entry__go"><Icon name="right" /></span>
+            </button>
+            <button className="rigbar__side" onClick={() => openModal('gear')} title="机身、镜头组、焦段、光圈、画幅">
+              <span className="rigbar__ic"><Icon name="aperture" /></span>
+              <span className="rigbar__body">
+                <span className="rigbar__t">镜头</span>
+                <span className="rigbar__v">{rig.mm} · {rig.fstop} · {rig.lensKit} ｜ {rig.ratio || '9:16'}</span>
+              </span>
+              <span className="entry__go"><Icon name="right" /></span>
+            </button>
+          </div>
+
           <div className="row" style={{ marginBottom: 6 }}>
             <span className="sec" style={{ margin: 0 }}>生成提示词</span>
             <div className="spacer" />
@@ -129,16 +159,6 @@ export function AssetInspector({ asset, view }: { asset: Asset; view: AssetView 
                 <button role="tab" aria-selected={proMode} onClick={() => { useUi.getState().set('proMode', true); useUi.getState().set('dimPick', false); }}>专业</button>
               </div>
             </div>
-            <button className="entry" onClick={() => openModal('stage')}>
-              <span className="entry__t" style={{ width: 56 }}>机位光线</span>
-              <span className="entry__v">{rig.size} · {azName(rig.az)} · {elName(rig.el)} → {azFace(rig.az)} ｜ {lightName(rig.lightAz, rig.lightEl)} · {kName(rig.kelvin)}</span>
-              <span className="entry__go"><Icon name="right" /></span>
-            </button>
-            <button className="entry" onClick={() => openModal('gear')}>
-              <span className="entry__t" style={{ width: 56 }}>镜头</span>
-              <span className="entry__v">{rig.mm} · {rig.fstop} · {rig.lensKit} ｜ {rig.ratio || '9:16'}</span>
-              <span className="entry__go"><Icon name="right" /></span>
-            </button>
             <details className="aux__more" open={useUi.getState().auxOpen}
               onToggle={(e) => setUi('auxOpen', (e.currentTarget as HTMLDetailsElement).open)}>
               <summary><Icon name="down" className="learn__chev" />{proMode ? '全部九个维度' : '镜头意图与运镜'}</summary>
@@ -153,12 +173,6 @@ export function AssetInspector({ asset, view }: { asset: Asset; view: AssetView 
             </details>
           </div>
         </div>
-      </div>
-
-      <div className="ainfo">
-        <div className="ainfo__row"><span className="dim">设定</span><span>{asset.desc}</span></div>
-        <div className="ainfo__row"><span className="dim">引用</span><span>{users} 个镜头引用了 {asset.aid}</span></div>
-        {asset.voice && <div className="ainfo__row"><span className="dim">音色</span><span>{asset.voice}</span></div>}
       </div>
     </div>
   );
