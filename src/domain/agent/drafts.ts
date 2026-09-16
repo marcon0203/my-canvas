@@ -240,7 +240,7 @@ export function draftShots(c: AgentContext, beats: readonly Beat[]): Shot[] {
 /** 缺提示词的镜头 */
 export const shotsMissingPrompt = (c: AgentContext): Shot[] => c.shots.filter((s) => !s.own.trim());
 
-const SIZE_EN: Record<string, string> = {
+export const SIZE_EN: Record<string, string> = {
   大远景: 'extreme wide shot', 远景: 'wide shot', 全景: 'full shot',
   中景: 'medium shot', 中近景: 'medium close-up', 近景: 'close-up', 特写: 'extreme close-up',
 };

@@ -38,6 +38,9 @@ npx tauri build   # 出三平台产物
 | `vault` | 系统钥匙串。`load()` 是 `pub(crate)` —— **没有任何 IPC 命令能读出明文** |
 | `providers` | 端点解析：用户改过的优先，内置目录只是种子 |
 | `agent` | 配置 → `AgentSpec` → Rig agent。解析是纯函数，配置错误在花钱之前就报出来 |
+| `run` | 编排：`Run<I>` 带公共入参，每条链路只换输入与产物事件 |
+| `outline` | 起草大纲。`number()` 补场次键 |
+| `shotprompt` | 补写提示词。`reconcile()` 核对镜号 |
 
 ## Rig 的实际形态（0.42）
 
@@ -51,7 +54,7 @@ npx tauri build   # 出三平台产物
 - OpenAI 兼容客户端：`openai::Client::builder().api_key(k).base_url(u).build()`。
   国内六家的文本接口都走这条；图片/视频是各家自有的异步任务接口，不进 Rig，作为 tool 挂上去。
 
-## 第一条打通的链路：起草大纲
+## 第一条链路：起草大纲
 
 ```
 技能卡「从一句灵感起草大纲」
@@ -68,14 +71,37 @@ npx tauri build   # 出三平台产物
 两个刻意的设计：
 
 **编排放 core 不放 tauri 层。** tauri 层在没有 GUI 系统库的机器上编译不了，
-把编排写那儿等于这段代码永远没被类型检查过。现在 `app/src/lib.rs` 85 行、5 个命令，
-每个都只做转发；编排在 `core::run`，用假 Sink 和假 Keys 测了 6 条。
+把编排写那儿等于这段代码永远没被类型检查过。现在 `app/src/lib.rs` 一百出头、6 个命令，
+每个都只做转发；编排在 `core::run`，用假 Sink 和假 Keys 测。
 
 **失败走事件，不走 Result。** 否则前端要同时处理「Promise reject」和「事件里的错误」
 两条路径。常见失败在前端翻成人话：没配密钥就说去哪配，模型没按 schema 返回就直说。
 
 **场次编号由 Rust 补，不让模型编。** 模型编 id 会重复、会跳号、会和已有的撞 ——
 `outline::number` 是纯函数，三条测试盯着它（跨幕连续、接着已有编号、覆盖模型瞎写的）。
+
+## 第二条链路：补写提示词
+
+```
+技能卡「为缺提示词的镜头补写」
+  └ api/agent.ts  isDesktop() && 确实有镜头缺提示词 ? IPC : 本地 mock
+      └ agent_shots_prompt
+          └ core::run::shots_prompt    ← 与起草大纲共用 prepare / stream_reply
+              ├ shotprompt::draft      Rig Extractor
+              └ shotprompt::reconcile  核对镜号，纯函数
+  └ RunEvent::Prompts → 产物卡 → 采纳 → shotPrompts 补丁
+```
+
+与第一条链路共用 `prepare`（解析 Agent + 取密钥）与 `stream_reply`，
+`Run<'a, I>` 把输入参数化 —— 新链路只要给自己的输入类型和产物事件。
+
+**Rust 不认识项目库。** 资产引用在前端展开成「名字：描述」再送过去，
+Rust 侧只负责「把几段文字合成一条提示词，并且别把镜号写错」。
+
+**镜号由 Rust 核对，不信模型。** `reconcile` 丢掉编出来的 id、去重、丢掉空提示词、
+补上忘了带的画风，并把漏写的镜号报回来 —— 产物卡标题如实写 `2/5 镜`，
+不假装全补上了。提示词写错了人一眼能看出来，**写到别的镜头上却是静默的错**，
+所以这层兜底比大纲那层更要紧，七条测试盯着它。
 
 ## 还没做
 

@@ -4,8 +4,11 @@ import { route } from '@/domain/agent/router';
 import { personaById } from '@/domain/agent/roster';
 import { canHandleConfigured, ownerOfConfigured } from '@/domain/agent/config';
 import type { Handoff, IntentKind, Plan } from '@/domain/agent/types';
-import { isDesktop, outlineDraft, type OutlineDraft } from './desktop';
+import { isDesktop, outlineDraft, shotsPrompt, type OutlineDraft, type PromptDraft, type RunEvent, type ShotBrief } from './desktop';
 import { allBeats } from '@/domain/story/model';
+import type { Shot } from '@/domain/shots/model';
+import { SIZE_EN, shotsMissingPrompt } from '@/domain/agent/drafts';
+import { ctxAssets } from '@/domain/agent/context';
 
 /**
  * Agent 传输层：本地模拟一次流式应答。
@@ -86,9 +89,14 @@ export async function* runAgent(
     return;
   }
 
-  // 桌面端 + 这件活已经接上真模型：走 IPC，不再用本地草稿
+  // 桌面端 + 这件活已经接上真模型：走 IPC，不再用本地草稿。
+  // 被 blocked 的活儿不走这条路 —— 没镜头可补时不该去花模型的钱。
   if (isDesktop() && resolved === 'outline.draft') {
     yield* runOutlineOnDesktop(ctx, signal);
+    return;
+  }
+  if (isDesktop() && resolved === 'shots.prompt' && shotsMissingPrompt(ctx).length > 0) {
+    yield* runShotPromptsOnDesktop(ctx, signal);
     return;
   }
 
@@ -139,55 +147,144 @@ async function* runOutlineOnDesktop(
   ctx: AgentContext,
   signal: AbortSignal,
 ): AsyncGenerator<AgentEvent> {
-  const steps = OUTLINE_STEPS;
-  yield { t: 'plan', plan: { kind: 'outline.draft', steps, reply: '' } };
+  yield { t: 'plan', plan: { kind: 'outline.draft', steps: OUTLINE_STEPS, reply: '' } };
 
+  const fresh = ctx.acts.length === 0;
+  yield* pump(signal, (emit) =>
+    outlineDraft(
+      {
+        cfg: ctx.agents[ctx.agentId],
+        fallbackPreamble: personaById(ctx.agentId).preamble,
+        globals: ctx.globalModels,
+        providers: {},
+        input: {
+          project: ctx.proj,
+          idea: ctx.input,
+          actCount: ctx.acts.length,
+          beatCount: allBeats(ctx.acts).length,
+        },
+      },
+      (e) => emit(e, (d) => outlineProposal(d as OutlineDraft, fresh, ctx)),
+    ),
+  );
+}
+
+/* ---------------- 真模型：补写提示词 ---------------- */
+
+const PROMPT_STEPS = [
+  { icon: 'text', label: '清点缺提示词的镜头' },
+  { icon: 'users', label: '让模型按引用合成' },
+  { icon: 'wand', label: '核对镜号并落回' },
+];
+
+/**
+ * 桌面端的「补写提示词」。
+ *
+ * 引用资产在**这里**展开成描述再送过去：Rust 侧不认识项目库，也不该认识 ——
+ * 它只负责「把几段文字合成一条提示词，并且别把镜号写错」。
+ */
+async function* runShotPromptsOnDesktop(
+  ctx: AgentContext,
+  signal: AbortSignal,
+): AsyncGenerator<AgentEvent> {
+  yield { t: 'plan', plan: { kind: 'shots.prompt', steps: PROMPT_STEPS, reply: '' } };
+
+  const miss = shotsMissingPrompt(ctx);
+
+  yield* pump(signal, (emit) =>
+    shotsPrompt(
+      {
+        cfg: ctx.agents[ctx.agentId],
+        fallbackPreamble: personaById(ctx.agentId).preamble,
+        globals: ctx.globalModels,
+        providers: {},
+        input: {
+          project: ctx.proj,
+          stylePrompt: ctx.stylePrompt,
+          shots: shotBriefs(ctx, miss),
+        },
+      },
+      (e) => emit(e, (d) => promptProposal(d as PromptDraft, miss.length)),
+    ),
+  );
+}
+
+/**
+ * 镜头 → 送给模型的简报。引用在这里展开成「名字：描述」，
+ * 景别用项目词表里的英文术语 —— 不让模型自己翻，术语要和手写提示词一致。
+ */
+export function shotBriefs(ctx: AgentContext, shots: readonly Shot[]): ShotBrief[] {
+  const assets = ctxAssets(ctx);
+  return shots.map((s) => ({
+    id: s.id,
+    size: s.size,
+    sizeEn: SIZE_EN[s.size] ?? 'medium shot',
+    desc: s.desc,
+    refs: assets.filter((a) => s.refs.includes(a.aid)).map((a) => `${a.name}：${a.desc}`),
+  }));
+}
+
+/** Rust 产物 → 前端产物卡。镜号 Rust 已经核对过，这里只管怎么摆 */
+export
+function promptProposal(draft: PromptDraft, asked: number) {
+  const edits = draft.prompts.map((p) => ({ id: p.id, own: p.own }));
+  const missed = asked - edits.length;
+  return {
+    title: missed > 0
+      ? `补写提示词 · ${edits.length}/${asked} 镜`
+      : `补写提示词 · ${edits.length} 镜`,
+    rows: edits.slice(0, 8).map((e) => ({ k: e.id, v: e.own })),
+    patch: { t: 'shotPrompts' as const, edits },
+    cost: 2,
+    goto: 'storyboard',
+  };
+}
+
+/* ---------------- IPC 事件泵 ---------------- */
+
+/**
+ * 把 Rust 的 RunEvent 翻译成本地 AgentEvent，并把「回调推送」倒成「异步生成器」。
+ *
+ * 两套事件**故意不合并**：前端的 AgentEvent 还要伺候浏览器 mock 那条路，
+ * 合并会让 mock 背上 IPC 的形状。
+ *
+ * `toProposal` 由各条链路自己给 —— 产物怎么变成卡片是链路的事，泵不管。
+ */
+async function* pump(
+  signal: AbortSignal,
+  start: (emit: (e: RunEvent, toProposal: (d: unknown) => NonNullable<Plan['proposal']>) => void) => Promise<void>,
+): AsyncGenerator<AgentEvent> {
   const queue: AgentEvent[] = [];
   let finished = false;
   let wake: (() => void) | null = null;
-  const push = (e: AgentEvent) => {
-    queue.push(e);
-    wake?.();
+  const push = (e: AgentEvent) => { queue.push(e); wake?.(); };
+
+  const emit = (e: RunEvent, toProposal: (d: unknown) => NonNullable<Plan['proposal']>) => {
+    switch (e.t) {
+      case 'step':
+        push({ t: 'step', index: e.index });
+        break;
+      case 'delta':
+        push({ t: 'delta', text: e.text });
+        break;
+      case 'proposal':
+      case 'prompts':
+        push({ t: 'proposal', proposal: toProposal(e.draft) });
+        break;
+      case 'done':
+        finished = true;
+        push({ t: 'done' });
+        break;
+      case 'failed':
+        finished = true;
+        // 失败当成一段正文说出来：用户要知道为什么没成，而不是看一个空面板
+        push({ t: 'delta', text: failureText(e.code, e.message) });
+        push({ t: 'done' });
+        break;
+    }
   };
 
-  const fresh = ctx.acts.length === 0;
-  void outlineDraft(
-    {
-      cfg: ctx.agents[ctx.agentId],
-      fallbackPreamble: personaById(ctx.agentId).preamble,
-      globals: ctx.globalModels,
-      providers: {},
-      input: {
-        project: ctx.proj,
-        idea: ctx.input,
-        actCount: ctx.acts.length,
-        beatCount: allBeats(ctx.acts).length,
-      },
-    },
-    (e) => {
-      switch (e.t) {
-        case 'step':
-          push({ t: 'step', index: e.index });
-          break;
-        case 'delta':
-          push({ t: 'delta', text: e.text });
-          break;
-        case 'proposal':
-          push({ t: 'proposal', proposal: outlineProposal(e.draft, fresh, ctx) });
-          break;
-        case 'done':
-          finished = true;
-          push({ t: 'done' });
-          break;
-        case 'failed':
-          finished = true;
-          // 失败当成一段正文说出来：用户要知道为什么没成，而不是看一个空面板
-          push({ t: 'delta', text: failureText(e.code, e.message) });
-          push({ t: 'done' });
-          break;
-      }
-    },
-  ).catch((err: unknown) => {
+  void start(emit).catch((err: unknown) => {
     finished = true;
     push({ t: 'delta', text: `调用失败：${String(err)}` });
     push({ t: 'done' });

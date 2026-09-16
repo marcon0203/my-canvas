@@ -7,6 +7,7 @@ use crate::agent::{self, AgentSpec};
 use crate::config::{AgentConfig, ModelRef, ProviderSetting};
 use crate::error::Error;
 use crate::outline::{self, OutlineDraft, OutlineInput};
+use crate::shotprompt::{self, PromptDraft, PromptInput};
 use std::collections::HashMap;
 
 /// 与前端 `AgentEvent` 同形。契约一致，前端换 transport 不用改事件处理。
@@ -16,6 +17,9 @@ pub enum RunEvent {
     Step { index: usize },
     Delta { text: String },
     Proposal { draft: OutlineDraft },
+    /// 补写提示词的产物。**刻意与 Proposal 分开**：两种产物形状不同，
+    /// 合成一个 untagged 字段会让前端靠猜字段来分辨。
+    Prompts { draft: PromptDraft },
     Done,
     /// **失败也走事件**，不走 Result —— 否则前端要同时处理
     /// 「Promise reject」和「事件里的错误」两条路径。
@@ -53,16 +57,21 @@ impl Keys for SystemKeys {
     }
 }
 
-pub struct OutlineRun<'a> {
+/// 一次运行的公共入参。`I` 是这条链路自己的输入形状 ——
+/// 解析 Agent、取密钥这两步每条链路都一样，只有输入不同。
+pub struct Run<'a, I> {
     pub cfg: &'a AgentConfig,
     pub fallback_preamble: &'a str,
     pub globals: &'a HashMap<String, ModelRef>,
     pub providers: &'a HashMap<String, ProviderSetting>,
-    pub input: &'a OutlineInput,
+    pub input: &'a I,
 }
 
+pub type OutlineRun<'a> = Run<'a, OutlineInput>;
+pub type PromptRun<'a> = Run<'a, PromptInput>;
+
 /// 解析阶段：不发请求，所以能独立测。失败时发 Failed 并返回 None。
-fn prepare<S: Sink, K: Keys>(run: &OutlineRun<'_>, sink: &S, keys: &K) -> Option<(AgentSpec, String)> {
+fn prepare<I, S: Sink, K: Keys>(run: &Run<'_, I>, sink: &S, keys: &K) -> Option<(AgentSpec, String)> {
     sink.emit(RunEvent::Step { index: 1 });
     let spec = match agent::resolve(run.cfg, run.fallback_preamble, run.globals, run.providers) {
         Ok(s) => s,
@@ -101,6 +110,22 @@ pub async fn outline_draft<S: Sink, K: Keys>(run: OutlineRun<'_>, sink: S, keys:
     sink.emit(RunEvent::Step { index: 3 });
     stream_reply(&sink, &draft.reply);
     sink.emit(RunEvent::Proposal { draft });
+    sink.emit(RunEvent::Done);
+}
+
+/// 跑一次「补写提示词」。步骤数与前端的步骤卡对齐。
+pub async fn shots_prompt<S: Sink, K: Keys>(run: PromptRun<'_>, sink: S, keys: K) {
+    let Some((spec, key)) = prepare(&run, &sink, &keys) else { return };
+
+    sink.emit(RunEvent::Step { index: 2 });
+    let draft = match shotprompt::draft(&spec, &key, run.input).await {
+        Ok(d) => d,
+        Err(e) => return sink.emit(RunEvent::failed(&e)),
+    };
+
+    sink.emit(RunEvent::Step { index: 3 });
+    stream_reply(&sink, &draft.reply);
+    sink.emit(RunEvent::Prompts { draft });
     sink.emit(RunEvent::Done);
 }
 

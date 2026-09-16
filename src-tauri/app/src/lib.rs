@@ -9,6 +9,7 @@ use studio_core::agent::{self, AgentSpec};
 use studio_core::config::{AgentConfig, ModelRef, ProviderSetting};
 use studio_core::outline::OutlineInput;
 use studio_core::run::{self, RunEvent};
+use studio_core::shotprompt::PromptInput;
 use studio_core::vault::{self, KeyStatus};
 
 /* ---------------- 密钥：明文只进钥匙串，出不来 ---------------- */
@@ -70,6 +71,32 @@ async fn agent_outline_draft(
     .await;
 }
 
+/// 补写提示词。与起草大纲同一套编排，只换输入与产物。
+#[tauri::command]
+async fn agent_shots_prompt(
+    cfg: AgentConfig,
+    fallback_preamble: String,
+    globals: HashMap<String, ModelRef>,
+    providers: HashMap<String, ProviderSetting>,
+    input: PromptInput,
+    on_event: tauri::ipc::Channel<RunEvent>,
+) {
+    run::shots_prompt(
+        run::PromptRun {
+            cfg: &cfg,
+            fallback_preamble: &fallback_preamble,
+            globals: &globals,
+            providers: &providers,
+            input: &input,
+        },
+        move |e: RunEvent| {
+            let _ = on_event.send(e);
+        },
+        run::SystemKeys,
+    )
+    .await;
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -79,6 +106,7 @@ pub fn run() {
             vault_status,
             agent_resolve,
             agent_outline_draft,
+            agent_shots_prompt,
         ])
         .run(tauri::generate_context!())
         .expect("启动失败");

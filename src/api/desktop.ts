@@ -54,6 +54,7 @@ export type RunEvent =
   | { t: 'step'; index: number }
   | { t: 'delta'; text: string }
   | { t: 'proposal'; draft: OutlineDraft }
+  | { t: 'prompts'; draft: PromptDraft }
   | { t: 'done' }
   | { t: 'failed'; code: string; message: string };
 
@@ -70,21 +71,53 @@ export interface OutlineInput {
   beatCount: number;
 }
 
-export interface RunArgs {
+/** 与 Rust 侧 `shotprompt::PromptDraft` 同形 */
+export interface PromptDraft {
+  reply: string;
+  prompts: { id: string; own: string }[];
+}
+
+/** 一镜的现状。**引用在前端展开成描述再送过去** —— Rust 不碰项目库 */
+export interface ShotBrief {
+  id: string;
+  size: string;
+  sizeEn: string;
+  desc: string;
+  refs: string[];
+}
+
+export interface PromptInput {
+  project: string;
+  stylePrompt: string;
+  shots: ShotBrief[];
+}
+
+export interface RunArgs<I> {
   cfg: unknown;
   fallbackPreamble: string;
   globals: unknown;
   providers: unknown;
-  input: OutlineInput;
+  input: I;
 }
 
 /**
  * 起草大纲：桌面端走 IPC 流式通道。
  * 浏览器里没有实现 —— 调用方应先用 `isDesktop()` 判断，走 mock 那条路。
  */
-export async function outlineDraft(args: RunArgs, onEvent: (e: RunEvent) => void): Promise<void> {
+export async function outlineDraft(args: RunArgs<OutlineInput>, onEvent: (e: RunEvent) => void): Promise<void> {
   const { invoke: call, Channel } = await import('@tauri-apps/api/core');
   const ch = new Channel<RunEvent>();
   ch.onmessage = onEvent;
   await call('agent_outline_draft', { ...args, onEvent: ch });
+}
+
+/** 补写提示词：同一条 Channel 机制，换命令与输入 */
+export async function shotsPrompt(
+  args: RunArgs<PromptInput>,
+  onEvent: (e: RunEvent) => void,
+): Promise<void> {
+  const { invoke: call, Channel } = await import('@tauri-apps/api/core');
+  const ch = new Channel<RunEvent>();
+  ch.onmessage = onEvent;
+  await call('agent_shots_prompt', { ...args, onEvent: ch });
 }

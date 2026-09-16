@@ -9,6 +9,7 @@ pub mod error;
 pub mod outline;
 pub mod providers;
 pub mod run;
+pub mod shotprompt;
 pub mod vault;
 
 pub use error::{Error, Result};
