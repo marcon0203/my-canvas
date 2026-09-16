@@ -22,6 +22,7 @@ import { Rail } from '@/components/shell/Rail';
 import { SubNav } from '@/components/shell/SubNav';
 import { isAgentId } from '@/domain/agent/roster';
 import { providerOf } from '@/domain/providers/catalog';
+import { isSkillId } from '@/domain/agent/skills';
 import type { ProviderId } from '@/domain/providers/model';
 import { SETTINGS_SUB, WORKBENCH_SUB, isValidSub, type SectionId } from '@/domain/nav';
 import { TokenGallery } from './routes/TokenGallery';
@@ -116,6 +117,7 @@ export function SettingsRoute() {
   // 详情段只有模型与智能体两个分区有；乱填的名字当没填，回列表而不是白屏
   const valid = active === 'agents' ? isAgentId(detail)
     : active === 'models' ? !!providerOf(detail as ProviderId)
+    : active === 'skills' ? isSkillId(detail)
     : false;
   const item = valid ? detail : undefined;
 

@@ -8,10 +8,10 @@ import type { IntentKind } from './types';
  * 「润色一下这段台词」同理落到润色而不是写正文。
  */
 
-const ACT = 10;
-const TOPIC = 3;
+export const ACT = 10;
+export const TOPIC = 3;
 
-interface Rule {
+export interface Rule {
   readonly kind: IntentKind;
   /** 祈使动词 / 明确动作 */
   readonly act: readonly string[];
@@ -19,7 +19,7 @@ interface Rule {
   readonly topic: readonly string[];
 }
 
-const RULES: readonly Rule[] = [
+export const RULES: readonly Rule[] = [
   { kind: 'outline.draft',
     act: ['起草', '搭个结构', '写大纲', 'outline'],
     topic: ['大纲', '幕', '结构', '故事线', '灵感', '想法', '开头'] },

@@ -192,7 +192,7 @@ function planStyleTransfer(c: AgentContext): Plan {
       title: `画风 · ${c.style} → ${next}`,
       rows: [{ k: '全局提示词', v: prompt }, { k: '不受影响', v: `${off} 张节点级画风的形状照` }],
       patch: { t: 'style', style: next, stylePrompt: prompt },
-      cost: 1,
+      cost: 1, goto: 'storyboard',
     },
   };
 }

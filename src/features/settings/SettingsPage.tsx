@@ -3,11 +3,12 @@ import { StageBar } from '@/components/StageBar';
 import { Button, Chip, Icon } from '@/ui';
 import { ProviderDetail, ProviderList } from './ProviderSettings';
 import { AgentDetail, AgentList } from './AgentSettings';
-import { SkillSettings } from './SkillSettings';
+import { SkillDetail, SkillList } from './SkillSettings';
 import { SETTINGS_SUB } from '@/domain/nav';
 import { personaById, type AgentId } from '@/domain/agent/roster';
 import { providerOf } from '@/domain/providers/catalog';
 import type { ProviderId } from '@/domain/providers/model';
+import { isSkillId, skillOf } from '@/domain/agent/skills';
 import { useReadyProviders, useSettings } from '@/store/settings';
 import { isDesktop } from '@/api/desktop';
 
@@ -39,6 +40,7 @@ export function SettingsPage({ section, detail, onOpen, onBack }: {
   const hint = SETTINGS_SUB.find((s) => s.k === section)?.hint;
   const p = section === 'agents' && detail ? personaById(detail as AgentId) : undefined;
   const prov = section === 'models' && detail ? providerOf(detail as ProviderId) : undefined;
+  const sk = section === 'skills' && isSkillId(detail) ? skillOf(detail) : undefined;
 
   return (
     <div className="stage">
@@ -53,6 +55,12 @@ export function SettingsPage({ section, detail, onOpen, onBack }: {
           }
           pills={<span className="t-cap dim">{p.tagline}</span>}
           actions={<Button onClick={onBack}><Icon name="left" />返回智能体</Button>}
+        />
+      ) : sk ? (
+        <StageBar
+          title={<span className="crumb"><Icon name={sk.icon} />{sk.name}</span>}
+          pills={<span className="mono dim t-cap">{sk.id}</span>}
+          actions={<Button onClick={onBack}><Icon name="left" />返回 Skill</Button>}
         />
       ) : prov ? (
         <StageBar
@@ -72,11 +80,13 @@ export function SettingsPage({ section, detail, onOpen, onBack }: {
         {section === 'models' && (prov
           ? <ProviderDetail id={prov.id} />
           : <ProviderList onOpen={onOpen} />)}
-        {section === 'skills' && <SkillSettings />}
+        {section === 'skills' && (sk
+          ? <SkillDetail id={sk.id} />
+          : <SkillList onOpen={onOpen} />)}
         {section === 'agents' && (p
           ? <AgentDetail id={p.id} />
           : <AgentList onOpen={onOpen} />)}
-        {!p && !prov && (
+        {!p && !prov && !sk && (
           <p className="t-cap dim setnote">
             <Icon name="bolt" />
             这是**应用级**设置，跨项目共用 —— 模型与 Agent 的配置不属于某一个项目。
