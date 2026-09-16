@@ -76,6 +76,10 @@ pub struct SkillStore {
 ///
 /// 只认开头的 `---` 围栏。没有围栏就是整篇都是正文 —— 那样没有 description，
 /// 调用方会把它当成坏 skill 跳过，而不是拿正文去猜。
+pub(crate) fn split_front(text: &str) -> Option<(&str, &str)> {
+    split(text)
+}
+
 fn split(text: &str) -> Option<(&str, &str)> {
     let rest = text.strip_prefix("---")?.trim_start_matches(['\r']).strip_prefix('\n')?;
     let end = rest.find("\n---")?;

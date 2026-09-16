@@ -25,6 +25,9 @@ import { providerOf } from '@/domain/providers/catalog';
 import { isSkillId } from '@/domain/agent/skills';
 import { builtinSkill } from '@/domain/skills/builtin';
 import type { ProviderId } from '@/domain/providers/model';
+import { startAutosave } from '@/api/autosave';
+import { loadSettings, startSettingsSync } from '@/api/settingsSync';
+import { useSettings } from '@/store/settings';
 import { SETTINGS_SUB, STEPS, WORKBENCH_SUB, defaultSub, isValidSub, type SectionId } from '@/domain/nav';
 import { TokenGallery } from './routes/TokenGallery';
 
@@ -54,6 +57,12 @@ const router = createBrowserRouter([
 ]);
 
 export function App() {
+  // 项目改动与设置都自动写回工作空间；挂在最外层，切路由不重装
+  useEffect(() => startAutosave(), []);
+  useEffect(() => startSettingsSync(), []);
+  const workspace = useSettings((s) => s.workspace);
+  useEffect(() => { void loadSettings(workspace); }, [workspace]);
+
   return (
     <QueryClientProvider client={queryClient}>
       <RouterProvider router={router} />

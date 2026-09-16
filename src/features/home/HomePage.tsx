@@ -1,4 +1,6 @@
+import { useState } from 'react';
 import { useNavigate } from 'react-router';
+import { NewProjectModal } from './NewProjectModal';
 import { Icon } from '@/ui/Icon';
 import { imgUrlFor } from '@/lib/media';
 import { useProjectList } from '@/api/queries';
@@ -15,6 +17,7 @@ export function HomePage() {
   const navigate = useNavigate();
   const toast = useUi((s) => s.toast);
   const list = useProjectList();
+  const [newOpen, setNewOpen] = useState(false);
   const openProject = (id: string) => navigate(`/project/${id}/outline`);
 
   return (
@@ -60,19 +63,20 @@ export function HomePage() {
         {(list.data ?? []).map((c) => (
           <div key={c.id} className="card" role="button" tabIndex={0} onClick={() => openProject(c.id)}
             onKeyDown={(e) => { if (e.key === 'Enter') openProject(c.id); }}>
-            <div className="card__pic card__pic--wide"><img className="ph" src={imgUrlFor(c.seed, 'wide')} alt="" /></div>
+            <div className="card__pic card__pic--wide"><img className="ph" src={imgUrlFor(c.id, 'wide')} alt="" /></div>
             <div className="card__b">
-              <div className="card__n">{c.title}</div>
-              <div className="card__m">{c.meta}</div>
+              <div className="card__n">{c.proj}</div>
+              <div className="card__m">{c.kind} · {c.ratio}</div>
             </div>
           </div>
         ))}
         <div className="card card--add" role="button" tabIndex={0} title="新建项目"
-          onClick={() => toast('新建项目：从一句灵感开始，或导入已有剧本')}
-          onKeyDown={(e) => { if (e.key === 'Enter') toast('新建项目：从一句灵感开始，或导入已有剧本'); }}>
+          onClick={() => setNewOpen(true)}
+          onKeyDown={(e) => { if (e.key === 'Enter') setNewOpen(true); }}>
           <div className="card__add"><Icon name="plus" /><span>新建项目</span></div>
         </div>
       </div>
+      <NewProjectModal open={newOpen} onClose={() => setNewOpen(false)} />
     </div></div></div>
   );
 }

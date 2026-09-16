@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { submitGen, cancelGen } from './generation';
-import { fetchProject, fetchProjectList } from './mock';
+import { listProjects, loadProject } from './store';
+import { useSettings } from '@/store/settings';
 import { parseGenParams, type GenParams } from './schemas';
 
 export const qk = {
@@ -9,16 +10,22 @@ export const qk = {
   tasks: ['tasks'] as const,
 };
 
-/** 首页「最近的项目」列表 */
+/** 首页「最近的项目」列表 —— 读的是工作空间，不是 mock */
 export function useProjectList() {
-  return useQuery({ queryKey: qk.projectList, queryFn: fetchProjectList, staleTime: Infinity });
+  const workspace = useSettings((s) => s.workspace);
+  return useQuery({
+    queryKey: [...qk.projectList, workspace],
+    queryFn: () => listProjects(workspace),
+    staleTime: Infinity,
+  });
 }
 
-/** 按 ID 拉取项目内容 + 能力配置。id 为空时不发请求 */
+/** 按 ID 拉取项目内容。id 为空时不发请求 */
 export function useProjectData(projectId: string) {
+  const workspace = useSettings((s) => s.workspace);
   return useQuery({
-    queryKey: qk.project(projectId),
-    queryFn: () => fetchProject(projectId),
+    queryKey: [...qk.project(projectId), workspace],
+    queryFn: () => loadProject(projectId, workspace),
     enabled: projectId.length > 0,
     staleTime: Infinity,
   });

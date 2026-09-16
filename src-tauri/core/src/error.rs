@@ -26,6 +26,8 @@ pub enum Error {
     Skill(String),
     #[error("工作空间：{0}")]
     Workspace(String),
+    #[error("读写失败：{0}")]
+    Store(String),
 }
 
 impl Error {
@@ -43,6 +45,7 @@ impl Error {
             Error::UnknownSkill(_) => "unknown_skill",
             Error::Skill(_) => "skill",
             Error::Workspace(_) => "workspace",
+            Error::Store(_) => "store",
         }
     }
 }

@@ -12,6 +12,8 @@ use studio_core::run::{self, RunEvent};
 use studio_core::shotprompt::PromptInput;
 use studio_core::skills::{Root, SkillMeta, SkillStore, SkillWarning};
 use studio_core::workspace::{self, Workspace};
+use studio_core::project::{self, Bundle, Meta};
+use studio_core::store::{self, ConfigFile};
 use studio_core::vault::{self, KeyStatus};
 
 /* ---------------- 密钥：明文只进钥匙串，出不来 ---------------- */
@@ -29,6 +31,56 @@ fn vault_clear(provider: String) -> Result<KeyStatus> {
 #[tauri::command]
 fn vault_status(providers: Vec<String>) -> Result<Vec<KeyStatus>> {
     providers.iter().map(|p| vault::status(p)).collect()
+}
+
+/* ---------------- 配置：落在工作空间里，不进数据库 ---------------- */
+
+/// 读一份配置。**密钥不在这里** —— 它在系统钥匙串，工作空间整个复制走也带不走。
+#[tauri::command]
+fn config_load(which: String, workspace: Option<String>) -> Result<serde_json::Value> {
+    let file = ConfigFile::parse(&which)
+        .ok_or_else(|| studio_core::Error::Store(format!("没有这份配置：{which}")))?;
+    let w = ws(workspace.as_deref())?;
+    store::read_json(&store::config_path(&w.root, file))
+}
+
+#[tauri::command]
+fn config_save(
+    which: String,
+    value: serde_json::Value,
+    workspace: Option<String>,
+) -> Result<()> {
+    let file = ConfigFile::parse(&which)
+        .ok_or_else(|| studio_core::Error::Store(format!("没有这份配置：{which}")))?;
+    let w = ws(workspace.as_deref())?;
+    w.ensure()?;
+    store::write_json(&store::config_path(&w.root, file), &value)
+}
+
+/* ---------------- 项目：目录 + Markdown + JSON ---------------- */
+
+#[tauri::command]
+fn project_list(workspace: Option<String>) -> Result<Vec<Meta>> {
+    Ok(project::list(&ws(workspace.as_deref())?.root))
+}
+
+#[tauri::command]
+fn project_load(id: String, workspace: Option<String>) -> Result<Bundle> {
+    project::load(&ws(workspace.as_deref())?.root, &id)
+}
+
+#[tauri::command]
+fn project_save(bundle: Bundle, workspace: Option<String>) -> Result<()> {
+    let w = ws(workspace.as_deref())?;
+    w.ensure()?;
+    std::fs::create_dir_all(project::projects_dir(&w.root))
+        .map_err(|e| studio_core::Error::Store(format!("建不了 projects 目录：{e}")))?;
+    project::save(&w.root, &bundle)
+}
+
+#[tauri::command]
+fn project_delete(id: String, workspace: Option<String>) -> Result<()> {
+    project::delete(&ws(workspace.as_deref())?.root, &id)
 }
 
 /* ---------------- Skill ---------------- */
@@ -244,6 +296,12 @@ pub fn run() {
             skill_resource,
             workspace_info,
             workspace_prepare,
+            config_load,
+            config_save,
+            project_list,
+            project_load,
+            project_save,
+            project_delete,
         ])
         .run(tauri::generate_context!())
         .expect("启动失败");
