@@ -3,7 +3,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { createBrowserRouter, RouterProvider, Navigate, useParams, useNavigate } from 'react-router';
 import { Toaster } from '@/ui/Toast';
 import { Skeleton } from '@/ui/Skeleton';
-import { Button } from '@/ui';
+import { Button, EmptyState } from '@/ui';
 import { useProjectData, useProjectList } from '@/api/queries';
 import { useProject } from '@/store/project';
 import { TopBar } from '@/components/TopBar';
@@ -17,7 +17,10 @@ import { StoryboardPage } from '@/features/storyboard/StoryboardPage';
 import { EditingPage } from '@/features/clips/EditingPage';
 import { CanvasPage } from '@/features/canvas/CanvasPage';
 import { MetricsPage } from '@/features/metrics/MetricsPage';
-import { SettingsPage } from '@/features/settings/SettingsPage';
+import { SettingsPage, type SettingsSection } from '@/features/settings/SettingsPage';
+import { Rail } from '@/components/shell/Rail';
+import { SubNav } from '@/components/shell/SubNav';
+import { SETTINGS_SUB, WORKBENCH_SUB, isValidSub, type SectionId } from '@/domain/nav';
 import { TokenGallery } from './routes/TokenGallery';
 
 const queryClient = new QueryClient();
@@ -38,7 +41,8 @@ const router = createBrowserRouter([
   { path: '/tokens', element: <TokenGallery /> },
   // 设置是**应用级**的，不属于任何项目：模型与 Agent 配置跨项目共用，
   // 放进 /project/:id/... 会让人以为是「这个项目的模型」
-  { path: '/settings', element: <SettingsRoute /> },
+  { path: '/settings/:section?', element: <SettingsRoute /> },
+  { path: '/resources', element: <ResourcesRoute /> },
   { path: '/project', element: <ProjectEntryRedirect /> },
   { path: '/project/:projectId/:step?', element: <ProjectRoute /> },
   { path: '/', element: <AppShell /> },
@@ -53,16 +57,65 @@ export function App() {
   );
 }
 
-/** 设置页：应用级，不挂在任何项目下 */
-export function SettingsRoute() {
-  const setRoute = useUi((s) => s.setRoute);
-  useEffect(() => { setRoute('settings'); }, [setRoute]);
+/**
+ * 应用骨架：左侧一级图标栏 + 二级菜单 + 内容区（Apifox 那种）。
+ * 一级决定在哪个大区，二级决定大区内部去哪；两者都进 URL，可刷新可分享。
+ */
+function Shell({ section, sub, onSub, children, aside }: {
+  section: SectionId;
+  sub?: { title: string; meta?: React.ReactNode; items: readonly { k: string; n: string; icon: string; hint?: string }[]; active: string; footer?: React.ReactNode };
+  onSub?: (k: string) => void;
+  children: React.ReactNode;
+  aside?: React.ReactNode;
+}) {
+  const navigate = useNavigate();
+  const go = (id: SectionId) => {
+    if (id === 'workbench') { navigate('/'); return; }
+    if (id === 'resources') { navigate('/resources'); return; }
+    navigate('/settings/models');
+  };
   return (
     <div className="app">
       <TopBar />
-      <div className="work work--full"><SettingsPage /></div>
+      <div className="body">
+        <Rail active={section} onPick={go} />
+        {sub && <SubNav {...sub} onPick={(k) => onSub?.(k)} />}
+        <main className="body__main">{children}</main>
+        {aside}
+      </div>
       <Toaster />
     </div>
+  );
+}
+
+/** 设置页：应用级，不挂在任何项目下。二级菜单是三个分区 */
+export function SettingsRoute() {
+  const { section } = useParams();
+  const navigate = useNavigate();
+  const setRoute = useUi((s) => s.setRoute);
+  useEffect(() => { setRoute('settings'); }, [setRoute]);
+
+  const active = isValidSub('settings', section ?? '') ? section! : 'models';
+  return (
+    <Shell section="settings"
+      sub={{ title: '设置', items: SETTINGS_SUB, active }}
+      onSub={(k) => navigate(`/settings/${k}`)}>
+      <SettingsPage section={active as SettingsSection} />
+    </Shell>
+  );
+}
+
+/** 资源管理：入口先放着，点进来说明白还没实现 —— 比灰掉一个按钮诚实 */
+export function ResourcesRoute() {
+  const setRoute = useUi((s) => s.setRoute);
+  useEffect(() => { setRoute('settings'); }, [setRoute]);
+  return (
+    <Shell section="resources">
+      <div className="stage"><div className="stage__body"><div className="pad">
+        <EmptyState icon="image"
+          text="资源管理还没实现。这里将来放跨项目共用的素材：参考图、音乐、字体、LUT，以及它们被哪些项目引用。现在先占个入口。" />
+      </div></div></div>
+    </Shell>
   );
 }
 
@@ -72,6 +125,7 @@ export function AppShell() {
   const projectId = useUi((s) => s.projectId);
   const step = useUi((s) => s.step);
   const hydratedFor = useProject((s) => s.hydratedFor);
+  const proj = useProject((s) => s.proj);
   const q = useProjectData(route === 'project' ? projectId : '');
 
   // 项目内容注入 store：不入撤销历史（pause → hydrate → clear → resume）
@@ -101,15 +155,21 @@ export function AppShell() {
   }
 
   const Page = PAGES[STEPS.includes(step) ? step : 'outline']!;
+  if (route === 'home') {
+    return <Shell section="workbench"><HomePage /></Shell>;
+  }
   return (
-    <div className="app">
-      <TopBar />
-      <div className={route === 'home' ? 'work work--full' : 'work'}>
-        {route === 'home' ? <HomePage /> : <Page />}
-        {route === 'project' && <AgentPanel />}
-      </div>
-      <Toaster />
-    </div>
+    <Shell section="workbench"
+      sub={{
+        title: '工作台',
+        meta: <span className="t-cap dim">{proj}</span>,
+        items: WORKBENCH_SUB,
+        active: step,
+      }}
+      onSub={(k) => useUi.getState().setStep(k as Step)}
+      aside={<AgentPanel />}>
+      <Page />
+    </Shell>
   );
 }
 

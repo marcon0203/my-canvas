@@ -46,4 +46,8 @@
   --ref-min-side:    300;
   --ref-ar-min:      0.4;
   --ref-ar-max:      2.5;
+
+  /* 主导航：一级图标栏与二级菜单的宽度 */
+  --rail-w:   64px;
+  --subnav-w: 208px;
 }

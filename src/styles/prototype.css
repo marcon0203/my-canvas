@@ -326,6 +326,54 @@ body { background: var(--color-bg-canvas); overflow: hidden; }
 /* ==========================================================================
    工作区骨架
    ========================================================================== */
+/* 主体：一级图标栏 + 二级菜单 + 内容区（+ 工作台的 Agent 侧栏） */
+.body {
+  flex: 1 1 auto; min-height: 0; display: flex; align-items: stretch;
+}
+.body__main { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; min-height: 0; }
+
+/* 一级：窄图标栏 */
+.rail {
+  flex: 0 0 auto; width: var(--rail-w); display: flex; flex-direction: column;
+  gap: 2px; padding: var(--space-2) 6px;
+  border-right: 1px solid var(--color-border-subtle); background: var(--color-bg-sidebar);
+}
+.rail__b {
+  display: flex; flex-direction: column; align-items: center; gap: 3px;
+  padding: 8px 2px; border: 0; border-radius: var(--radius-control);
+  background: none; color: var(--color-text-tertiary);
+  font-family: inherit; cursor: pointer;
+}
+.rail__b:hover { background: var(--color-bg-hover); color: var(--color-text-primary); }
+.rail__b[aria-current="true"] { background: var(--color-accent-subtle); color: var(--color-accent); }
+.rail__b svg { width: 18px; height: 18px; }
+.rail__n { font-size: 10px; line-height: 1.2; letter-spacing: .02em; }
+
+/* 二级：子菜单 */
+.subnav {
+  flex: 0 0 auto; width: var(--subnav-w); display: flex; flex-direction: column; min-height: 0;
+  border-right: 1px solid var(--color-border-subtle); background: var(--color-bg-canvas);
+}
+.subnav__h {
+  display: flex; align-items: center; gap: var(--space-2); flex: 0 0 auto;
+  height: 40px; padding: 0 var(--space-3); border-bottom: 1px solid var(--color-border-subtle);
+}
+.subnav__t { font-size: 12px; font-weight: 600; color: var(--color-text-primary); }
+.subnav__list { flex: 1 1 auto; min-height: 0; overflow-y: auto; padding: var(--space-2); display: flex; flex-direction: column; gap: 1px; }
+.subnav__b {
+  display: grid; grid-template-columns: 16px 1fr; grid-template-rows: auto auto;
+  column-gap: var(--space-2); align-items: center; text-align: left;
+  padding: 7px var(--space-2); border: 0; border-radius: var(--radius-control);
+  background: none; color: var(--color-text-secondary); font-family: inherit; cursor: pointer;
+}
+.subnav__b:hover { background: var(--color-bg-hover); color: var(--color-text-primary); }
+.subnav__b[aria-current="true"] { background: var(--color-accent); color: var(--color-on-accent); }
+.subnav__b[aria-current="true"] .subnav__hint { color: rgba(255,255,255,.72); }
+.subnav__b svg { width: 14px; height: 14px; grid-row: 1 / span 2; }
+.subnav__n { font-size: 13px; font-weight: 500; }
+.subnav__hint { font-size: 11px; color: var(--color-text-tertiary); }
+.subnav__f { flex: 0 0 auto; padding: var(--space-2); border-top: 1px solid var(--color-border-subtle); }
+
 .work { flex: 1 1 auto; min-height: 0; display: grid; grid-template-columns: minmax(0,1fr) 320px; }
 .work--full { grid-template-columns: minmax(0,1fr); }
 .stage { min-width: 0; display: flex; flex-direction: column; min-height: 0; background: var(--color-bg-canvas); }
@@ -681,7 +729,7 @@ body { background: var(--color-bg-canvas); overflow: hidden; }
 /* ==========================================================================
    Agent 侧栏 —— iOS 分组列表 + iMessage 气泡
    ========================================================================== */
-.agent { border-left: 1px solid var(--color-border-subtle); display: flex; flex-direction: column; min-height: 0; background: var(--color-bg-sidebar); }
+.agent { flex: 0 0 auto; width: 320px; border-left: 1px solid var(--color-border-subtle); display: flex; flex-direction: column; min-height: 0; background: var(--color-bg-sidebar); }
 .agent__h { height: 52px; flex: 0 0 auto; display: flex; align-items: center; gap: var(--space-2); padding: 0 var(--space-4); border-bottom: 1px solid var(--color-border-subtle); }
 .agent__log { flex: 1 1 auto; min-height: 0; overflow-y: auto; padding: var(--space-5) var(--space-4); }
 .agent__hi { font-size: 13px; color: var(--color-text-tertiary); margin-bottom: var(--space-4); }
@@ -856,6 +904,31 @@ body { background: var(--color-bg-canvas); overflow: hidden; }
 .pcard__link { margin-left: 8px; color: var(--color-accent); text-decoration: none; }
 .pcard__link:hover { text-decoration: underline; }
 .pcard__models { margin-top: var(--space-3); padding-top: var(--space-3); border-top: 1px solid var(--color-border-subtle); }
+.pcard--warn { border-color: var(--color-warning); background: var(--color-warning-bg); }
+.pcard--warn .pcard__n { color: var(--color-warning); }
+.pcard--warn svg { color: var(--color-warning); width: 16px; height: 16px; }
+
+/* Skill 管理：一行一件活儿 —— 图标 / 名字 / 所需工具 / 归属 */
+.skilltable { display: flex; flex-direction: column; }
+.skillrow {
+  display: grid;
+  grid-template-columns: 20px minmax(160px, 1.1fr) minmax(0, 2fr) 128px;
+  align-items: center; gap: var(--space-3);
+  padding: 10px 4px; border-top: 1px solid var(--color-border-subtle);
+}
+.skillrow:first-child { border-top: 0; }
+.skillrow--orphan .skillrow__n { color: var(--color-warning); }
+.skillrow__ic { display: flex; color: var(--color-text-tertiary); }
+.skillrow__ic svg { width: 16px; height: 16px; }
+.skillrow__main { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+.skillrow__n { font-size: 13px; font-weight: 500; color: var(--color-text-primary); }
+.skillrow__k { font-size: 11px; }
+.skillrow__tools { display: flex; flex-wrap: wrap; gap: 4px; min-width: 0; }
+.skillrow .runbar__sel { width: 100%; }
+@media (max-width: 1100px) {
+  .skillrow { grid-template-columns: 20px 1fr 128px; }
+  .skillrow__tools { grid-column: 2 / span 2; }
+}
 
 .mlist { display: flex; flex-direction: column; gap: 2px; margin-bottom: var(--space-2); }
 .mrow {

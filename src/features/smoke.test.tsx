@@ -162,7 +162,8 @@ describe('路由直达（防白屏回归）', () => {
     const html = await renderAt('/project/p1/outline', () => host.innerHTML.includes('Plot outline'));
     expect(html).toContain('Plot outline');
     expect(html).toContain('剧情结构');
-    expect(html).toContain('创作流程');
+    expect(html).toContain('主导航');
+    expect(html).toContain('剧情大纲');
   });
 
   it('/project/p1/metrics 直达渲染数据页', async () => {

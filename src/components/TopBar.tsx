@@ -2,15 +2,7 @@ import { useSyncExternalStore } from 'react';
 import { useNavigate } from 'react-router';
 import { Icon } from '@/ui/Icon';
 import { useProject } from '@/store/project';
-import { useUi, type Step } from '@/store/ui';
-
-const FLOW: readonly { k: Step; zh: string; en: string }[] = [
-  { k: 'outline', zh: '剧情大纲', en: 'Plot outline' },
-  { k: 'script', zh: '剧本', en: 'Script' },
-  { k: 'assets', zh: '资产', en: 'Assets' },
-  { k: 'storyboard', zh: '分镜', en: 'Storyboard' },
-  { k: 'editing', zh: '剪辑', en: 'Editing' },
-];
+import { useUi } from '@/store/ui';
 
 /** 顶栏：原型 renderTop 同构（.top / .top__proj / .top__nav.seg / .top__tools / .credit / .ava） */
 export function TopBar() {
@@ -18,8 +10,6 @@ export function TopBar() {
   const proj = useProject((s) => s.proj);
   const credits = useProject((s) => s.credits);
   const route = useUi((s) => s.route);
-  const step = useUi((s) => s.step);
-  const setStep = useUi((s) => s.setStep);
   const setRoute = useUi((s) => s.setRoute);
   const toast = useUi((s) => s.toast);
 
@@ -38,14 +28,7 @@ export function TopBar() {
       {inProj ? (
         <>
           <div className="top__proj">{proj}</div>
-          <nav className="top__nav seg" aria-label="创作流程">
-            {FLOW.map((f) => (
-              <button key={f.k} title={f.en} aria-selected={f.k === step}
-                onClick={() => { setStep(f.k); }}>
-                {f.zh}
-              </button>
-            ))}
-          </nav>
+          <div className="spacer" />
           <div className="top__tools">
             <button className="tbtn" title="撤销" style={{ opacity: canUndo ? 1 : 0.4 }}
               onClick={() => { if (canUndo) { useProject.temporal.getState().undo(); toast('已撤销'); } }}>
@@ -55,10 +38,6 @@ export function TopBar() {
               onClick={() => { if (canRedo) { useProject.temporal.getState().redo(); toast('已重做'); } }}>
               <Icon name="redo" />
             </button>
-            <button className="tbtn" title="总览 · Overview" aria-current={step === 'overview'}
-              onClick={() => setStep('overview')}><Icon name="grid" /></button>
-            <button className="tbtn" title="数据 · Metrics" aria-current={step === 'metrics'}
-              onClick={() => setStep('metrics')}><Icon name="bolt" /></button>
 
           </div>
           <div className="spacer" />
@@ -67,8 +46,6 @@ export function TopBar() {
         <div className="spacer" />
       )}
       <div className="row" style={{ gap: 8 }}>
-        <button className="tbtn" title="设置 · 模型服务商与 Agent 配置（应用级，跨项目共用）"
-          onClick={() => navigate('/settings')}><Icon name="gear" /></button>
         <button className="tbtn" onClick={() => toast('相比基础版的差异：资产有稳定 ID 与版本、定稿锁定才能被引用、每次生成都记账')}>
           <Icon name="layers" />差异
         </button>
