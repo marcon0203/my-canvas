@@ -390,6 +390,61 @@ body { background: var(--color-bg-canvas); overflow: hidden; }
 .subnav__back svg { width: 14px; height: 14px; flex: 0 0 auto; }
 
 /* 账号角落：一级栏底 / 项目顶栏，两处共用一份 */
+/* ---- 设置详情页：统一的行布局 ----
+   整页只有两条竖线：标签列左边缘、控件列左边缘。说明在控件下面，
+   不在右边 —— 放右边会被控件宽度推得忽左忽右。 */
+.fields { display: flex; flex-direction: column; }
+.field {
+  display: grid; grid-template-columns: var(--field-k) minmax(0, 1fr);
+  column-gap: var(--space-4); row-gap: 6px; align-items: center;
+  padding: var(--space-3) 0; border-top: 1px solid var(--color-border-subtle);
+}
+.field:first-child { border-top: 0; padding-top: 0; }
+.field:last-child { padding-bottom: 0; }
+.field__k {
+  font-size: 12px; color: var(--color-text-secondary);
+  align-self: center; padding-top: 0;
+}
+.field__v { min-width: 0; display: flex; align-items: center; gap: var(--space-2); flex-wrap: wrap; }
+/* basis 必须是 0：.nv-input 自带 width:100%，basis auto 会让它占满整行把按钮挤到下一行 */
+.field__v > .nv-input, .field__v > .runbar__sel { flex: 1 1 0; min-width: 0; max-width: var(--field-v); }
+/* 行内的按钮不许被输入框挤扁 —— 挤扁了「保存」会断成两行 */
+.field__v > button { flex: 0 0 auto; white-space: nowrap; }
+.field__hint {
+  grid-column: 2; font-size: 11px; line-height: 1.7; color: var(--color-text-tertiary);
+}
+/* 控件占满整行：提示词、chip 墙。标签变成这一行的小标题 */
+.field--wide { grid-template-columns: minmax(0, 1fr); row-gap: var(--space-2); align-items: stretch; }
+.field--wide .field__k { font-weight: 600; color: var(--color-text-primary); }
+.field--wide .field__v { display: block; }
+.field--wide .field__hint { grid-column: 1; }
+
+/* ---- 模型清单：定宽列，不靠内容自然流动 ---- */
+.mtable { display: flex; flex-direction: column; }
+.mhead, .mrow {
+  display: grid;
+  grid-template-columns: 44px minmax(120px, 1.1fr) minmax(130px, 1.2fr) 48px minmax(0, 1.6fr) 28px;
+  align-items: center; column-gap: var(--space-3);
+  padding: 7px var(--space-2); border-radius: var(--radius-control);
+}
+.mhead {
+  font-size: 11px; color: var(--color-text-tertiary);
+  border-bottom: 1px solid var(--color-border-subtle); border-radius: 0; padding-bottom: 8px;
+}
+.mrow { font-size: 12px; }
+.mrow:hover { background: var(--color-bg-hover); }
+.mrow__n {
+  font-weight: 500; color: var(--color-text-primary);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.mrow__id { font-size: 11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mrow__ctx { font-size: 11px; color: var(--color-text-tertiary); font-variant-numeric: tabular-nums; }
+.mrow__caps { display: flex; gap: 4px; flex-wrap: wrap; min-width: 0; }
+.mrow__del { justify-self: end; }
+
+/* chip 墙：活儿与工具。行距比 .chiprow 松一点，一屏几十个才不糊成一片 */
+.chipwall { display: flex; flex-wrap: wrap; gap: 6px; }
+
 /* 能力勾选：新增模型弹窗里 */
 .capbox {
   display: inline-flex; align-items: center; gap: 5px;
@@ -1021,17 +1076,6 @@ body { background: var(--color-bg-canvas); overflow: hidden; }
 }
 
 .mlist { display: flex; flex-direction: column; gap: 2px; margin-bottom: var(--space-2); }
-.mrow {
-  display: flex; align-items: center; gap: var(--space-2); flex-wrap: wrap;
-  padding: 5px 6px; border-radius: var(--radius-control); font-size: 12px;
-}
-.mrow:hover { background: var(--color-bg-hover); }
-.mrow__n { font-weight: 500; color: var(--color-text-primary); }
-.mrow__id { font-size: 11px; }
-.mrow__caps { display: flex; gap: 4px; }
-.mrow__note { max-width: 240px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.addm { display: flex; gap: var(--space-2); align-items: center; flex-wrap: wrap; }
-.addm .nv-input { flex: 1 1 140px; min-width: 0; }
 
 .chiprow { display: flex; gap: 5px; flex-wrap: wrap; }
 

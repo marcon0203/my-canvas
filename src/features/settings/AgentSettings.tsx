@@ -12,6 +12,7 @@ import { MODALITY_LABEL, modelKey, parseModelKey, type Modality, type ModelRef }
 import type { IntentKind } from '@/domain/agent/types';
 import { useEffectiveGlobals, useExtraModels, useReadyProviders, useSettings } from '@/store/settings';
 import { useUi } from '@/store/ui';
+import { Field, Fields } from './Field';
 
 const ALL_INTENTS = Object.keys(INTENT_META) as Exclude<IntentKind, 'chat'>[];
 
@@ -118,74 +119,70 @@ export function AgentDetail({ id }: { id: AgentId }) {
     <>
       <section className={`pcard${cfg.enabled ? '' : ' pcard--off'}`}>
         <header className="pcard__h">
-          <span className="pcard__n">侧重方向 · 系统提示词</span>
-          <span className="t-cap dim">自主规划下，这段比多勾几个技能更能决定它的行为</span>
+          <span className="pcard__n">基本</span>
           <div className="spacer" />
           <Switch on={cfg.enabled} onChange={(v) => patch(id, { enabled: v })} label="启用" />
         </header>
-        <Preamble id={id} />
-
-        <label className="pcard__row" style={{ marginTop: 12 }}>
-          <span className="pcard__k">自主度</span>
-          <Segmented ariaLabel="自主度"
-            items={(['propose', 'auto'] as Autonomy[]).map((a) => ({ key: a, label: AUTONOMY_LABEL[a], title: AUTONOMY_HINT[a] }))}
-            value={cfg.autonomy}
-            onChange={(v) => patch(id, { autonomy: v as Autonomy })} />
-          <span className="t-cap dim">{AUTONOMY_HINT[cfg.autonomy]}</span>
-        </label>
-      </section>
-
-      <section className="pcard">
-        <header className="pcard__h">
-          <span className="pcard__n">模型</span>
-          <span className="t-cap dim">只列它用得上的模态</span>
-        </header>
-        {needs.map((m) => (
-          <label key={m} className="pcard__row">
-            <span className="pcard__k">{MODALITY_LABEL[m]}</span>
-            <ModelSelect modality={m} value={cfg.models[m]}
-              inherited={globals[m]}
-              onChange={(ref) => {
-                const next = { ...cfg.models };
-                if (ref) next[m] = ref; else delete next[m];
-                patch(id, { models: next });
-              }} />
-          </label>
-        ))}
-      </section>
-
-      <section className="pcard">
-        <header className="pcard__h">
-          <span className="pcard__n">接的活儿 · {cfg.skills.length}</span>
-          <span className="t-cap dim">勾上时所需工具会自动补齐</span>
-        </header>
-        <div className="chiprow">
-          {ALL_INTENTS.map((k) => {
-            const on = cfg.skills.includes(k);
-            const miss = on ? missingTools(cfg.tools, k) : [];
-            return (
-              <ToggleChip key={k} on={on} onClick={() => toggleSkill(k)}
-                title={miss.length ? `缺工具：${miss.map((t) => toolOf(t)?.name).join('、')}` : intentName(k)}>
-                {INTENT_META[k].name}{miss.length ? ' ⚠' : ''}
-              </ToggleChip>
-            );
-          })}
-        </div>
-      </section>
-
-      <section className="pcard">
-        <header className="pcard__h">
-          <span className="pcard__n">工具 · {cfg.tools.length}</span>
-          <span className="t-cap dim">带「读」的只读项目，不改东西</span>
-        </header>
-        <div className="chiprow">
-          {TOOLS.map((t) => (
-            <ToggleChip key={t.id} on={cfg.tools.includes(t.id)} onClick={() => toggleTool(t.id)}
-              title={`${t.desc}${t.needs ? `（需要${MODALITY_LABEL[t.needs]}模型）` : ''}`}>
-              {t.name}{t.writes ? '' : ' ·读'}
-            </ToggleChip>
+        <Fields>
+          <Field label="自主度" hint={AUTONOMY_HINT[cfg.autonomy]}>
+            <Segmented ariaLabel="自主度"
+              items={(['propose', 'auto'] as Autonomy[]).map((a) => ({ key: a, label: AUTONOMY_LABEL[a], title: AUTONOMY_HINT[a] }))}
+              value={cfg.autonomy}
+              onChange={(v) => patch(id, { autonomy: v as Autonomy })} />
+          </Field>
+          {needs.map((m) => (
+            <Field key={m} label={MODALITY_LABEL[m]}>
+              <ModelSelect modality={m} value={cfg.models[m]}
+                inherited={globals[m]}
+                onChange={(ref) => {
+                  const next = { ...cfg.models };
+                  if (ref) next[m] = ref; else delete next[m];
+                  patch(id, { models: next });
+                }} />
+            </Field>
           ))}
-        </div>
+        </Fields>
+      </section>
+
+      <section className="pcard">
+        <header className="pcard__h">
+          <span className="pcard__n">侧重方向 · 系统提示词</span>
+          <span className="t-cap dim">自主规划下，这段比多勾几个技能更能决定它的行为</span>
+        </header>
+        <Preamble id={id} />
+      </section>
+
+      <section className="pcard">
+        <header className="pcard__h">
+          <span className="pcard__n">能干什么</span>
+          <span className="t-cap dim">勾上活儿时所需工具会自动补齐</span>
+        </header>
+        <Fields>
+          <Field wide label={`接的活儿 · ${cfg.skills.length}`}>
+            <div className="chipwall">
+              {ALL_INTENTS.map((k) => {
+                const on = cfg.skills.includes(k);
+                const miss = on ? missingTools(cfg.tools, k) : [];
+                return (
+                  <ToggleChip key={k} on={on} onClick={() => toggleSkill(k)}
+                    title={miss.length ? `缺工具：${miss.map((t) => toolOf(t)?.name).join('、')}` : intentName(k)}>
+                    {INTENT_META[k].name}{miss.length ? ' ⚠' : ''}
+                  </ToggleChip>
+                );
+              })}
+            </div>
+          </Field>
+          <Field wide label={`工具 · ${cfg.tools.length}`} hint="带「读」的只读项目，不改东西">
+            <div className="chipwall">
+              {TOOLS.map((t) => (
+                <ToggleChip key={t.id} on={cfg.tools.includes(t.id)} onClick={() => toggleTool(t.id)}
+                  title={`${t.desc}${t.needs ? `（需要${MODALITY_LABEL[t.needs]}模型）` : ''}`}>
+                  {t.name}{t.writes ? '' : ' ·读'}
+                </ToggleChip>
+              ))}
+            </div>
+          </Field>
+        </Fields>
       </section>
 
       {issues.length > 0 && (

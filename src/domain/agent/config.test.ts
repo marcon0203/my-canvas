@@ -35,6 +35,13 @@ describe('agent/config · 默认配置自洽', () => {
     expect(checkConfig(editor, { text: TEXT }).filter((i) => i.level === 'error')).toEqual([]);
   });
 
+  it('模态顺序恒为 文本 → 图片 → 视频，不随勾工具的先后变', () => {
+    const dp = defaultConfig(personaById('dp'));
+    // 反着勾一遍：先视频工具再图片工具，顺序也不该跟着倒过来
+    const flipped = { ...dp, tools: ['video.generate', 'image.generate', ...dp.tools] as const };
+    expect(neededModalities(flipped)).toEqual(['text', 'image', 'video']);
+  });
+
   it('摄影指导要视频模型 —— 没配就报错，不静默跑不动', () => {
     const dp = defaultConfig(personaById('dp'));
     expect(neededModalities(dp)).toContain('video');

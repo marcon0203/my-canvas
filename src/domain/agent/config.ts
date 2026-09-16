@@ -69,14 +69,21 @@ export const preambleOf = (cfg: AgentConfig | undefined, p: Persona): string =>
 export const defaultConfigs = (): Record<AgentId, AgentConfig> =>
   Object.fromEntries(PERSONAS.map((p) => [p.id, defaultConfig(p)])) as Record<AgentId, AgentConfig>;
 
-/** 这个 Agent 实际会用到哪些模态 —— 界面只让它配这几个，别给剪辑配文生图 */
+/** 模态的规范顺序。界面各处都按它排，免得同一个 Agent 换个页面顺序就变 */
+export const MODALITY_ORDER: readonly Modality[] = ['text', 'image', 'video'];
+
+/**
+ * 这个 Agent 实际会用到哪些模态 —— 界面只让它配这几个，别给剪辑配文生图。
+ * **按规范顺序返回**，不按工具的遍历顺序：后者会让「文本、视频、图片」
+ * 这种顺序出现在界面上，取决于用户先勾了哪个工具。
+ */
 export function neededModalities(cfg: AgentConfig): Modality[] {
   const out = new Set<Modality>(['text']);   // 对话本身就要文本模型
   for (const t of cfg.tools) {
     if (t === 'image.generate') out.add('image');
     if (t === 'video.generate') out.add('video');
   }
-  return [...out];
+  return MODALITY_ORDER.filter((m) => out.has(m));
 }
 
 /** 取这个 Agent 在某模态下用的模型：自己配的优先，否则用全局默认 */

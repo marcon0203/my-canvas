@@ -6,6 +6,7 @@ import {
   type Modality, type ModelSpec, type ProviderId,
 } from '@/domain/providers/model';
 import { baseUrlOf, providerSetting, useSettings } from '@/store/settings';
+import { Field, Fields } from './Field';
 import { useUi } from '@/store/ui';
 
 const MODALITIES: Modality[] = ['text', 'image', 'video'];
@@ -97,27 +98,31 @@ export function ProviderDetail({ id }: { id: ProviderId }) {
           )}
         </header>
 
-        <label className="pcard__row">
-          <span className="pcard__k">端点</span>
-          <Input value={baseUrl} placeholder={spec.userDefined ? '必填，例如 http://localhost:11434/v1' : spec.baseUrl}
-            onChange={(e) => setBaseUrl(id, e.target.value)} />
-        </label>
+        <Fields>
+          <Field label="端点"
+            hint={spec.userDefined ? '自定义端点必须填，否则请求发不出去' : `留空就用默认：${spec.baseUrl}`}>
+            <Input value={baseUrl} placeholder={spec.userDefined ? '必填，例如 http://localhost:11434/v1' : spec.baseUrl}
+              onChange={(e) => setBaseUrl(id, e.target.value)} />
+          </Field>
 
-        <label className="pcard__row">
-          <span className="pcard__k">密钥</span>
-          <Input type="password" value={draftKey}
-            placeholder={setting.hasKey ? '已写入系统钥匙串，重填可覆盖' : 'sk-…'}
-            onChange={(e) => setDraftKey(e.target.value)} />
-          <Button onClick={() => {
-            if (!draftKey.trim()) { toast('先填密钥'); return; }
-            setKey(id, draftKey.trim());
-            setDraftKey('');
-            toast(`${spec.name} 密钥已写入系统钥匙串 —— 前端不保存明文`);
-          }}>保存</Button>
-          {setting.hasKey && (
-            <Button onClick={() => { clearKey(id); toast(`已清除 ${spec.name} 的密钥`); }}>清除</Button>
-          )}
-        </label>
+          <Field label="密钥"
+            hint={setting.hasKey
+              ? `已写入系统钥匙串，界面只显示尾号 ${setting.keyHint}`
+              : '写入系统钥匙串，前端不保存明文'}>
+            <Input type="password" value={draftKey}
+              placeholder={setting.hasKey ? '重填可覆盖' : 'sk-…'}
+              onChange={(e) => setDraftKey(e.target.value)} />
+            <Button onClick={() => {
+              if (!draftKey.trim()) { toast('先填密钥'); return; }
+              setKey(id, draftKey.trim());
+              setDraftKey('');
+              toast(`${spec.name} 密钥已写入系统钥匙串 —— 前端不保存明文`);
+            }}>保存</Button>
+            {setting.hasKey && (
+              <Button onClick={() => { clearKey(id); toast(`已清除 ${spec.name} 的密钥`); }}>清除</Button>
+            )}
+          </Field>
+        </Fields>
       </section>
 
       <section className="pcard">
@@ -132,7 +137,10 @@ export function ProviderDetail({ id }: { id: ProviderId }) {
             还没有模型。{spec.userDefined ? '自定义端点的模型全靠自己加 —— 填模型 id 与它的类型。' : '点右上角新增一个。'}
           </p>
         ) : (
-          <div className="mlist">
+          <div className="mtable">
+            <div className="mhead">
+              <span>类型</span><span>名称</span><span>模型 id</span><span>上下文</span><span>能力</span><span />
+            </div>
             {models.map((m) => <ModelRow key={m.id} providerId={id} m={m}
               custom={setting.extraModels.some((x) => x.id === m.id)} />)}
           </div>
@@ -152,20 +160,20 @@ function ModelRow({ providerId, m, custom }: { providerId: ProviderId; m: ModelS
     m.caps.reasoning && '推理', m.caps.refImage && '参考图',
   ].filter(Boolean) as string[];
   return (
-    <div className="mrow">
+    <div className="mrow" title={m.note}>
       <Chip tone={TONE[m.modality]}>{MODALITY_LABEL[m.modality]}</Chip>
       <span className="mrow__n">{m.name}</span>
       <span className="mono dim mrow__id">{m.id}</span>
-      {m.context && <span className="t-cap dim">{Math.round(m.context / 1024)}K</span>}
+      <span className="mrow__ctx">{m.context ? `${Math.round(m.context / 1024)}K` : '—'}</span>
       <span className="mrow__caps">{caps.map((c) => <Chip key={c}>{c}</Chip>)}</span>
-      {m.note && <span className="t-cap dim mrow__note" title={m.note}>{m.note}</span>}
-      <div className="spacer" />
-      {custom && (
-        <button className="tbtn" title="移除这个自加的模型"
-          onClick={() => { remove(providerId, m.id); toast(`已移除 ${m.id}`); }}>
-          <Icon name="trash" />
-        </button>
-      )}
+      {custom
+        ? (
+          <button className="tbtn mrow__del" title="移除这个自加的模型"
+            onClick={() => { remove(providerId, m.id); toast(`已移除 ${m.id}`); }}>
+            <Icon name="trash" />
+          </button>
+        )
+        : <span />}
     </div>
   );
 }
