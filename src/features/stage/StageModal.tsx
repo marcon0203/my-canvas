@@ -7,7 +7,8 @@ import { lightName, azName, azFace, elName, kName } from '@/domain/camera/naming
 import { RIG_EL, type Rig } from '@/domain/assets/model';
 import { Button, Slider, Switch, ToggleChip } from '@/ui';
 import { GelPalette } from '@/components/GelPalette';
-import { SIZE_ORDER } from '@/domain/types';
+import { SIZE_ORDER, type AspectRatio } from '@/domain/types';
+import { ASPECT, refImageSize } from '@/domain/camera/framing';
 import { useProject } from '@/store/project';
 import { useUi } from '@/store/ui';
 
@@ -39,6 +40,9 @@ export function StageModal({ open, onClose, rig, onPatch, title = '机位与光�
   const toast = useUi((s) => s.toast);
   const ratios = useProject((s) => s.ratios);
   if (!open) return null;
+
+  const ratio = rig.ratio || '9:16';
+  const aspect = ASPECT[ratio as AspectRatio] ?? ASPECT['9:16'];
 
   const drag = (target: StageDragTarget, dAz: number, dEl: number) => {
     if (target === 'cam') onPatch({ az: wrap180(rig.az + dAz), el: clamp(rig.el + dEl, RIG_EL.min, RIG_EL.max) });
@@ -87,12 +91,21 @@ export function StageModal({ open, onClose, rig, onPatch, title = '机位与光�
               <span className="t-cap dim">{rig.size} · {rig.mm} · {rig.fstop}</span>
             </div>
             <div className="sbox__c sbox__c--dark">
-              <ShotView rig={rig} pose={rig.pose} skin={skin} exportRef={exportRef} />
+              {/* 画布本身就是画幅的形状：相机 aspect 取自画布尺寸，换画幅=换裁切 */}
+              {/* 监视器是方的：竖幅贴高、横幅贴宽，剩下的是黑边。
+                  不靠 max-height —— 它在 aspect-ratio 容器里解析不稳，竖幅会溢出被裁。 */}
+              <div className="sbox__frame"
+                style={{
+                  aspectRatio: ratio.replace(':', '/'),
+                  ...(aspect >= 1 ? { width: '100%' } : { height: '100%' }),
+                }}>
+                <ShotView rig={rig} pose={rig.pose} skin={skin} exportRef={exportRef} />
+              </div>
             </div>
             <div className="sbox__f" style={{ flexWrap: 'wrap' }}>
               <span className="t-cap dim">画幅</span>
               {ratios.map((r) => (
-                <ToggleChip key={r} on={(rig.ratio || '9:16') === r}
+                <ToggleChip key={r} on={ratio === r}
                   onClick={() => onPatch({ ratio: r })}>{r}</ToggleChip>
               ))}
               <span className="spacer" />
@@ -101,7 +114,8 @@ export function StageModal({ open, onClose, rig, onPatch, title = '机位与光�
                   const url = exportRef.current?.();
                   if (!url) { toast('渲染失败 —— 浏览器没拿到 WebGL'); return; }
                   onPatch({ poseRef: url });
-                  toast('已渲染 720×1280 姿态参考图 —— 不花钱，随时重来');
+                  const { width, height } = refImageSize(aspect);
+                  toast(`已渲染 ${width}×${height}（${ratio}）姿态参考图 —— 不花钱，随时重来`);
                 }}>
                 <Icon name="image" />渲染参考图
               </Button>

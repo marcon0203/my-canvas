@@ -1282,9 +1282,16 @@ details summary:hover { color: var(--color-accent); }
 .mo { position:fixed; inset:0; background:rgba(0,0,0,.38); z-index:220;
   -webkit-backdrop-filter:blur(6px); backdrop-filter:blur(6px);
   display:flex; align-items:center; justify-content:center; padding:24px; }
+/* 弹窗高于视口时内部滚动，而不是把头部顶出屏幕 —— 布光台很高，
+   原来关闭按钮会滚到可视区外，弹窗关不掉 */
 .mo__box { width:100%; background:var(--color-bg-surface); border:1px solid var(--color-border-default);
-  border-radius:var(--radius-card); box-shadow:var(--shadow-raised); overflow:hidden; }
-.mo__h { display:flex; align-items:baseline; gap:12px; padding:18px 20px 14px; }
+  border-radius:var(--radius-card); box-shadow:var(--shadow-raised); overflow:hidden;
+  max-height:100%; display:flex; flex-direction:column; min-height:0; }
+.mo__box > *:not(.mo__h) { min-height:0; }
+.mo__box > .stagegrid, .mo__box > .params, .mo__box > .mo__form, .mo__box > .mo__b { overflow-y:auto; }
+/* 头部常驻：无论内容多长，关闭按钮都在 */
+.mo__h { display:flex; align-items:baseline; gap:12px; padding:18px 20px 14px;
+  flex:0 0 auto; position:sticky; top:0; z-index:1; background:var(--color-bg-surface); }
 .mo__t { font-size:17px; font-weight:600; flex:0 0 auto; }
 /* 挤不下时让副标题让位，标题不折行 */
 .mo__s { font-size:12px; color:var(--color-text-tertiary);
@@ -1466,6 +1473,9 @@ details summary:hover { color: var(--color-accent); }
 .sbox__c { aspect-ratio:1/1; display:flex; align-items:center; justify-content:center;
   background:var(--color-bg-muted); overflow:hidden; }
 .sbox__c--dark { background:#101114; }          /* 监视器黑边：画幅之外的部分 */
+/* 画幅框：在方形监视器里按所选比例 contain —— 切画幅是换裁切形状，不是把人推远拉近 */
+.sbox__frame { position:relative; overflow:hidden; flex:0 0 auto;
+  box-shadow:0 0 0 1px rgba(255,255,255,.14); }
 .sbox__f { display:flex; align-items:center; gap:6px; padding:8px 12px;
   border-top:1px solid var(--color-border-subtle); }
 .cc--sm { padding:2px 8px; font-size:11px; }

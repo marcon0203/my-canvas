@@ -2,6 +2,8 @@ import { Chip } from '@/ui';
 import { Icon } from '@/ui/Icon';
 import { POSE_KEYS, POSE_LABEL, type PoseMode, type Rig } from '@/domain/assets/model';
 import { POSE_FRAG } from '@/domain/prompt/vocabulary';
+import { ASPECT, refImageSize } from '@/domain/camera/framing';
+import type { AspectRatio } from '@/domain/types';
 
 const WM_SKINS = [
   { k: 'blue', n: '蓝模', d: '蓝灰，和浅色背景分得开，看结构最清楚' },
@@ -24,6 +26,7 @@ export function PosePanel({ rig, onPatch, skin, onSkin, refCount = 0 }: {
   refCount?: number;
 }) {
   const mode: PoseMode = rig.poseMode ?? 'img';
+  const refSize = refImageSize(ASPECT[(rig.ratio || '9:16') as AspectRatio] ?? ASPECT['9:16']);
   const used = refCount + (rig.poseRef && mode !== 'text' ? 1 : 0);
   return (
     <div className="pose">
@@ -78,7 +81,8 @@ export function PosePanel({ rig, onPatch, skin, onSkin, refCount = 0 }: {
         </div>
         <div style={{ flex: 1, minWidth: 0 }}>
           <p className="t-cap dim" style={{ margin: '8px 0 0', lineHeight: 1.7 }}>
-            720×1280，符合参考图尺寸约束。渲染不花钱，随便重来。点右上角「渲染参考图」生成。
+            {refSize.width}×{refSize.height}（跟随画幅 {rig.ratio || '9:16'}），符合参考图尺寸约束。
+            渲染不花钱，随便重来。点右上角「渲染参考图」生成。
           </p>
           {rig.poseRef && (
             <button className="tbtn" style={{ marginTop: 8 }} onClick={() => onPatch({ poseRef: undefined })}>

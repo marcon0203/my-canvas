@@ -4,12 +4,14 @@ import { PerspectiveCamera, WebGLRenderTarget } from 'three';
 import { StageScene } from './StageScene';
 import { useSceneColors } from './useSceneColors';
 import { shotCamera } from '@/domain/camera/geometry';
+import { ASPECT, refImageSize } from '@/domain/camera/framing';
+import type { AspectRatio } from '@/domain/types';
 import { DEG2RAD } from '@/domain/camera/geometry';
 import type { PoseKey, Rig } from '@/domain/assets/model';
 
 /**
  * 摄影机取景画布：指示物全藏，所见即参考图。
- * exportRef 挂一个导出函数：按参考图接口约束渲 720×1280 的 dataURL（不花钱，随时重来）。
+ * exportRef 挂一个导出函数：按**所选画幅**渲一张满足参考图接口约束的 dataURL（不花钱，随时重来）。
  */
 export function ShotView({ rig, pose, skin = 'grey', exportRef }: {
   rig: Rig;
@@ -53,7 +55,7 @@ function ShotCamera({ rig }: { rig: Rig }) {
   return null;
 }
 
-/** 离屏渲染：720×1280（满足参考图 ≥300px、宽高比 0.4–2.5 硬约束） */
+/** 离屏渲染：按**所选画幅**出图（长边 1280，满足参考图 ≥300px、0.4–2.5 硬约束） */
 function OffscreenExporter({ rig, exportRef }: {
   rig: Rig;
   exportRef: React.MutableRefObject<(() => string | null) | undefined>;
@@ -62,7 +64,8 @@ function OffscreenExporter({ rig, exportRef }: {
   const cam = camera as PerspectiveCamera;
   useEffect(() => {
     exportRef.current = () => {
-      const W = 720, H = 1280;
+      const aspect = ASPECT[(rig.ratio || '9:16') as AspectRatio] ?? ASPECT['9:16'];
+      const { width: W, height: H } = refImageSize(aspect);
       const oldW = gl.domElement.width;
       const oldH = gl.domElement.height;
       try {
