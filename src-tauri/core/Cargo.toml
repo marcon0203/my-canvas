@@ -1,0 +1,24 @@
+[package]
+name = "studio-core"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+tokio.workspace = true
+futures.workspace = true
+async-trait.workspace = true
+tracing.workspace = true
+
+# 密钥只进系统钥匙串，明文不落盘、不过 IPC
+keyring = "4"
+# rustls：不依赖系统 OpenSSL，三平台产物一致
+reqwest = { version = "0.12", default-features = false, features = ["json", "stream", "rustls-tls"] }
+eventsource-stream = "0.2"
+rig = "0.42"
+
+[dev-dependencies]
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "test-util"] }

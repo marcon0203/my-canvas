@@ -1,0 +1,21 @@
+[package]
+name = "studio-app"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+# Tauri 壳：只做 IPC 绑定与窗口，逻辑全在 studio-core。
+# 注意：Linux 上构建需要 webkit2gtk-4.1；无 GUI 环境（容器/CI）只编 core 即可。
+[lib]
+name = "studio_app_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[dependencies]
+studio-core = { path = "../core" }
+serde.workspace = true
+serde_json.workspace = true
+tokio.workspace = true
+tauri = { version = "2", features = [] }
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }

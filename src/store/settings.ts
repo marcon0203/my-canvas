@@ -7,6 +7,7 @@ import type { AgentId } from '@/domain/agent/roster';
 import { personaById } from '@/domain/agent/roster';
 import type { Modality, ModelRef, ModelSpec, ProviderId } from '@/domain/providers/model';
 import { defaultModel, providerOf } from '@/domain/providers/catalog';
+import { maskHint, vault } from '@/api/desktop';
 
 /**
  * 应用设置：厂商接入 + 每个 Agent 的配置。
@@ -36,8 +37,11 @@ export interface SettingsState {
   agents: Record<AgentId, AgentConfig>;
 
   setBaseUrl: (id: ProviderId, url: string) => void;
+  /** 桌面端写系统钥匙串；浏览器只记状态。两种情况都不在 store 里存明文 */
   setKey: (id: ProviderId, key: string) => void;
   clearKey: (id: ProviderId) => void;
+  /** 启动时与钥匙串对一遍 —— 换台机器打开，状态要跟着那台机器的钥匙串走 */
+  syncKeys: () => void;
   toggleProvider: (id: ProviderId, on: boolean) => void;
   addModel: (id: ProviderId, m: ModelSpec) => void;
   removeModel: (id: ProviderId, modelId: string) => void;
@@ -47,7 +51,8 @@ export interface SettingsState {
   resetAgent: (id: AgentId) => void;
 }
 
-const KEY_HINT = (key: string) => (key.length <= 4 ? '••••' : `••••${key.slice(-4)}`);
+// 与 Rust 侧 vault::hint_of 同一规则，见 api/desktop.ts
+const KEY_HINT = maskHint;
 
 export const useSettings = create<SettingsState>()(
   persist(
@@ -60,13 +65,37 @@ export const useSettings = create<SettingsState>()(
         providers: { ...s.providers, [id]: { ...blank(s.providers[id]), baseUrl: url.trim() || undefined } },
       })),
 
-      // 真实实现是写系统钥匙串；这里只记状态，明文不落 store
-      setKey: (id, key) => set((s) => ({
-        providers: { ...s.providers, [id]: { ...blank(s.providers[id]), hasKey: true, keyHint: KEY_HINT(key) } },
-      })),
-      clearKey: (id) => set((s) => ({
-        providers: { ...s.providers, [id]: { ...blank(s.providers[id]), hasKey: false, keyHint: undefined } },
-      })),
+      // 明文交给桥接去写钥匙串，store 里只留状态与尾号
+      setKey: (id, key) => {
+        set((s) => ({
+          providers: { ...s.providers, [id]: { ...blank(s.providers[id]), hasKey: true, keyHint: KEY_HINT(key) } },
+        }));
+        void vault.set(id, key).then((st) => set((s) => ({
+          providers: { ...s.providers, [id]: { ...blank(s.providers[id]), hasKey: st.hasKey, keyHint: st.hint } },
+        })));
+      },
+      clearKey: (id) => {
+        set((s) => ({
+          providers: { ...s.providers, [id]: { ...blank(s.providers[id]), hasKey: false, keyHint: undefined } },
+        }));
+        void vault.clear(id);
+      },
+
+      syncKeys: () => {
+        const ids = Object.keys(useSettings.getState().providers) as ProviderId[];
+        if (!ids.length) return;
+        void vault.status(ids).then((list) => {
+          if (!list.length) return;   // 浏览器回落：没有钥匙串可对
+          set((s) => {
+            const next = { ...s.providers };
+            for (const st of list) {
+              const id = st.provider as ProviderId;
+              next[id] = { ...blank(next[id]), hasKey: st.hasKey, keyHint: st.hint };
+            }
+            return { providers: next };
+          });
+        });
+      },
       toggleProvider: (id, on) => set((s) => ({
         providers: { ...s.providers, [id]: { ...blank(s.providers[id]), disabled: !on } },
       })),
