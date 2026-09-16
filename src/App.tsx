@@ -22,7 +22,7 @@ import { TokenGallery } from './routes/TokenGallery';
 
 const queryClient = new QueryClient();
 
-const STEPS: Step[] = ['outline', 'script', 'assets', 'storyboard', 'editing', 'overview', 'metrics', 'settings'];
+const STEPS: Step[] = ['outline', 'script', 'assets', 'storyboard', 'editing', 'overview', 'metrics'];
 
 const PAGES: Record<Step, () => React.JSX.Element> = {
   outline: OutlinePage,
@@ -32,11 +32,13 @@ const PAGES: Record<Step, () => React.JSX.Element> = {
   editing: EditingPage,
   overview: CanvasPage,
   metrics: MetricsPage,
-  settings: SettingsPage,
 };
 
 const router = createBrowserRouter([
   { path: '/tokens', element: <TokenGallery /> },
+  // 设置是**应用级**的，不属于任何项目：模型与 Agent 配置跨项目共用，
+  // 放进 /project/:id/... 会让人以为是「这个项目的模型」
+  { path: '/settings', element: <SettingsRoute /> },
   { path: '/project', element: <ProjectEntryRedirect /> },
   { path: '/project/:projectId/:step?', element: <ProjectRoute /> },
   { path: '/', element: <AppShell /> },
@@ -48,6 +50,19 @@ export function App() {
     <QueryClientProvider client={queryClient}>
       <RouterProvider router={router} />
     </QueryClientProvider>
+  );
+}
+
+/** 设置页：应用级，不挂在任何项目下 */
+export function SettingsRoute() {
+  const setRoute = useUi((s) => s.setRoute);
+  useEffect(() => { setRoute('settings'); }, [setRoute]);
+  return (
+    <div className="app">
+      <TopBar />
+      <div className="work work--full"><SettingsPage /></div>
+      <Toaster />
+    </div>
   );
 }
 

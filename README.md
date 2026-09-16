@@ -43,8 +43,10 @@ npm run verify     # token 分层自检（需先 build）
 - **阶段 6 · Agent 班底驱动全流程**（已完成）：一个环节一位 Agent，各有专长，
   接不了的活儿会转交 —— 见下节。
 - **阶段 7 · 配置体系**（已完成）：厂商/模型注册表（火山、DeepSeek、智谱、百炼、
-  混元、月之暗面 + 自定义 OpenAI 兼容端点），每个 Agent 单独配 skill / 模型 / 工具。
-  桌面端（Tauri + Rust）架构见 `docs/desktop-architecture.md`。
+  混元、月之暗面 + 自定义 OpenAI 兼容端点），每个 Agent 单独配**侧重方向（系统提示词）**、
+  自主度、skill、模型、工具。设置是**应用级**的（`/settings`），跨项目共用 ——
+  项目详情里不出现任何模型与配置。
+  桌面端（Tauri + Rust + Rig）架构见 `docs/desktop-architecture.md`。
 
 ## Agent 班底：一个环节一位，各有专长
 

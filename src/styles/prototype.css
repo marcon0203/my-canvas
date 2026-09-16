@@ -824,6 +824,17 @@ body { background: var(--color-bg-canvas); overflow: hidden; }
 
 /* ---- 设置页：服务商卡片 / Agent 配置卡片 ---- */
 .setgrid { display: grid; gap: var(--space-4); }
+.home__head { display: flex; align-items: flex-start; gap: var(--space-4); }
+
+/* 系统提示词编辑：默认只露一行，改过的展开 */
+.prem { display: flex; align-items: flex-start; gap: var(--space-2); }
+.prem__peek {
+  flex: 1 1 auto; min-width: 0; margin: 0;
+  font-size: 12px; line-height: 1.7; color: var(--color-text-secondary);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.prem--open { flex-direction: column; }
+.prem--open .runbar__input { width: 100%; font-size: 12px; line-height: 1.75; }
 .setnote {
   display: flex; align-items: flex-start; gap: 6px; line-height: 1.8;
   margin: var(--space-5) 0 0; padding-top: var(--space-4);
@@ -867,15 +878,6 @@ body { background: var(--color-bg-canvas); overflow: hidden; }
 .issue--error { color: var(--color-error); }
 .issue--warn { color: var(--color-warning); }
 
-/* 侧栏里的当班模型：配置得看得见，点它直接去设置 */
-.agent__model {
-  display: flex; align-items: center; gap: 5px; width: 100%;
-  padding: 6px var(--space-4); border: 0; border-bottom: 1px solid var(--color-border-subtle);
-  background: var(--color-bg-muted); color: var(--color-text-secondary);
-  font-family: inherit; font-size: 11px; text-align: left; cursor: pointer;
-}
-.agent__model:hover { color: var(--color-text-primary); }
-.agent__model svg { width: 12px; height: 12px; color: var(--color-text-tertiary); flex: 0 0 auto; }
 
 /* ---- 树：资产 → 形状照（形状照长在它所属的资产下面） ---- */
 .expl__row { display: flex; align-items: center; gap: 2px; }

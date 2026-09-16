@@ -50,10 +50,39 @@ Rust 侧 `keyring` crate 读写。**前端永远拿不到明文**，只拿到「
 关掉窗口任务继续跑，重开能接上。生命周期语义（queued/running/done/cancelled）不变 ——
 前端那套轮询代码原样能用。
 
-### 厂商适配层自己写，不套 SDK
-调研过 `rig` / `genai` / `async-openai`：文本对话它们都行，但
-**图片和视频各家协议差异大**（火山 Seedance、智谱 CogVideoX、百炼万相都是各自的异步任务接口），
-统一 SDK 覆盖不到。做法是定义一个窄接口，各家实现：
+### Agent 框架：文本循环用 Rig，视觉任务自己写
+
+**这条结论改过一次，说明白为什么。**
+最初判断是「不套框架」—— 前提是流程确定：拆镜就是「找没镜头的场次 → 每场三镜 → 挂引用」，
+路径固定，套调度引擎是负担。
+产品路线定为**自主规划**之后这个前提不成立了，结论跟着变：Agent 要自己决定先干什么、
+调哪个工具、什么时候算做完，这正是框架存在的理由。
+
+选 [Rig](https://rig.rs/)：
+- 20+ 厂商统一接口 + 类型安全的工具定义 + 流式，Rust 原生
+- 2026 年的基准里 CPU 占用最低（24.3%，LangChain 64%）
+- 单二进制部署，与 Tauri 单机档一致
+
+**loop 形态选 plan-and-execute，不选 ReAct。** 两者失败方式相反：ReAct 边想边做、
+出错时已经改了东西；plan-and-execute 先出完整计划，可以在执行前拦住。
+我们界面上那套「步骤卡 → 流式正文 → 产物卡（采纳/丢弃）」本来就是 plan-and-execute
+加一道人工闸口 —— 这道闸口是产品承诺（Agent 不背着人改东西），不能为了框架让路。
+每位 Agent 的**自主度**可配：`propose` 执行前交回人，`auto` 跑完整循环但在花钱或动定稿资产时停。
+
+**每位 Agent 映射成一个 Rig agent**，四样东西来自已有的配置结构：
+
+| 配置字段 | Rig 对应 | 决定什么 |
+|---|---|---|
+| `persona.preamble` / `cfg.preamble` | `.preamble()` | **怎么想** —— 先看什么、什么算做完、拿不准偏哪边 |
+| `cfg.tools` | `.tool()` | 能动什么 |
+| `cfg.models[modality]` | `.model()` | 用谁的脑子 |
+| `cfg.skills` | 路由与转交 | 接不接这个活 |
+
+侧重方向主要靠 `preamble` 拉开，不是靠多勾几个技能 —— 设置里这段可以整段改写。
+
+**但视觉任务不进 Rig。**
+火山 Seedance、智谱 CogVideoX、百炼万相都是各自的异步任务接口（提交拿 task_id 再轮询），
+Rig 的抽象覆盖不到。这部分保持自己写的窄接口，由工具层调用：
 
 ```rust
 #[async_trait]
@@ -65,8 +94,9 @@ trait Provider {
 }
 ```
 
-国内六家的文本接口都是 OpenAI 兼容，共用一个 `OpenAiCompatProvider` 即可；
-图片/视频按家写适配。自定义端点直接复用 `OpenAiCompatProvider`。
+国内六家的文本接口都是 OpenAI 兼容，走 Rig 的 OpenAI 客户端改 baseURL 即可；
+图片/视频按家写适配，包装成 Rig 的 tool 交给 agent 调用。
+自定义端点同样复用 OpenAI 兼容路径。
 
 ### 本地存储
 SQLite（`sqlx`）存项目树、资产、生成记录、成本流水。
@@ -80,7 +110,7 @@ SQLite（`sqlx`）存项目树、资产、生成记录、成本流水。
 | ~~0~~ | **配置体系**：厂商/模型注册表、每个 Agent 单独配 skill/模型/工具、设置界面 | 已完成（本轮） |
 | 1 | Tauri 骨架：cargo 工程、IPC 命令、钥匙串、SQLite | `api/client.ts` 换 `invoke` |
 | 2 | 厂商适配：文本先通，图片/视频按家接 | `api/generation.ts` 换 transport |
-| 3 | Agent 真接模型：`api/agent.ts` 的流式换成真 SSE | `domain/agent/` 不动 |
+| 3 | Agent 接 Rig：每位一个 agent（preamble/tools/model 来自配置），`api/agent.ts` 的流式换成真 SSE | `domain/agent/` 的 Plan/Proposal 契约不动 |
 | 4 | 打包与自更新：三平台产物、签名、增量更新 | 无 |
 
 **阶段 0 的东西不会白做**：厂商注册表、Agent 配置、设置界面都在 `domain/` 和

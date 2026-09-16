@@ -59,8 +59,7 @@ export function TopBar() {
               onClick={() => setStep('overview')}><Icon name="grid" /></button>
             <button className="tbtn" title="数据 · Metrics" aria-current={step === 'metrics'}
               onClick={() => setStep('metrics')}><Icon name="bolt" /></button>
-            <button className="tbtn" title="设置 · 模型服务商与 Agent 配置" aria-current={step === 'settings'}
-              onClick={() => setStep('settings')}><Icon name="gear" /></button>
+
           </div>
           <div className="spacer" />
         </>
@@ -68,6 +67,8 @@ export function TopBar() {
         <div className="spacer" />
       )}
       <div className="row" style={{ gap: 8 }}>
+        <button className="tbtn" title="设置 · 模型服务商与 Agent 配置（应用级，跨项目共用）"
+          onClick={() => navigate('/settings')}><Icon name="gear" /></button>
         <button className="tbtn" onClick={() => toast('相比基础版的差异：资产有稳定 ID 与版本、定稿锁定才能被引用、每次生成都记账')}>
           <Icon name="layers" />差异
         </button>

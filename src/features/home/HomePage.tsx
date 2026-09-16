@@ -19,8 +19,17 @@ export function HomePage() {
 
   return (
     <div className="stage"><div className="stage__body"><div className="home">
-      <h1 className="home__t">开始创作</h1>
-      <p className="home__s">从一句灵感到成片，选一条创作路径开始。</p>
+      <div className="home__head">
+        <div>
+          <h1 className="home__t">开始创作</h1>
+          <p className="home__s">从一句灵感到成片，选一条创作路径开始。</p>
+        </div>
+        <div className="spacer" />
+        <button className="tbtn" onClick={() => navigate('/settings')}
+          title="模型服务商与 Agent 配置（应用级，跨项目共用）">
+          <Icon name="gear" />设置
+        </button>
+      </div>
 
       <div className="hero" role="button" tabIndex={0}
         onClick={() => { const first = list.data?.[0]; if (first) openProject(first.id); }}

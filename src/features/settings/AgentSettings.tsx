@@ -1,8 +1,12 @@
-import { Button, Icon, Select, Switch, ToggleChip } from '@/ui';
+import { useState } from 'react';
+import { Button, Icon, Segmented, Select, Switch, Textarea, ToggleChip } from '@/ui';
 import { PERSONAS, personaById, INTENT_META, intentName } from '@/domain/agent/roster';
 import type { AgentId } from '@/domain/agent/roster';
 import { TOOLS, TOOLS_FOR_INTENT, missingTools, toolOf, type ToolId } from '@/domain/agent/tools';
-import { checkConfig, defaultConfig, neededModalities } from '@/domain/agent/config';
+import {
+  AUTONOMY_HINT, AUTONOMY_LABEL, checkConfig, defaultConfig, neededModalities, preambleOf,
+  type Autonomy,
+} from '@/domain/agent/config';
 import { findModel, modelsOfModality } from '@/domain/providers/catalog';
 import { MODALITY_LABEL, modelKey, parseModelKey, type Modality, type ModelRef } from '@/domain/providers/model';
 import type { IntentKind } from '@/domain/agent/types';
@@ -74,7 +78,21 @@ function AgentCard({ id }: { id: AgentId }) {
       </header>
       <p className="t-cap dim" style={{ margin: '0 0 12px' }}>{p.tagline}</p>
 
-      <div className="pcard__k" style={{ marginBottom: 6 }}>模型</div>
+      <div className="pcard__k" style={{ marginBottom: 6 }}>
+        侧重方向 · 系统提示词
+      </div>
+      <Preamble id={id} />
+
+      <label className="pcard__row" style={{ marginTop: 10 }}>
+        <span className="pcard__k">自主度</span>
+        <Segmented ariaLabel="自主度"
+          items={(['propose', 'auto'] as Autonomy[]).map((a) => ({ key: a, label: AUTONOMY_LABEL[a], title: AUTONOMY_HINT[a] }))}
+          value={cfg.autonomy}
+          onChange={(v) => patch(id, { autonomy: v as Autonomy })} />
+        <span className="t-cap dim">{AUTONOMY_HINT[cfg.autonomy]}</span>
+      </label>
+
+      <div className="pcard__k" style={{ margin: '12px 0 6px' }}>模型</div>
       {needs.map((m) => (
         <label key={m} className="pcard__row">
           <span className="pcard__k">{MODALITY_LABEL[m]}</span>
@@ -129,6 +147,50 @@ function AgentCard({ id }: { id: AgentId }) {
         </Button>
       </div>
     </section>
+  );
+}
+
+/**
+ * 系统提示词：自主规划下，这段比多勾几个技能更能决定这位 Agent 的行为。
+ * 默认折叠 —— 大多数人不改；改过的展开显示并标出来。
+ */
+function Preamble({ id }: { id: AgentId }) {
+  const p = personaById(id);
+  const cfg = useSettings((s) => s.agents[id]) ?? defaultConfig(p);
+  const patch = useSettings((s) => s.patchAgent);
+  const custom = !!cfg.preamble?.trim();
+  const [open, setOpen] = useState(custom);
+  const [draft, setDraft] = useState(preambleOf(cfg, p));
+
+  if (!open) {
+    return (
+      <div className="prem">
+        <p className="prem__peek">{preambleOf(cfg, p).split('\n')[0]}</p>
+        <button className="tbtn" onClick={() => { setDraft(preambleOf(cfg, p)); setOpen(true); }}>
+          <Icon name="wand" />{custom ? '已改写 · 查看' : '改写'}
+        </button>
+      </div>
+    );
+  }
+  return (
+    <div className="prem prem--open">
+      <Textarea rows={10} value={draft} onChange={(e) => setDraft(e.target.value)}
+        aria-label={`${p.name}的系统提示词`} />
+      <div className="row" style={{ marginTop: 6 }}>
+        {custom && <span className="t-cap dim">已改写，不再跟随出厂默认</span>}
+        <div className="spacer" />
+        {custom && (
+          <Button onClick={() => { patch(id, { preamble: undefined }); setDraft(p.preamble); setOpen(false); }}>
+            <Icon name="undo" />恢复出厂
+          </Button>
+        )}
+        <Button onClick={() => setOpen(false)}>收起</Button>
+        <Button variant="primary" onClick={() => {
+          patch(id, { preamble: draft.trim() === p.preamble.trim() ? undefined : draft });
+          setOpen(false);
+        }}><Icon name="check" />保存</Button>
+      </div>
+    </div>
   );
 }
 

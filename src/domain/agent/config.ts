@@ -21,10 +21,33 @@ export interface AgentConfig {
   readonly models: Partial<Record<Modality, ModelRef>>;
   /** 0–1，越高越发散。undefined 用厂商默认 */
   readonly temperature?: number;
-  /** 追加在系统提示词后面的个性化指令 */
-  readonly extraPrompt?: string;
+  /**
+   * 改写后的系统提示词。undefined = 用 persona.preamble。
+   * 这是调 Agent「侧重方向」的主要手段 —— 比加几个技能有效得多。
+   */
+  readonly preamble?: string;
+  /**
+   * 自主度。决定这位 Agent 在拿到活儿之后**放手到什么程度**：
+   * - 'propose'：出计划、出产物，等人采纳（默认，产物可审可撤）
+   * - 'auto'：自己把能干的干完，只在要花钱或改定稿资产时停下来问
+   * 接 Rig 之后这一档直接映射到 agent loop：propose 走 plan-then-execute 并在
+   * 执行前交回人，auto 走完整循环。
+   */
+  readonly autonomy: Autonomy;
   readonly enabled: boolean;
 }
+
+export type Autonomy = 'propose' | 'auto';
+
+export const AUTONOMY_LABEL: Record<Autonomy, string> = {
+  propose: '先出方案',
+  auto: '自主执行',
+};
+
+export const AUTONOMY_HINT: Record<Autonomy, string> = {
+  propose: '出计划和产物，等你点采纳才写进项目',
+  auto: '能干的自己干完，只在要花钱或动定稿资产时停下来问',
+};
 
 export function defaultConfig(p: Persona): AgentConfig {
   const tools = new Set<ToolId>(defaultTools(p.owns));
@@ -34,9 +57,14 @@ export function defaultConfig(p: Persona): AgentConfig {
     skills: [...p.owns],
     tools: [...tools],
     models: {},
+    autonomy: 'propose',
     enabled: true,
   };
 }
+
+/** 这位 Agent 实际生效的系统提示词 */
+export const preambleOf = (cfg: AgentConfig | undefined, p: Persona): string =>
+  cfg?.preamble?.trim() || p.preamble;
 
 export const defaultConfigs = (): Record<AgentId, AgentConfig> =>
   Object.fromEntries(PERSONAS.map((p) => [p.id, defaultConfig(p)])) as Record<AgentId, AgentConfig>;

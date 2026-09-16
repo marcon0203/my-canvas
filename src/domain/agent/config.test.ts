@@ -3,7 +3,7 @@ import { PERSONAS, personaById } from './roster';
 import { TOOLS_FOR_INTENT, canRun, defaultTools } from './tools';
 import {
   canHandleConfigured, checkConfig, defaultConfig, defaultConfigs,
-  neededModalities, ownerOfConfigured,
+  neededModalities, ownerOfConfigured, preambleOf,
 } from './config';
 import type { ModelRef } from '@/domain/providers/model';
 
@@ -111,5 +111,30 @@ describe('agent/config · 配置真的改变分工', () => {
   it('defaultTools 只给该给的 —— 剪辑拿不到出图工具', () => {
     expect(defaultTools(personaById('editor').owns)).not.toContain('image.generate');
     expect(defaultTools(personaById('dp').owns)).toContain('video.generate');
+  });
+});
+
+describe('agent/config · 侧重方向与自主度', () => {
+  it('每位都有自己的系统提示词，不是同一段套话', () => {
+    const texts = PERSONAS.map((p) => p.preamble);
+    expect(new Set(texts).size).toBe(PERSONAS.length);
+    for (const p of PERSONAS) {
+      expect(p.preamble.length, p.name).toBeGreaterThan(80);
+      // 每段都要写清「拿不准时偏向哪边」—— 自主规划下这句最影响行为
+      expect(p.preamble, p.name).toContain('拿不准时');
+    }
+  });
+
+  it('默认先出方案，不自作主张', () => {
+    for (const p of PERSONAS) expect(defaultConfig(p).autonomy).toBe('propose');
+  });
+
+  it('改写后用改写的，清空回落出厂默认', () => {
+    const p = personaById('dp');
+    const base = defaultConfig(p);
+    expect(preambleOf(base, p)).toBe(p.preamble);
+    expect(preambleOf({ ...base, preamble: '只拍特写' }, p)).toBe('只拍特写');
+    // 空白不算改写 —— 免得误存一个空提示词把 Agent 变哑巴
+    expect(preambleOf({ ...base, preamble: '   ' }, p)).toBe(p.preamble);
   });
 });

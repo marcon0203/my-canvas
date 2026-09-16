@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 
-export type Step = 'outline' | 'script' | 'assets' | 'storyboard' | 'editing' | 'overview' | 'metrics' | 'settings';
+export type Step = 'outline' | 'script' | 'assets' | 'storyboard' | 'editing' | 'overview' | 'metrics';
 export type Modal = null | 'stage' | 'gear';
 
 export interface Toast {
@@ -10,7 +10,7 @@ export interface Toast {
 
 /** UI 态：选中、弹窗、折叠、画布相机 —— 全部不进撤销历史 */
 export interface UiState {
-  route: 'home' | 'project';
+  route: 'home' | 'project' | 'settings';
   projectId: string;
   step: Step;
   nodeSel: string;
