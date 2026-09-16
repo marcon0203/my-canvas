@@ -348,6 +348,10 @@ body { background: var(--color-bg-canvas); overflow: hidden; }
 .rail__b[aria-current="true"] { background: var(--color-accent-subtle); color: var(--color-accent); }
 .rail__b svg { width: 18px; height: 18px; }
 .rail__n { font-size: 10px; line-height: 1.2; letter-spacing: .02em; }
+.rail__f {
+  flex: 0 0 auto; margin-top: auto; padding-top: var(--space-2);
+  border-top: 1px solid var(--color-border-subtle);
+}
 
 /* 二级：子菜单 */
 .subnav {
@@ -373,6 +377,23 @@ body { background: var(--color-bg-canvas); overflow: hidden; }
 .subnav__n { font-size: 13px; font-weight: 500; }
 .subnav__hint { font-size: 11px; color: var(--color-text-tertiary); }
 .subnav__f { flex: 0 0 auto; padding: var(--space-2); border-top: 1px solid var(--color-border-subtle); }
+
+/* 带返回的标题行：项目内一级栏收起，这是唯一的出口，所以给它整行 */
+.subnav__h--back { padding: 0 var(--space-2); }
+.subnav__back {
+  display: flex; align-items: center; gap: 4px; width: 100%;
+  padding: 5px var(--space-2); border: 0; border-radius: var(--radius-control);
+  background: none; color: var(--color-text-secondary);
+  font-family: inherit; font-size: 12px; cursor: pointer; text-align: left;
+}
+.subnav__back:hover { background: var(--color-bg-hover); color: var(--color-text-primary); }
+.subnav__back svg { width: 14px; height: 14px; flex: 0 0 auto; }
+
+/* 账号角落：一级栏底 / 项目顶栏，两处共用一份 */
+.acct { display: flex; align-items: center; gap: 8px; }
+.acct--compact { flex-direction: column; gap: 6px; }
+.acct--compact .credit { width: 100%; justify-content: center; padding: 0 4px; }
+.acct--compact .credit span { font-size: 11px; }
 
 .work { flex: 1 1 auto; min-height: 0; display: grid; grid-template-columns: minmax(0,1fr) 320px; }
 .work--full { grid-template-columns: minmax(0,1fr); }

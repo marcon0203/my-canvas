@@ -61,11 +61,25 @@ export function App() {
 /**
  * 应用骨架：左侧一级图标栏 + 二级菜单 + 内容区（Apifox 那种）。
  * 一级决定在哪个大区，二级决定大区内部去哪；两者都进 URL，可刷新可分享。
+ *
+ * 两处刻意的缺省：
+ * - `section` 不给就**不画一级栏**。项目内是这样 —— 那时二级菜单（创作阶段）
+ *   才是主导航，一级栏只会分散注意力；出口是二级菜单顶部的「返回工作台」。
+ * - `top` 不给就**不画顶栏**。顶栏装的全是项目级的东西，首页和设置页没有，
+ *   留着只会是一排跳回自己的按钮。
  */
-function Shell({ section, sub, onSub, children, aside }: {
-  section: SectionId;
-  sub?: { title: string; meta?: React.ReactNode; items: readonly { k: string; n: string; icon: string; hint?: string }[]; active: string; footer?: React.ReactNode };
+function Shell({ section, sub, onSub, top = false, children, aside }: {
+  section?: SectionId;
+  sub?: {
+    title: string;
+    meta?: React.ReactNode;
+    back?: { label: string; onClick: () => void };
+    items: readonly { k: string; n: string; icon: string; hint?: string }[];
+    active: string;
+    footer?: React.ReactNode;
+  };
   onSub?: (k: string) => void;
+  top?: boolean;
   children: React.ReactNode;
   aside?: React.ReactNode;
 }) {
@@ -77,9 +91,9 @@ function Shell({ section, sub, onSub, children, aside }: {
   };
   return (
     <div className="app">
-      <TopBar />
+      {top && <TopBar />}
       <div className="body">
-        <Rail active={section} onPick={go} />
+        {section && <Rail active={section} onPick={go} />}
         {sub && <SubNav {...sub} onPick={(k) => onSub?.(k)} />}
         <main className="body__main">{children}</main>
         {aside}
@@ -127,11 +141,11 @@ export function ResourcesRoute() {
 
 /** 应用外壳：与原型同构（.app > header.top + .work + aside.agent）。home 与项目两种形态 */
 export function AppShell() {
+  const navigate = useNavigate();
   const route = useUi((s) => s.route);
   const projectId = useUi((s) => s.projectId);
   const step = useUi((s) => s.step);
   const hydratedFor = useProject((s) => s.hydratedFor);
-  const proj = useProject((s) => s.proj);
   const q = useProjectData(route === 'project' ? projectId : '');
 
   // 项目内容注入 store：不入撤销历史（pause → hydrate → clear → resume）
@@ -165,10 +179,10 @@ export function AppShell() {
     return <Shell section="workbench"><HomePage /></Shell>;
   }
   return (
-    <Shell section="workbench"
+    <Shell top
       sub={{
-        title: '工作台',
-        meta: <span className="t-cap dim">{proj}</span>,
+        title: '创作流程',
+        back: { label: '返回工作台', onClick: () => { useUi.getState().setRoute('home'); navigate('/'); } },
         items: WORKBENCH_SUB,
         active: step,
       }}
