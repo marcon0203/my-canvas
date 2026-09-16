@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { PERSONAS, canHandle, intentName, ownerOf, personaForStep, personaById, skillsOf } from './roster';
+import { PERSONAS, canHandle, intentName, isAgentId, ownerOf, personaForStep, personaById, skillsOf } from './roster';
 import type { IntentKind } from './types';
 
 const ALL_KINDS: IntentKind[] = [
@@ -52,5 +52,18 @@ describe('agent/roster · 分工', () => {
 
   it('转交话术里留着接手方的占位符', () => {
     for (const p of PERSONAS) expect(p.handoff).toContain('%s');
+  });
+});
+
+describe('roster · URL 段校验', () => {
+  it('五位都认得', () => {
+    for (const p of PERSONAS) expect(isAgentId(p.id)).toBe(true);
+  });
+
+  it('乱填的名字不认 —— 路由靠它挡住白屏', () => {
+    for (const bad of ['nobody', '', 'Writer', 'writer ', 'constructor', 'toString']) {
+      expect(isAgentId(bad)).toBe(false);
+    }
+    expect(isAgentId(undefined)).toBe(false);
   });
 });

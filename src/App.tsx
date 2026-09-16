@@ -20,6 +20,7 @@ import { MetricsPage } from '@/features/metrics/MetricsPage';
 import { SettingsPage, type SettingsSection } from '@/features/settings/SettingsPage';
 import { Rail } from '@/components/shell/Rail';
 import { SubNav } from '@/components/shell/SubNav';
+import { isAgentId } from '@/domain/agent/roster';
 import { SETTINGS_SUB, WORKBENCH_SUB, isValidSub, type SectionId } from '@/domain/nav';
 import { TokenGallery } from './routes/TokenGallery';
 
@@ -41,7 +42,7 @@ const router = createBrowserRouter([
   { path: '/tokens', element: <TokenGallery /> },
   // 设置是**应用级**的，不属于任何项目：模型与 Agent 配置跨项目共用，
   // 放进 /project/:id/... 会让人以为是「这个项目的模型」
-  { path: '/settings/:section?', element: <SettingsRoute /> },
+  { path: '/settings/:section?/:detail?', element: <SettingsRoute /> },
   { path: '/resources', element: <ResourcesRoute /> },
   { path: '/project', element: <ProjectEntryRedirect /> },
   { path: '/project/:projectId/:step?', element: <ProjectRoute /> },
@@ -90,17 +91,22 @@ function Shell({ section, sub, onSub, children, aside }: {
 
 /** 设置页：应用级，不挂在任何项目下。二级菜单是三个分区 */
 export function SettingsRoute() {
-  const { section } = useParams();
+  const { section, detail } = useParams();
   const navigate = useNavigate();
   const setRoute = useUi((s) => s.setRoute);
   useEffect(() => { setRoute('settings'); }, [setRoute]);
 
-  const active = isValidSub('settings', section ?? '') ? section! : 'models';
+  const active = (isValidSub('settings', section ?? '') ? section! : 'models') as SettingsSection;
+  // 详情段只有智能体分区有；乱填的名字当没填，回列表而不是白屏
+  const agent = active === 'agents' && isAgentId(detail) ? detail : undefined;
+
   return (
     <Shell section="settings"
       sub={{ title: '设置', items: SETTINGS_SUB, active }}
       onSub={(k) => navigate(`/settings/${k}`)}>
-      <SettingsPage section={active as SettingsSection} />
+      <SettingsPage section={active} detail={agent}
+        onOpenAgent={(id) => navigate(`/settings/agents/${id}`)}
+        onBack={() => navigate('/settings/agents')} />
     </Shell>
   );
 }

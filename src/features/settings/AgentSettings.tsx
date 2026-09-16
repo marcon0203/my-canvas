@@ -4,7 +4,7 @@ import { PERSONAS, personaById, INTENT_META, intentName } from '@/domain/agent/r
 import type { AgentId } from '@/domain/agent/roster';
 import { TOOLS, TOOLS_FOR_INTENT, missingTools, toolOf, type ToolId } from '@/domain/agent/tools';
 import {
-  AUTONOMY_HINT, AUTONOMY_LABEL, checkConfig, defaultConfig, neededModalities, preambleOf,
+  AUTONOMY_LABEL, AUTONOMY_HINT, checkConfig, defaultConfig, neededModalities, preambleOf,
   type Autonomy,
 } from '@/domain/agent/config';
 import { findModel, modelsOfModality } from '@/domain/providers/catalog';
@@ -15,8 +15,13 @@ import { useUi } from '@/store/ui';
 
 const ALL_INTENTS = Object.keys(INTENT_META) as Exclude<IntentKind, 'chat'>[];
 
-/** 每个 Agent 单独配：接哪些活、用什么模型、给哪些工具 */
-export function AgentSettings() {
+/**
+ * 智能体管理 · 列表页。
+ *
+ * 卡片只回答「这位是谁、现在什么状态、有没有毛病」—— 五位并排能一眼扫完。
+ * 具体怎么配（提示词、模型、活儿、工具）进详情页，那儿是一位一屏，不用挤。
+ */
+export function AgentList({ onOpen }: { onOpen: (id: AgentId) => void }) {
   const globals = useEffectiveGlobals();
   const setGlobal = useSettings((s) => s.setGlobalModel);
 
@@ -35,14 +40,74 @@ export function AgentSettings() {
         ))}
       </section>
 
-      <div className="setgrid">
-        {PERSONAS.map((p) => <AgentCard key={p.id} id={p.id} />)}
+      <div className="agrid">
+        {PERSONAS.map((p) => <AgentTile key={p.id} id={p.id} onOpen={onOpen} />)}
       </div>
     </>
   );
 }
 
-function AgentCard({ id }: { id: AgentId }) {
+/** 一张卡片。整张可点进详情；启用开关单独拦住点击，免得手一抖进了详情页 */
+function AgentTile({ id, onOpen }: { id: AgentId; onOpen: (id: AgentId) => void }) {
+  const p = personaById(id);
+  const cfg = useSettings((s) => s.agents[id]) ?? defaultConfig(p);
+  const patch = useSettings((s) => s.patchAgent);
+  const globals = useEffectiveGlobals();
+  const extra = useExtraModels();
+
+  const ready = new Set<string>(useReadyProviders());
+
+  const issues = checkConfig(cfg, globals, extra);
+  const errs = issues.filter((i) => i.level === 'error').length;
+  const textRef = cfg.models.text ?? globals.text;
+  const textName = textRef ? findModel(textRef, extra)?.name : undefined;
+  // checkConfig 只管配置自不自洽，管不着有没有密钥 —— 卡片答的是「现在能不能跑」，
+  // 所以厂商没接入也得算一种「跑不起来」，不能显示成「配置自洽」
+  const offline = !!textRef && !ready.has(textRef.provider);
+
+  return (
+    <article className={`atile${cfg.enabled ? '' : ' atile--off'}`}>
+      <button className="atile__hit" onClick={() => onOpen(id)}
+        aria-label={`配置${p.name}`}>
+        <header className="atile__h">
+          <span className={`aface aface--${p.id}`} aria-hidden><Icon name={p.icon} /></span>
+          <span className="atile__n">{p.name}</span>
+          <span className="atile__en">{p.en}</span>
+        </header>
+        <p className="atile__tag">{p.tagline}</p>
+        <dl className="atile__stats">
+          <div><dt>活儿</dt><dd>{cfg.skills.length}</dd></div>
+          <div><dt>工具</dt><dd>{cfg.tools.length}</dd></div>
+          <div><dt>自主度</dt><dd>{AUTONOMY_LABEL[cfg.autonomy]}</dd></div>
+        </dl>
+        <p className="atile__model">
+          <Icon name="cube" />
+          {textName
+            ? `${textName}${cfg.models.text ? '' : ' · 跟随全局'}`
+            : '没有可用的文本模型'}
+        </p>
+        <p className={`atile__st${errs ? ' atile__st--bad' : ''}`}>
+          {!cfg.enabled
+            ? '已停用，它的活儿不会有人接'
+            : errs
+              ? `${errs} 个问题要处理`
+              : issues.length
+                ? issues[0]!.text
+                : offline
+                  ? '配置没问题，但这家厂商还没接入，跑不起来'
+                  : '配置自洽，可以跑'}
+        </p>
+      </button>
+      {/* 开关放在可点区之外：它不是「进详情」，而是就地生效 */}
+      <div className="atile__sw">
+        <Switch on={cfg.enabled} onChange={(v) => patch(id, { enabled: v })} label={`启用${p.name}`} />
+      </div>
+    </article>
+  );
+}
+
+/** 智能体管理 · 详情页。一位一屏 */
+export function AgentDetail({ id }: { id: AgentId }) {
   const p = personaById(id);
   const cfg = useSettings((s) => s.agents[id]) ?? defaultConfig(p);
   const patch = useSettings((s) => s.patchAgent);
@@ -68,91 +133,107 @@ function AgentCard({ id }: { id: AgentId }) {
   };
 
   return (
-    <section className={`pcard${cfg.enabled ? '' : ' pcard--off'}`}>
-      <header className="pcard__h">
-        <span className={`aface aface--${p.id}`} aria-hidden><Icon name={p.icon} /></span>
-        <span className="pcard__n">{p.name}</span>
-        <span className="pcard__en">{p.en}</span>
-        <div className="spacer" />
-        <Switch on={cfg.enabled} onChange={(v) => patch(id, { enabled: v })} label="启用" />
-      </header>
-      <p className="t-cap dim" style={{ margin: '0 0 12px' }}>{p.tagline}</p>
+    <>
+      <section className={`pcard${cfg.enabled ? '' : ' pcard--off'}`}>
+        <header className="pcard__h">
+          <span className="pcard__n">侧重方向 · 系统提示词</span>
+          <span className="t-cap dim">自主规划下，这段比多勾几个技能更能决定它的行为</span>
+          <div className="spacer" />
+          <Switch on={cfg.enabled} onChange={(v) => patch(id, { enabled: v })} label="启用" />
+        </header>
+        <Preamble id={id} />
 
-      <div className="pcard__k" style={{ marginBottom: 6 }}>
-        侧重方向 · 系统提示词
-      </div>
-      <Preamble id={id} />
-
-      <label className="pcard__row" style={{ marginTop: 10 }}>
-        <span className="pcard__k">自主度</span>
-        <Segmented ariaLabel="自主度"
-          items={(['propose', 'auto'] as Autonomy[]).map((a) => ({ key: a, label: AUTONOMY_LABEL[a], title: AUTONOMY_HINT[a] }))}
-          value={cfg.autonomy}
-          onChange={(v) => patch(id, { autonomy: v as Autonomy })} />
-        <span className="t-cap dim">{AUTONOMY_HINT[cfg.autonomy]}</span>
-      </label>
-
-      <div className="pcard__k" style={{ margin: '12px 0 6px' }}>模型</div>
-      {needs.map((m) => (
-        <label key={m} className="pcard__row">
-          <span className="pcard__k">{MODALITY_LABEL[m]}</span>
-          <ModelSelect modality={m} value={cfg.models[m]}
-            inherited={globals[m]}
-            onChange={(ref) => {
-              const next = { ...cfg.models };
-              if (ref) next[m] = ref; else delete next[m];
-              patch(id, { models: next });
-            }} />
+        <label className="pcard__row" style={{ marginTop: 12 }}>
+          <span className="pcard__k">自主度</span>
+          <Segmented ariaLabel="自主度"
+            items={(['propose', 'auto'] as Autonomy[]).map((a) => ({ key: a, label: AUTONOMY_LABEL[a], title: AUTONOMY_HINT[a] }))}
+            value={cfg.autonomy}
+            onChange={(v) => patch(id, { autonomy: v as Autonomy })} />
+          <span className="t-cap dim">{AUTONOMY_HINT[cfg.autonomy]}</span>
         </label>
-      ))}
+      </section>
 
-      <div className="pcard__k" style={{ margin: '12px 0 6px' }}>接的活儿 · {cfg.skills.length}</div>
-      <div className="chiprow">
-        {ALL_INTENTS.map((k) => {
-          const on = cfg.skills.includes(k);
-          const miss = on ? missingTools(cfg.tools, k) : [];
-          return (
-            <ToggleChip key={k} on={on} onClick={() => toggleSkill(k)}
-              title={miss.length ? `缺工具：${miss.map((t) => toolOf(t)?.name).join('、')}` : intentName(k)}>
-              {INTENT_META[k].name}{miss.length ? ' ⚠' : ''}
-            </ToggleChip>
-          );
-        })}
-      </div>
-
-      <div className="pcard__k" style={{ margin: '12px 0 6px' }}>工具 · {cfg.tools.length}</div>
-      <div className="chiprow">
-        {TOOLS.map((t) => (
-          <ToggleChip key={t.id} on={cfg.tools.includes(t.id)} onClick={() => toggleTool(t.id)}
-            title={`${t.desc}${t.needs ? `（需要${MODALITY_LABEL[t.needs]}模型）` : ''}`}>
-            {t.name}{t.writes ? '' : ' ·读'}
-          </ToggleChip>
+      <section className="pcard">
+        <header className="pcard__h">
+          <span className="pcard__n">模型</span>
+          <span className="t-cap dim">只列它用得上的模态</span>
+        </header>
+        {needs.map((m) => (
+          <label key={m} className="pcard__row">
+            <span className="pcard__k">{MODALITY_LABEL[m]}</span>
+            <ModelSelect modality={m} value={cfg.models[m]}
+              inherited={globals[m]}
+              onChange={(ref) => {
+                const next = { ...cfg.models };
+                if (ref) next[m] = ref; else delete next[m];
+                patch(id, { models: next });
+              }} />
+          </label>
         ))}
-      </div>
+      </section>
+
+      <section className="pcard">
+        <header className="pcard__h">
+          <span className="pcard__n">接的活儿 · {cfg.skills.length}</span>
+          <span className="t-cap dim">勾上时所需工具会自动补齐</span>
+        </header>
+        <div className="chiprow">
+          {ALL_INTENTS.map((k) => {
+            const on = cfg.skills.includes(k);
+            const miss = on ? missingTools(cfg.tools, k) : [];
+            return (
+              <ToggleChip key={k} on={on} onClick={() => toggleSkill(k)}
+                title={miss.length ? `缺工具：${miss.map((t) => toolOf(t)?.name).join('、')}` : intentName(k)}>
+                {INTENT_META[k].name}{miss.length ? ' ⚠' : ''}
+              </ToggleChip>
+            );
+          })}
+        </div>
+      </section>
+
+      <section className="pcard">
+        <header className="pcard__h">
+          <span className="pcard__n">工具 · {cfg.tools.length}</span>
+          <span className="t-cap dim">带「读」的只读项目，不改东西</span>
+        </header>
+        <div className="chiprow">
+          {TOOLS.map((t) => (
+            <ToggleChip key={t.id} on={cfg.tools.includes(t.id)} onClick={() => toggleTool(t.id)}
+              title={`${t.desc}${t.needs ? `（需要${MODALITY_LABEL[t.needs]}模型）` : ''}`}>
+              {t.name}{t.writes ? '' : ' ·读'}
+            </ToggleChip>
+          ))}
+        </div>
+      </section>
 
       {issues.length > 0 && (
-        <ul className="issues">
-          {issues.map((it, i) => (
-            <li key={i} className={`issue issue--${it.level}`}>
-              <Icon name={it.level === 'error' ? 'x' : 'bolt'} />{it.text}
-            </li>
-          ))}
-        </ul>
+        <section className="pcard pcard--warn">
+          <header className="pcard__h">
+            <Icon name="bolt" />
+            <span className="pcard__n">{issues.length} 条要注意</span>
+          </header>
+          <ul className="issues">
+            {issues.map((it, i) => (
+              <li key={i} className={`issue issue--${it.level}`}>
+                <Icon name={it.level === 'error' ? 'x' : 'bolt'} />{it.text}
+              </li>
+            ))}
+          </ul>
+        </section>
       )}
 
-      <div className="row" style={{ marginTop: 12 }}>
+      <div className="row">
         <div className="spacer" />
         <Button onClick={() => { reset(id); toast(`${p.name} 的配置已恢复默认`); }}>
           <Icon name="undo" />恢复默认
         </Button>
       </div>
-    </section>
+    </>
   );
 }
 
 /**
- * 系统提示词：自主规划下，这段比多勾几个技能更能决定这位 Agent 的行为。
- * 默认折叠 —— 大多数人不改；改过的展开显示并标出来。
+ * 系统提示词：默认折叠 —— 大多数人不改；改过的展开显示并标出来。
  */
 function Preamble({ id }: { id: AgentId }) {
   const p = personaById(id);

@@ -118,6 +118,9 @@ const BY_INTENT = new Map(PERSONAS.flatMap((p) => p.owns.map((k) => [k, p] as co
 
 export const personaById = (id: AgentId): Persona => BY_ID.get(id)!;
 
+/** URL 段是不是一个真的 Agent —— 路由直达时用它挡住乱填的名字 */
+export const isAgentId = (id: string | undefined): id is AgentId => !!id && BY_ID.has(id as AgentId);
+
 /** 环节 → 当班的 Agent。没配到的环节交给制片（总览类） */
 export const personaForStep = (step: string): Persona => BY_STEP.get(step) ?? personaById('producer');
 
