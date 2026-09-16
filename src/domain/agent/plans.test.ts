@@ -4,6 +4,7 @@ import { defaultRig } from '@/domain/assets/model';
 import { allBeats } from '@/domain/story/model';
 import type { AgentContext } from './context';
 import { plan } from './plans';
+import { defaultConfigs } from './config';
 
 /** 用真实 seed 建上下文：计划必须对得上项目现状，不能是写死的文案 */
 function ctx(input = '', over: Partial<AgentContext> = {}): AgentContext {
@@ -19,6 +20,8 @@ function ctx(input = '', over: Partial<AgentContext> = {}): AgentContext {
     sel: { step: 'outline', beatId: 'b3', assetId: 'c1', shotId: 's1-1', blockId: null },
     input,
     agentId: 'writer',
+    agents: defaultConfigs(),
+    globalModels: {},
     ...over,
   };
 }

@@ -5,6 +5,9 @@ import { useAgent } from '@/store/agent';
 import { personaById, skillsOf } from '@/domain/agent/roster';
 import type { Persona } from '@/domain/agent/roster';
 import type { AgentMessage, Proposal } from '@/domain/agent/types';
+import { modelFor } from '@/domain/agent/config';
+import { findModel } from '@/domain/providers/catalog';
+import { useEffectiveGlobals, useExtraModels, useSettings } from '@/store/settings';
 
 /**
  * Agent 侧栏：流式对话驱动整条流水线。
@@ -22,6 +25,12 @@ export function AgentPanel() {
   const syncStep = useAgent((s) => s.syncStep);
   const agentId = useAgent((s) => s.agentId);
   const persona = personaById(agentId);
+  // 当班用的是哪个文本模型 —— 配置得看得见，否则改了也不知道有没有生效
+  const cfg = useSettings((s) => s.agents[agentId]);
+  const globals = useEffectiveGlobals();
+  const extra = useExtraModels();
+  const setStep = useUi((s) => s.setStep);
+  const model = findModel(modelFor(cfg, 'text', globals), extra);
   const [draft, setDraft] = useState('');
   const logRef = useRef<HTMLDivElement>(null);
 
@@ -55,6 +64,13 @@ export function AgentPanel() {
         <button className="tbtn" title="会话历史" aria-label="会话历史" style={{ padding: '0 8px' }}
           onClick={() => toast('会话历史：本地模拟阶段只保留当前会话')}><Icon name="hist" /></button>
       </div>
+
+      <button className="agent__model" onClick={() => setStep('settings')}
+        title={model ? `${persona.name}当前用的文本模型，点开去设置里改` : '还没配模型，点开去设置'}>
+        <Icon name="cube" />
+        {model ? model.name : '未配置模型'}
+        {cfg && !cfg.models.text && model && <span className="dim">· 跟随全局</span>}
+      </button>
 
       <div className="agent__log" id="alog" ref={logRef}>
         {messages.length > 0

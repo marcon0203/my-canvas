@@ -1,7 +1,8 @@
 import type { AgentContext } from '@/domain/agent/context';
 import { plan } from '@/domain/agent/plans';
 import { route } from '@/domain/agent/router';
-import { canHandle, ownerOf, personaById } from '@/domain/agent/roster';
+import { personaById } from '@/domain/agent/roster';
+import { canHandleConfigured, ownerOfConfigured } from '@/domain/agent/config';
 import type { Handoff, IntentKind, Plan } from '@/domain/agent/types';
 
 /**
@@ -50,9 +51,22 @@ export async function* runAgent(
   const resolved = kind ?? route(ctx.input).kind;
   const me = personaById(ctx.agentId);
 
-  // 接不了就转交 —— 当班的先说一句，再把人交出去，不假装自己会
-  if (!canHandle(me, resolved)) {
-    const to = ownerOf(resolved)!;
+  // 接不了就转交 —— 当班的先说一句，再把人交出去，不假装自己会。
+  // 判定以**配置**为准：用户把活儿挪给别人、或勾掉了工具，转交要跟着变
+  if (!canHandleConfigured(me.id, resolved, ctx.agents)) {
+    const toId = ownerOfConfigured(resolved, ctx.agents);
+    if (!toId) {
+      // 这活儿被所有人取消了：说清楚，别假装转交给某个不接的人
+      const line = `「${resolved}」现在没有 Agent 接 —— 去设置里给某位加上这项技能和对应工具。`;
+      yield { t: 'plan', plan: { kind: resolved, steps: [], reply: line, blocked: line } };
+      for (let i = 0; i < line.length; i += CHARS_PER_TICK) {
+        try { await sleep(TICK_MS, signal); } catch { yield { t: 'aborted' }; return; }
+        yield { t: 'delta', text: line.slice(i, i + CHARS_PER_TICK) };
+      }
+      yield { t: 'done' };
+      return;
+    }
+    const to = personaById(toId);
     const handoff: Handoff = { from: me.id, to: to.id, kind: resolved };
     const line = me.handoff.replace('%s', `**${to.name}**`);
     yield { t: 'plan', plan: { kind: resolved, steps: [], reply: line } };

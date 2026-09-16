@@ -42,6 +42,9 @@ npm run verify     # token 分层自检（需先 build）
   外加首页。原型《The Dream of Cats》数据完整移植于 `store/seed.ts`。
 - **阶段 6 · Agent 班底驱动全流程**（已完成）：一个环节一位 Agent，各有专长，
   接不了的活儿会转交 —— 见下节。
+- **阶段 7 · 配置体系**（已完成）：厂商/模型注册表（火山、DeepSeek、智谱、百炼、
+  混元、月之暗面 + 自定义 OpenAI 兼容端点），每个 Agent 单独配 skill / 模型 / 工具。
+  桌面端（Tauri + Rust）架构见 `docs/desktop-architecture.md`。
 
 ## Agent 班底：一个环节一位，各有专长
 
@@ -66,8 +69,15 @@ Agent 不背着人改东西。
 由它重跑同一句输入并交付产物。转交前后的消息留在同一条会话里，
 用户那句话只冒一次泡。
 
+**每位的专长可以改。** `roster` 里的 `owns` 只是出厂默认，运行时以设置里的配置为准：
+把「批量转视频」从摄影指导挪给制片，转交会跟着走；勾掉某件工具，对应技能立刻接不了
+（界面上那个 ⚠ 是真的）。停用某位 Agent，它的活儿就没人接 —— Agent 会明说，
+而不是假装转交给一个不接的人。
+
 ```
-domain/agent/   纯逻辑：roster 班底与分工 / router 自由文本路由 / drafts 草稿生成 / plans 计划装配
+domain/providers/ 厂商与模型目录（种子，端点与模型清单都可在设置里改）
+domain/agent/   纯逻辑：roster 班底与分工 / config 每位的配置与校验 / tools 工具注册表 /
+                router 自由文本路由 / drafts 草稿生成 / plans 计划装配
 api/agent.ts    传输层：本地模拟流式应答（plan → step → delta → proposal → done），可中断；
                 当班接不了时改发 handoff
 store/agent.ts  会话态：消息、当班 Agent、流式进度、采纳落库、转交接力（不进撤销历史）

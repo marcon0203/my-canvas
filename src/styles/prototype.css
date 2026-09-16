@@ -822,6 +822,61 @@ body { background: var(--color-bg-canvas); overflow: hidden; }
 .ahand__t { font-size: 12px; color: var(--color-text-secondary); overflow-wrap: anywhere; }
 .ahand__t strong { color: var(--color-text-primary); }
 
+/* ---- 设置页：服务商卡片 / Agent 配置卡片 ---- */
+.setgrid { display: grid; gap: var(--space-4); }
+.setnote {
+  display: flex; align-items: flex-start; gap: 6px; line-height: 1.8;
+  margin: var(--space-5) 0 0; padding-top: var(--space-4);
+  border-top: 1px solid var(--color-border-subtle);
+}
+.setnote svg { width: 13px; height: 13px; flex: 0 0 auto; margin-top: 3px; }
+
+.pcard {
+  border: 1px solid var(--color-border-subtle); border-radius: var(--radius-card);
+  background: var(--color-bg-surface); padding: var(--space-4) var(--space-5);
+}
+.pcard--off { opacity: 0.55; }
+.pcard__h { display: flex; align-items: center; gap: var(--space-2); margin-bottom: var(--space-3); flex-wrap: wrap; }
+.pcard__n { font-size: 15px; font-weight: 600; color: var(--color-text-primary); }
+.pcard__en { font-size: 11px; color: var(--color-text-tertiary); }
+.pcard__k { font-size: 12px; color: var(--color-text-tertiary); flex: 0 0 auto; min-width: 48px; }
+.pcard__row { display: flex; align-items: center; gap: var(--space-2); margin-bottom: 8px; }
+.pcard__row .nv-input, .pcard__row .runbar__sel { flex: 1 1 auto; min-width: 0; }
+.pcard__link { margin-left: 8px; color: var(--color-accent); text-decoration: none; }
+.pcard__link:hover { text-decoration: underline; }
+.pcard__models { margin-top: var(--space-3); padding-top: var(--space-3); border-top: 1px solid var(--color-border-subtle); }
+
+.mlist { display: flex; flex-direction: column; gap: 2px; margin-bottom: var(--space-2); }
+.mrow {
+  display: flex; align-items: center; gap: var(--space-2); flex-wrap: wrap;
+  padding: 5px 6px; border-radius: var(--radius-control); font-size: 12px;
+}
+.mrow:hover { background: var(--color-bg-hover); }
+.mrow__n { font-weight: 500; color: var(--color-text-primary); }
+.mrow__id { font-size: 11px; }
+.mrow__caps { display: flex; gap: 4px; }
+.mrow__note { max-width: 240px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.addm { display: flex; gap: var(--space-2); align-items: center; flex-wrap: wrap; }
+.addm .nv-input { flex: 1 1 140px; min-width: 0; }
+
+.chiprow { display: flex; gap: 5px; flex-wrap: wrap; }
+
+.issues { list-style: none; margin: var(--space-3) 0 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+.issue { display: flex; align-items: flex-start; gap: 6px; font-size: 12px; line-height: 1.6; }
+.issue svg { width: 12px; height: 12px; flex: 0 0 auto; margin-top: 3px; }
+.issue--error { color: var(--color-error); }
+.issue--warn { color: var(--color-warning); }
+
+/* 侧栏里的当班模型：配置得看得见，点它直接去设置 */
+.agent__model {
+  display: flex; align-items: center; gap: 5px; width: 100%;
+  padding: 6px var(--space-4); border: 0; border-bottom: 1px solid var(--color-border-subtle);
+  background: var(--color-bg-muted); color: var(--color-text-secondary);
+  font-family: inherit; font-size: 11px; text-align: left; cursor: pointer;
+}
+.agent__model:hover { color: var(--color-text-primary); }
+.agent__model svg { width: 12px; height: 12px; color: var(--color-text-tertiary); flex: 0 0 auto; }
+
 /* ---- 树：资产 → 形状照（形状照长在它所属的资产下面） ---- */
 .expl__row { display: flex; align-items: center; gap: 2px; }
 .expl__rowmain { flex: 1 1 auto; min-width: 0; }
@@ -1313,10 +1368,10 @@ details summary:hover { color: var(--color-accent); }
 
 .sw { width:40px; height:22px; border-radius:999px; border:0; cursor:pointer; padding:2px;
   background:var(--color-border-default); transition:background var(--duration-fast) var(--ease-standard); }
-.sw[aria-pressed="true"] { background:var(--color-accent); }
+.sw[aria-checked="true"], .sw[aria-pressed="true"] { background:var(--color-accent); }
 .sw span { display:block; width:18px; height:18px; border-radius:999px; background:#fff;
   transition:transform var(--duration-fast) var(--ease-standard); }
-.sw[aria-pressed="true"] span { transform:translateX(18px); }
+.sw[aria-checked="true"] span, .sw[aria-pressed="true"] span { transform:translateX(18px); }
 
 .wheels { display:grid; grid-template-columns:repeat(4,1fr); gap:0; padding:6px 20px 0; }
 .wh { text-align:center; padding:12px 8px; border-right:1px solid var(--color-border-subtle); }

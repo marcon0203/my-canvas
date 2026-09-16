@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 
-export type Step = 'outline' | 'script' | 'assets' | 'storyboard' | 'editing' | 'overview' | 'metrics';
+export type Step = 'outline' | 'script' | 'assets' | 'storyboard' | 'editing' | 'overview' | 'metrics' | 'settings';
 export type Modal = null | 'stage' | 'gear';
 
 export interface Toast {

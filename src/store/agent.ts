@@ -6,6 +6,7 @@ import { personaById, personaForStep } from '@/domain/agent/roster';
 import type { AgentMessage, IntentKind, Proposal } from '@/domain/agent/types';
 import { useProject } from './project';
 import { useUi } from './ui';
+import { effectiveGlobals, useSettings } from './settings';
 
 /**
  * Agent 会话态：消息、流式进度、待采纳产物。不进撤销历史 ——
@@ -50,6 +51,8 @@ function snapshot(input: string, agentId: AgentId): AgentContext {
     },
     input,
     agentId,
+    agents: useSettings.getState().agents,
+    globalModels: effectiveGlobals(useSettings.getState()),
   };
 }
 

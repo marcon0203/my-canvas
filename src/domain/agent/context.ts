@@ -2,6 +2,8 @@ import type { Asset, AssetGroup } from '@/domain/assets/model';
 import type { Shot } from '@/domain/shots/model';
 import type { Act, DocBlock } from '@/domain/story/model';
 import type { AgentId } from './roster';
+import type { AgentConfig } from './config';
+import type { Modality, ModelRef } from '@/domain/providers/model';
 
 /**
  * Agent 看到的项目快照 —— 只读。
@@ -31,6 +33,10 @@ export interface AgentContext {
   readonly input: string;
   /** 当班的是哪位 Agent */
   readonly agentId: AgentId;
+  /** 全班底的配置：决定谁接哪些活、用什么模型 */
+  readonly agents: Record<AgentId, AgentConfig>;
+  /** 各模态的全局默认模型（Agent 没单独配时用它） */
+  readonly globalModels: Partial<Record<Modality, ModelRef>>;
 }
 
 export const ctxAssets = (c: AgentContext): Asset[] =>

@@ -59,6 +59,8 @@ export function TopBar() {
               onClick={() => setStep('overview')}><Icon name="grid" /></button>
             <button className="tbtn" title="数据 · Metrics" aria-current={step === 'metrics'}
               onClick={() => setStep('metrics')}><Icon name="bolt" /></button>
+            <button className="tbtn" title="设置 · 模型服务商与 Agent 配置" aria-current={step === 'settings'}
+              onClick={() => setStep('settings')}><Icon name="gear" /></button>
           </div>
           <div className="spacer" />
         </>

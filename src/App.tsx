@@ -17,11 +17,12 @@ import { StoryboardPage } from '@/features/storyboard/StoryboardPage';
 import { EditingPage } from '@/features/clips/EditingPage';
 import { CanvasPage } from '@/features/canvas/CanvasPage';
 import { MetricsPage } from '@/features/metrics/MetricsPage';
+import { SettingsPage } from '@/features/settings/SettingsPage';
 import { TokenGallery } from './routes/TokenGallery';
 
 const queryClient = new QueryClient();
 
-const STEPS: Step[] = ['outline', 'script', 'assets', 'storyboard', 'editing', 'overview', 'metrics'];
+const STEPS: Step[] = ['outline', 'script', 'assets', 'storyboard', 'editing', 'overview', 'metrics', 'settings'];
 
 const PAGES: Record<Step, () => React.JSX.Element> = {
   outline: OutlinePage,
@@ -31,6 +32,7 @@ const PAGES: Record<Step, () => React.JSX.Element> = {
   editing: EditingPage,
   overview: CanvasPage,
   metrics: MetricsPage,
+  settings: SettingsPage,
 };
 
 const router = createBrowserRouter([
