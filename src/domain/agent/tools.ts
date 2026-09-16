@@ -79,16 +79,16 @@ export const TOOLS: readonly ToolSpec[] = [
   { id: 'cost.estimate', group: 'read', name: '估花费', desc: '真花之前先报个数', status: 'ready' },
 
   /* 写项目 */
-  { id: 'outline.write', group: 'write', name: '写大纲', desc: '起草或补充幕与场次', needs: 'text', writes: true, status: 'declared', blockedBy: '要先解决与前端 store 的同步' },
-  { id: 'script.write', group: 'write', name: '写剧本', desc: '写正文块、润色已有段落', needs: 'text', writes: true, status: 'declared', blockedBy: '要先解决与前端 store 的同步' },
-  { id: 'asset.write', group: 'write', name: '建资产', desc: '新建角色/场景/道具', needs: 'text', writes: true, status: 'declared', blockedBy: '要先解决与前端 store 的同步' },
-  { id: 'asset.lock', group: 'write', name: '资产定稿', desc: '锁定版本，让分镜可以引用', writes: true, status: 'declared', blockedBy: '要先解决与前端 store 的同步' },
-  { id: 'shot.write', group: 'write', name: '写分镜', desc: '拆镜、改镜头字段与引用', needs: 'text', writes: true, status: 'declared', blockedBy: '要先解决与前端 store 的同步' },
+  { id: 'outline.write', group: 'write', name: '写大纲', desc: '起草或补充幕与场次；场次键由程序统一重编', needs: 'text', writes: true, status: 'ready' },
+  { id: 'script.write', group: 'write', name: '写剧本', desc: '写正文块、润色已有段落', needs: 'text', writes: true, status: 'declared', blockedBy: '同写大纲那条路：要改成返回补丁而不是落盘，还没搬' },
+  { id: 'asset.write', group: 'write', name: '建资产', desc: '新建角色/场景/道具', needs: 'text', writes: true, status: 'declared', blockedBy: '同写大纲那条路：要改成返回补丁而不是落盘，还没搬' },
+  { id: 'asset.lock', group: 'write', name: '资产定稿', desc: '锁定版本，让分镜可以引用；资产不存在会报错', writes: true, status: 'ready' },
+  { id: 'shot.write', group: 'write', name: '写分镜', desc: '拆镜、改镜头字段与引用；镜号由程序分配', needs: 'text', writes: true, status: 'ready' },
 
   /* 提示词 */
   { id: 'prompt.compile', group: 'prompt', name: '合成提示词', desc: '画风 + 资产 + 镜头语言 → 英文提示词', needs: 'text', writes: true, status: 'declared', blockedBy: '合成规则要先从前端搬到 core' },
   { id: 'prompt.translate', group: 'prompt', name: '提示词中译英', desc: '只译看得见的东西，不译情节与心理', needs: 'text', status: 'declared', blockedBy: '要能在 agent loop 里被调用' },
-  { id: 'style.apply', group: 'prompt', name: '换画风', desc: '换画风并重算受影响的提示词', needs: 'text', writes: true, status: 'declared', blockedBy: '要先解决与前端 store 的同步' },
+  { id: 'style.apply', group: 'prompt', name: '换画风', desc: '换画风并重算受影响的提示词', needs: 'text', writes: true, status: 'declared', blockedBy: '同写大纲那条路：要改成返回补丁而不是落盘，还没搬' },
 
   /* 生成 */
   { id: 'image.generate', group: 'generate', name: '出图', desc: '生成形状照与关键帧', needs: 'image', writes: true, status: 'unverified', blockedBy: '协议已实现并测过，厂商字段映射还没对过真实文档 —— 接第一家时拿真 key 调一次就知道要不要改' },
@@ -101,12 +101,12 @@ export const TOOLS: readonly ToolSpec[] = [
   { id: 'audio.sfx', group: 'generate', name: '音效', desc: '雨声、脚步、关门这类单个音效', writes: true, status: 'declared', blockedBy: '音频接口与图片视频不同家，适配器还没写' },
 
   /* 镜头 */
-  { id: 'stage.render', group: 'camera', name: '渲参考图', desc: '布光台白模离屏渲染，本地不花钱', status: 'declared', blockedBy: '要由前端执行再把结果回传' },
-  { id: 'shot.rig', group: 'camera', name: '设机位光线', desc: '改这一镜的机位、焦距、光位', writes: true, status: 'declared', blockedBy: '要先解决与前端 store 的同步' },
+  { id: 'stage.render', group: 'camera', name: '渲参考图', desc: '布光台白模离屏渲染，本地不花钱', status: 'ready' },
+  { id: 'shot.rig', group: 'camera', name: '设机位光线', desc: '改这一镜的机位、焦距、光位', writes: true, status: 'declared', blockedBy: '同写大纲那条路：要改成返回补丁而不是落盘，还没搬' },
 
   /* 成片 */
-  { id: 'edit.timeline', group: 'deliver', name: '排时间线', desc: '可用片段按场次与节拍排进时间线', writes: true, status: 'declared', blockedBy: '要先解决与前端 store 的同步' },
-  { id: 'edit.subtitle', group: 'deliver', name: '生成字幕', desc: '按正文与配音时间轴生成字幕', writes: true, status: 'declared', blockedBy: '要先解决与前端 store 的同步' },
+  { id: 'edit.timeline', group: 'deliver', name: '排时间线', desc: '可用片段按场次与节拍排进时间线', writes: true, status: 'declared', blockedBy: '同写大纲那条路：要改成返回补丁而不是落盘，还没搬' },
+  { id: 'edit.subtitle', group: 'deliver', name: '生成字幕', desc: '按正文与配音时间轴生成字幕', writes: true, status: 'declared', blockedBy: '同写大纲那条路：要改成返回补丁而不是落盘，还没搬' },
   { id: 'file.export', group: 'deliver', name: '导出文件', desc: '导出剧本 .md、成片 .mp4', status: 'declared', blockedBy: '导出路径要用户选，不能由 Agent 决定' },
 
   /* 查资料 */

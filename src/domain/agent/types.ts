@@ -36,6 +36,7 @@ export type ProposalPatch =
   | { t: 'shots'; shots: Shot[] }
   | { t: 'shotPrompts'; edits: { id: string; own: string }[] }
   | { t: 'style'; style: string; stylePrompt: string }
+  | { t: 'assetLock'; aid: string }
   | { t: 'run'; action: 'video.batch' | 'edit.autocut' };
 
 /** 产物预览行：采纳前给人看的 diff 摘要 */

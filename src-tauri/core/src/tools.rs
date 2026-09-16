@@ -140,8 +140,9 @@ pub fn all() -> Vec<ToolSpec> {
               "batch": { "type": "integer", "minimum": 1, "maximum": 4 } }), &["kind", "count"])),
 
         /* ---------------- 写项目 ---------------- */
-        t("outline.write", "写大纲", Write, "起草或补充幕与场次。",
-          W, Rust, Declared, Some(SYNC),
+        t("outline.write", "写大纲", Write,
+          "起草或补充幕与场次。场次键由程序统一重编，不要自己编号。",
+          W, Rust, Ready, None,
           obj(json!({ "acts": { "type": "array", "description": "幕数组，形状同 outline.md" } }), &["acts"])),
 
         t("script.write", "写剧本", Write, "写正文块或润色已有段落。",
@@ -152,12 +153,14 @@ pub fn all() -> Vec<ToolSpec> {
           W, Rust, Declared, Some(SYNC),
           obj(json!({ "assets": { "type": "array" } }), &["assets"])),
 
-        t("asset.lock", "资产定稿", Write, "锁定资产版本，锁定后分镜才能引用它。",
-          W, Rust, Declared, Some(SYNC),
+        t("asset.lock", "资产定稿", Write,
+          "锁定资产版本，锁定后分镜才能引用它。资产不存在会直接报错。",
+          W, Rust, Ready, None,
           obj(json!({ "aid": { "type": "string" } }), &["aid"])),
 
-        t("shot.write", "写分镜", Write, "拆镜、改镜头字段与资产引用。",
-          W, Rust, Declared, Some(SYNC),
+        t("shot.write", "写分镜", Write,
+          "拆镜、改镜头字段与资产引用。镜号由程序分配，不要自己编。",
+          W, Rust, Ready, None,
           obj(json!({ "shots": { "type": "array" } }), &["shots"])),
 
         /* ---------------- 提示词 ---------------- */
@@ -284,6 +287,17 @@ pub fn spec(id: &str) -> Option<ToolSpec> {
 #[serde(tag = "t", rename_all = "camelCase")]
 pub enum Outcome {
     Ok { value: Value },
+    /// **写类工具不落盘，返回一份补丁。**
+    ///
+    /// 为什么不让 Rust 直接写：前端 store 是界面的活数据，autosave 会把它
+    /// 写回盘。Rust 也写的话就有两个写入者 —— Rust 刚写完，autosave 拿着
+    /// store 里的旧数据一覆盖，改动就没了。这种丢更新很难查，因为两边看
+    /// 各自都「成功」了。
+    ///
+    /// 所以写入者只有一个（前端），Rust 这边做它真正擅长的：**校验与编号**。
+    /// 补丁走原来那条「产物 → 人采纳 → applyAgentPatch → 一条撤销记录」，
+    /// 权限闸门、撤销、diff 全都不用另做一套。
+    Patch { tool: String, patch: Value },
     /// 超出自主上限，等人点头
     NeedsApproval { tool: String, risk: Risk, why: String },
     /// 契约在、实现还没有
@@ -350,6 +364,11 @@ pub async fn dispatch(
         });
     }
 
+    // 写类工具：算出补丁交回去，不落盘（见 Outcome::Patch 上的说明）
+    if let Some(patch) = write_patch(root, project_id, t.id, &args)? {
+        return Ok(Outcome::Patch { tool: t.id.into(), patch });
+    }
+
     let value = match t.id {
         "project.read" => read_project(root, project_id, &args)?,
         "project.search" => search_project(root, project_id, &args)?,
@@ -384,6 +403,92 @@ fn read_project(root: &Path, id: &str, args: &Value) -> Result<Value> {
             "assets": b.assets, "shots": b.shots,
         }),
     })
+}
+
+/// 写类工具 → 补丁。返回 None 表示这个工具不是写类的。
+///
+/// Rust 在这儿的价值是**校验与编号**，不是写文件：
+/// 模型给的场次键会重复、镜号会和已有的撞、引用的资产可能根本不存在。
+/// 这些程序判得准，模型判不准。
+fn write_patch(root: &Path, id: &str, tool: &str, args: &Value) -> Result<Option<Value>> {
+    match tool {
+        "outline.write" => {
+            let mut acts: Vec<crate::md::Act> = serde_json::from_value(
+                args.get("acts").cloned().unwrap_or(Value::Null),
+            ).map_err(|e| Error::Store(format!("acts 形状不对：{e}")))?;
+            if acts.is_empty() {
+                return Err(Error::Store("没有幕 —— 空大纲不是一份产物".into()));
+            }
+            // 场次键统一重编，跨幕连续。模型自己编会重复、会跳号
+            let existing = crate::project::load(root, id)
+                .map(|b| b.acts.iter().map(|a| a.beats.len()).sum::<usize>())
+                .unwrap_or(0);
+            let mut n = existing + 1;
+            for a in acts.iter_mut() {
+                for b in a.beats.iter_mut() {
+                    b.k = format!("场景{n}");
+                    n += 1;
+                }
+            }
+            Ok(Some(json!({ "t": "acts", "acts": acts })))
+        }
+
+        "shot.write" => {
+            let shots = args.get("shots").and_then(Value::as_array).cloned().unwrap_or_default();
+            if shots.is_empty() {
+                return Err(Error::Store("没有镜头".into()));
+            }
+            // 镜号与已有的不能撞 —— 撞了会把别人的镜头覆盖掉
+            let taken: Vec<String> = crate::project::load(root, id)
+                .map(|b| {
+                    b.shots.as_array().map(|a| {
+                        a.iter().filter_map(|s| s.get("id")?.as_str().map(str::to_string)).collect()
+                    }).unwrap_or_default()
+                })
+                .unwrap_or_default();
+            let mut out = Vec::new();
+            let mut used = taken.clone();
+            for mut sh in shots {
+                let scene = sh.get("sceneKey").and_then(Value::as_str).unwrap_or("场景1").to_string();
+                let num: String = scene.chars().filter(char::is_ascii_digit).collect();
+                let num = if num.is_empty() { "1".to_string() } else { num };
+                let mut k = 1;
+                let mut sid = format!("s{num}-{k}");
+                while used.contains(&sid) {
+                    k += 1;
+                    sid = format!("s{num}-{k}");
+                }
+                used.push(sid.clone());
+                if let Some(o) = sh.as_object_mut() {
+                    o.insert("id".into(), json!(sid));
+                }
+                out.push(sh);
+            }
+            Ok(Some(json!({ "t": "shots", "shots": out })))
+        }
+
+        "asset.lock" => {
+            let aid = args.get("aid").and_then(Value::as_str).unwrap_or("").trim().to_string();
+            if aid.is_empty() {
+                return Err(Error::Store("没说锁哪个资产".into()));
+            }
+            // 引用一个不存在的资产是静默错误：分镜引上了，出图时才发现没有
+            let b = crate::project::load(root, id)?;
+            let found = b.assets.as_object().is_some_and(|groups| {
+                groups.values().any(|list| {
+                    list.as_array().is_some_and(|a| {
+                        a.iter().any(|x| x.get("aid").and_then(Value::as_str) == Some(&aid))
+                    })
+                })
+            });
+            if !found {
+                return Err(Error::Store(format!("资产库里没有 {aid}")));
+            }
+            Ok(Some(json!({ "t": "assetLock", "aid": aid })))
+        }
+
+        _ => Ok(None),
+    }
 }
 
 /// 出图/出视频：拼 body → 走异步任务协议。
@@ -660,7 +765,9 @@ mod tests {
     fn 标成已实现的工具都得有分支_否则注册表在说谎() {
         for t in all().into_iter().filter(|t| t.status == Status::Ready) {
             assert!(
-                matches!(t.id, "project.read" | "project.search" | "metrics.read" | "cost.estimate"),
+                matches!(t.id,
+                    "project.read" | "project.search" | "metrics.read" | "cost.estimate"
+                    | "outline.write" | "shot.write" | "asset.lock"),
                 "{} 标成 Ready 但 dispatch 里没有分支", t.id
             );
         }
@@ -742,6 +849,81 @@ mod tests {
         let e = dispatch(tmp.path(), "p1", "image.generate", json!({ "prompt": "   " }),
             Some(Risk::Spend), Some(gen_ctx(&base, &m))).await.unwrap_err();
         assert!(e.to_string().contains("空的"));
+    }
+
+    #[tokio::test]
+    async fn 写类工具返回补丁_不落盘_只有一个写入者() {
+        let tmp = setup();
+        let before = std::fs::read_to_string(tmp.path().join("projects/p1/outline.md")).unwrap();
+        let o = dispatch(tmp.path(), "p1", "outline.write", json!({
+            "acts": [{ "id": "", "t": "新的一幕", "span": "0:00–1:00",
+                       "beats": [{ "id": "", "k": "随便写的", "t": "一场" }] }]
+        }), None, None).await.unwrap();
+        match o {
+            Outcome::Patch { tool, patch } => {
+                assert_eq!(tool, "outline.write");
+                assert_eq!(patch["t"], "acts");
+            }
+            x => panic!("{x:?}"),
+        }
+        // 盘上一个字没动 —— 写入者只有前端那一个
+        let after = std::fs::read_to_string(tmp.path().join("projects/p1/outline.md")).unwrap();
+        assert_eq!(before, after, "写类工具不该落盘，否则和 autosave 抢着写会丢更新");
+    }
+
+    #[tokio::test]
+    async fn 场次键由程序重编_不信模型编的() {
+        let tmp = setup();
+        let Outcome::Patch { patch, .. } = dispatch(tmp.path(), "p1", "outline.write", json!({
+            "acts": [{ "id": "", "t": "幕", "span": "",
+                       "beats": [{ "id": "", "k": "模型瞎写的", "t": "甲" },
+                                 { "id": "", "k": "模型瞎写的", "t": "乙" }] }]
+        }), None, None).await.unwrap() else { panic!() };
+        // seed 里已有 1 场，所以接着编 2、3
+        assert_eq!(patch["acts"][0]["beats"][0]["k"], "场景2");
+        assert_eq!(patch["acts"][0]["beats"][1]["k"], "场景3");
+    }
+
+    #[tokio::test]
+    async fn 镜号不与已有的撞车_撞了会覆盖别人的镜头() {
+        let tmp = setup();
+        // seed 里已有 s1-1 s1-2 s1-3
+        let Outcome::Patch { patch, .. } = dispatch(tmp.path(), "p1", "shot.write", json!({
+            "shots": [{ "sceneKey": "场景1", "desc": "新的" },
+                      { "sceneKey": "场景1", "desc": "又一个" }]
+        }), None, None).await.unwrap() else { panic!() };
+        let ids: Vec<&str> = patch["shots"].as_array().unwrap().iter()
+            .map(|s| s["id"].as_str().unwrap()).collect();
+        assert_eq!(ids, ["s1-4", "s1-5"]);
+    }
+
+    #[tokio::test]
+    async fn 空大纲不算产物_直接报错() {
+        let tmp = setup();
+        let e = dispatch(tmp.path(), "p1", "outline.write", json!({ "acts": [] }), None, None)
+            .await.unwrap_err();
+        assert!(e.to_string().contains("空大纲"));
+    }
+
+    #[tokio::test]
+    async fn 锁不存在的资产直接报错_而不是让分镜引一个空的() {
+        let tmp = setup();
+        let e = dispatch(tmp.path(), "p1", "asset.lock", json!({ "aid": "CHAR-999" }), None, None)
+            .await.unwrap_err();
+        assert!(e.to_string().contains("CHAR-999"));
+        // 存在的能锁
+        let o = dispatch(tmp.path(), "p1", "asset.lock", json!({ "aid": "CHAR-001" }), None, None)
+            .await.unwrap();
+        assert!(matches!(o, Outcome::Patch { .. }));
+    }
+
+    #[tokio::test]
+    async fn 写类工具照样过闸门_上限只读时挡住() {
+        let tmp = setup();
+        let o = dispatch(tmp.path(), "p1", "outline.write",
+            json!({ "acts": [{ "id": "", "t": "x", "span": "", "beats": [] }] }),
+            Some(Risk::Read), None).await.unwrap();
+        assert!(matches!(o, Outcome::NeedsApproval { .. }));
     }
 
     #[test]

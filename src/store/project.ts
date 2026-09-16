@@ -262,6 +262,12 @@ export const useProject = create<ProjectState>()(
           case 'assets':
             for (const { group, asset } of patch.add) s.assets[group].push(asset);
             break;
+          case 'assetLock': {
+            const a = [...s.assets.角色, ...s.assets.场景, ...s.assets.道具]
+              .find((x) => x.aid === patch.aid);
+            if (a) { a.status = 'locked'; a.ver += 1; }
+            break;
+          }
           case 'assetViews':
             for (const g of patch.gen) {
               const v = findView(s.assets, g.assetId, g.viewName);
