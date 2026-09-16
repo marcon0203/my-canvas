@@ -129,6 +129,17 @@ export async function* runAgent(
 }
 
 
+/**
+ * 内置能力 → 真 skill 的对应关系。
+ *
+ * 只有这两件已经有 SKILL.md（在 `src-tauri/skills/`），跑的时候会把那份正文
+ * 展开进 preamble。其余十件还是写死在 plans.ts 里的本地逻辑，没有 skill 可展开。
+ */
+export const SKILL_FOR_INTENT: Partial<Record<IntentKind, string>> = {
+  'outline.draft': 'draft-outline',
+  'shots.prompt': 'write-shot-prompts',
+};
+
 /* ---------------- 真模型：起草大纲 ---------------- */
 
 const OUTLINE_STEPS = [
@@ -163,6 +174,7 @@ async function* runOutlineOnDesktop(
           actCount: ctx.acts.length,
           beatCount: allBeats(ctx.acts).length,
         },
+        skill: SKILL_FOR_INTENT['outline.draft'],
       },
       (e) => emit(e, (d) => outlineProposal(d as OutlineDraft, fresh, ctx)),
     ),
@@ -203,6 +215,7 @@ async function* runShotPromptsOnDesktop(
           stylePrompt: ctx.stylePrompt,
           shots: shotBriefs(ctx, miss),
         },
+        skill: SKILL_FOR_INTENT['shots.prompt'],
       },
       (e) => emit(e, (d) => promptProposal(d as PromptDraft, miss.length)),
     ),

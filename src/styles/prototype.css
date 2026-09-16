@@ -1057,7 +1057,7 @@ body { background: var(--color-bg-canvas); overflow: hidden; }
 .sktable { display: flex; flex-direction: column; }
 .skhead, .skrow {
   display: grid;
-  grid-template-columns: 20px minmax(180px, 2fr) 96px 88px 128px;
+  grid-template-columns: 20px minmax(180px, 2fr) 96px minmax(140px, auto) 128px;
   align-items: center; column-gap: var(--space-3);
   padding: 8px 4px;
 }
@@ -1080,6 +1080,8 @@ body { background: var(--color-bg-canvas); overflow: hidden; }
 .skrow--orphan .skrow__n { color: var(--color-warning); }
 .skrow__k { font-size: 11px; }
 .skrow__out { font-size: 12px; color: var(--color-text-secondary); }
+/* 第 4 列放 chip，chip 比列宽长时让它自己截断而不是压到归属列上 */
+.skrow > span > .pill { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .skrow__own .runbar__sel { width: 100%; }
 @media (max-width: 1100px) {
   .skhead, .skrow { grid-template-columns: 20px minmax(0,1fr) 88px 128px; }
@@ -1090,6 +1092,14 @@ body { background: var(--color-bg-canvas); overflow: hidden; }
 .skdesc { margin: 0 0 var(--space-3); font-size: 13px; line-height: 1.8; color: var(--color-text-secondary); }
 .skdesc:last-child { margin-bottom: 0; }
 .skplain { font-size: 13px; line-height: 1.7; color: var(--color-text-primary); }
+/* SKILL.md 正文：原样展示，它是写给模型看的指令，格式本身有意义 */
+.skbody {
+  margin: 0; padding: var(--space-4); border-radius: var(--radius-control);
+  background: var(--color-bg-canvas); border: 1px solid var(--color-border-subtle);
+  font-family: var(--font-mono); font-size: 12px; line-height: 1.8;
+  color: var(--color-text-secondary); white-space: pre-wrap; word-break: break-word;
+  max-height: 520px; overflow-y: auto;
+}
 
 /* 智能体卡片墙。整张卡可点进详情，右上角的启用开关不在可点区里 */
 .agrid {

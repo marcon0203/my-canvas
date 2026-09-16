@@ -91,7 +91,7 @@ pub fn prompt_of(input: &OutlineInput) -> String {
 }
 
 /// 跑一次。Rig 的 Extractor 负责让模型填 schema，失败自动重试。
-pub async fn draft(spec: &AgentSpec, api_key: &str, input: &OutlineInput) -> Result<OutlineDraft> {
+pub async fn draft(spec: &AgentSpec, api_key: &str, preamble: &str, input: &OutlineInput) -> Result<OutlineDraft> {
     // prelude 一次带齐 CompletionClient（父 trait）与 AgentClientExt，
     // 只导后者的话 completion_model 不在方法解析范围内，.extractor() 找不到
     use rig::prelude::*;
@@ -105,7 +105,7 @@ pub async fn draft(spec: &AgentSpec, api_key: &str, input: &OutlineInput) -> Res
 
     let extractor = client
         .extractor::<OutlineDraft>(&spec.model.model)
-        .preamble(&spec.preamble)
+        .preamble(preamble)
         .build();
 
     let mut draft = extractor

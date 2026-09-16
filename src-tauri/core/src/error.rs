@@ -20,6 +20,10 @@ pub enum Error {
     Http(String),
     #[error("模型返回无法解析：{0}")]
     Decode(String),
+    #[error("找不到 skill {0}")]
+    UnknownSkill(String),
+    #[error("skill 加载失败：{0}")]
+    Skill(String),
 }
 
 impl Error {
@@ -34,6 +38,8 @@ impl Error {
             Error::NoModel { .. } => "no_model",
             Error::Http(_) => "http",
             Error::Decode(_) => "decode",
+            Error::UnknownSkill(_) => "unknown_skill",
+            Error::Skill(_) => "skill",
         }
     }
 }

@@ -20,6 +20,9 @@ reqwest = { version = "0.12", default-features = false, features = ["json", "str
 eventsource-stream = "0.2"
 rig = "0.42"
 schemars = "1.2.2"
+# frontmatter 解析。rig 已经间接依赖它，不是新增的构建成本
+serde_yaml_ng = "0.10"
 
 [dev-dependencies]
 tokio = { version = "1", features = ["rt-multi-thread", "macros", "test-util"] }
+tempfile = "3"

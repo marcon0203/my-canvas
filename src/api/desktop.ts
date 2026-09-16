@@ -8,6 +8,9 @@
  * 回落实现只记「配没配」，并且在设置界面里如实说明。
  */
 
+import { BUILTIN_SKILLS, builtinSkill } from '@/domain/skills/builtin';
+import type { SkillMeta, SkillWarning } from '@/domain/skills/loader';
+
 export interface KeyStatus {
   provider: string;
   hasKey: boolean;
@@ -98,6 +101,8 @@ export interface RunArgs<I> {
   globals: unknown;
   providers: unknown;
   input: I;
+  /** 这一轮要展开哪个 skill 的正文。不给就只有清单，没有指令 */
+  skill?: string;
 }
 
 /**
@@ -120,4 +125,35 @@ export async function shotsPrompt(
   const ch = new Channel<RunEvent>();
   ch.onmessage = onEvent;
   await call('agent_shots_prompt', { ...args, onEvent: ch });
+}
+
+/* ---------------- Skill ---------------- */
+
+
+export interface SkillList {
+  skills: SkillMeta[];
+  warnings: SkillWarning[];
+}
+
+/**
+ * 装了哪些 skill（第 1 级：只有名字与说明，不含正文）。
+ *
+ * 桌面端扫真实目录，能看到用户自己放进去的；浏览器里没有文件系统，
+ * 只能列出构建期嵌进来的内置那几个 —— 内容是真的，但看不到用户的。
+ */
+export async function skillsList(): Promise<SkillList> {
+  if (!isDesktop()) return { skills: BUILTIN_SKILLS.map((s) => s.meta), warnings: [] };
+  return invoke<SkillList>('skills_list');
+}
+
+/** 某个 skill 的正文（第 2 级：点进详情才读） */
+export async function skillBody(name: string): Promise<string> {
+  if (!isDesktop()) return builtinSkill(name)?.body ?? '';
+  return invoke<string>('skill_body', { name });
+}
+
+/** skill 里的附件（第 3 级：正文指到哪个读哪个）。浏览器里读不到 */
+export async function skillResource(name: string, rel: string): Promise<string> {
+  if (!isDesktop()) return '';
+  return invoke<string>('skill_resource', { name, rel });
 }

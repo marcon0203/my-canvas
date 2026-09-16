@@ -10,6 +10,7 @@ use studio_core::config::{AgentConfig, ModelRef, ProviderSetting};
 use studio_core::outline::OutlineInput;
 use studio_core::run::{self, RunEvent};
 use studio_core::shotprompt::PromptInput;
+use studio_core::skills::{Root, SkillMeta, SkillStore, SkillWarning};
 use studio_core::vault::{self, KeyStatus};
 
 /* ---------------- 密钥：明文只进钥匙串，出不来 ---------------- */
@@ -27,6 +28,49 @@ fn vault_clear(provider: String) -> Result<KeyStatus> {
 #[tauri::command]
 fn vault_status(providers: Vec<String>) -> Result<Vec<KeyStatus>> {
     providers.iter().map(|p| vault::status(p)).collect()
+}
+
+/* ---------------- Skill ---------------- */
+
+/// 扫描三处目录，**只解析 frontmatter**（第 1 级）。
+///
+/// 顺序就是覆盖顺序：用户放的盖过内置的，项目里的盖过用户的。
+fn roots(app: &tauri::AppHandle) -> Vec<Root> {
+    use tauri::Manager;
+    let mut out = Vec::new();
+    if let Ok(p) = app.path().resolve("skills", tauri::path::BaseDirectory::Resource) {
+        out.push(Root { name: "内置".into(), path: p });
+    }
+    if let Ok(p) = app.path().app_data_dir() {
+        out.push(Root { name: "用户".into(), path: p.join("skills") });
+    }
+    out
+}
+
+#[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+struct SkillList {
+    skills: Vec<SkillMeta>,
+    warnings: Vec<SkillWarning>,
+}
+
+/// 列出装了哪些 skill。**不含正文** —— 正文是第 2 级，界面要看再单独要。
+#[tauri::command]
+fn skills_list(app: tauri::AppHandle) -> SkillList {
+    let st = SkillStore::scan(&roots(&app));
+    SkillList { skills: st.all().to_vec(), warnings: st.warnings().to_vec() }
+}
+
+/// 读某个 skill 的正文（第 2 级）。界面上「看看它到底写了什么」用这个。
+#[tauri::command]
+fn skill_body(app: tauri::AppHandle, name: String) -> Result<String> {
+    SkillStore::scan(&roots(&app)).body(&name)
+}
+
+/// 读 skill 里的附件（第 3 级）。路径穿越由 core 挡，这层只转发。
+#[tauri::command]
+fn skill_resource(app: tauri::AppHandle, name: String, rel: String) -> Result<String> {
+    SkillStore::scan(&roots(&app)).resource(&name, &rel)
 }
 
 /* ---------------- Agent ---------------- */
@@ -53,8 +97,11 @@ async fn agent_outline_draft(
     globals: HashMap<String, ModelRef>,
     providers: HashMap<String, ProviderSetting>,
     input: OutlineInput,
+    skill: Option<String>,
     on_event: tauri::ipc::Channel<RunEvent>,
+    app: tauri::AppHandle,
 ) {
+    let skills = SkillStore::scan(&roots(&app));
     run::outline_draft(
         run::OutlineRun {
             cfg: &cfg,
@@ -62,6 +109,8 @@ async fn agent_outline_draft(
             globals: &globals,
             providers: &providers,
             input: &input,
+            skills: &skills,
+            skill: skill.as_deref(),
         },
         move |e: RunEvent| {
             let _ = on_event.send(e);
@@ -79,8 +128,11 @@ async fn agent_shots_prompt(
     globals: HashMap<String, ModelRef>,
     providers: HashMap<String, ProviderSetting>,
     input: PromptInput,
+    skill: Option<String>,
     on_event: tauri::ipc::Channel<RunEvent>,
+    app: tauri::AppHandle,
 ) {
+    let skills = SkillStore::scan(&roots(&app));
     run::shots_prompt(
         run::PromptRun {
             cfg: &cfg,
@@ -88,6 +140,8 @@ async fn agent_shots_prompt(
             globals: &globals,
             providers: &providers,
             input: &input,
+            skills: &skills,
+            skill: skill.as_deref(),
         },
         move |e: RunEvent| {
             let _ = on_event.send(e);
@@ -107,6 +161,9 @@ pub fn run() {
             agent_resolve,
             agent_outline_draft,
             agent_shots_prompt,
+            skills_list,
+            skill_body,
+            skill_resource,
         ])
         .run(tauri::generate_context!())
         .expect("启动失败");

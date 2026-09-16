@@ -8,6 +8,7 @@ use crate::config::{AgentConfig, ModelRef, ProviderSetting};
 use crate::error::Error;
 use crate::outline::{self, OutlineDraft, OutlineInput};
 use crate::shotprompt::{self, PromptDraft, PromptInput};
+use crate::skills::{SkillStore, compose_preamble};
 use std::collections::HashMap;
 
 /// 与前端 `AgentEvent` 同形。契约一致，前端换 transport 不用改事件处理。
@@ -65,6 +66,20 @@ pub struct Run<'a, I> {
     pub globals: &'a HashMap<String, ModelRef>,
     pub providers: &'a HashMap<String, ProviderSetting>,
     pub input: &'a I,
+    /// 已加载的 skill。`skill` 指定这一轮要展开哪一个的正文（第 2 级）；
+    /// 其余的只以名字+说明出现在清单里（第 1 级）。
+    pub skills: &'a SkillStore,
+    pub skill: Option<&'a str>,
+}
+
+/// 拼这一轮真正发出去的 preamble：人格 + skill 清单 + （要用的那个）skill 正文。
+///
+/// 正文在这里才读 —— 扫描时只读了 frontmatter。没找到那个 skill 不算致命错误：
+/// 少一段指令，模型还能按人格干活，比整轮失败强。
+fn preamble_of<I>(run: &Run<'_, I>, spec: &AgentSpec) -> String {
+    let allowed: Vec<String> = run.cfg.skills.clone();
+    let body = run.skill.and_then(|n| run.skills.body(n).ok());
+    compose_preamble(&spec.preamble, &run.skills.catalog(&allowed), body.as_deref())
 }
 
 pub type OutlineRun<'a> = Run<'a, OutlineInput>;
@@ -102,7 +117,8 @@ pub async fn outline_draft<S: Sink, K: Keys>(run: OutlineRun<'_>, sink: S, keys:
     let Some((spec, key)) = prepare(&run, &sink, &keys) else { return };
 
     sink.emit(RunEvent::Step { index: 2 });
-    let draft = match outline::draft(&spec, &key, run.input).await {
+    let preamble = preamble_of(&run, &spec);
+    let draft = match outline::draft(&spec, &key, &preamble, run.input).await {
         Ok(d) => d,
         Err(e) => return sink.emit(RunEvent::failed(&e)),
     };
@@ -118,7 +134,8 @@ pub async fn shots_prompt<S: Sink, K: Keys>(run: PromptRun<'_>, sink: S, keys: K
     let Some((spec, key)) = prepare(&run, &sink, &keys) else { return };
 
     sink.emit(RunEvent::Step { index: 2 });
-    let draft = match shotprompt::draft(&spec, &key, run.input).await {
+    let preamble = preamble_of(&run, &spec);
+    let draft = match shotprompt::draft(&spec, &key, &preamble, run.input).await {
         Ok(d) => d,
         Err(e) => return sink.emit(RunEvent::failed(&e)),
     };
@@ -189,7 +206,10 @@ mod tests {
         let p = HashMap::new();
         let i = input();
         prepare(
-            &OutlineRun { cfg: c, fallback_preamble: "出厂", globals: &g, providers: &p, input: &i },
+            &OutlineRun {
+                cfg: c, fallback_preamble: "出厂", globals: &g, providers: &p, input: &i,
+                skills: &SkillStore::default(), skill: None,
+            },
             &sink,
             &keys,
         );
@@ -222,6 +242,7 @@ mod tests {
             &OutlineRun {
                 cfg: &c, fallback_preamble: "出厂",
                 globals: &no_models, providers: &no_providers, input: &i,
+                skills: &SkillStore::default(), skill: None,
             },
             &sink,
             // 取密钥就 panic：证明模型都没解析出来时不该碰钥匙串
@@ -251,6 +272,77 @@ mod tests {
             })
             .collect();
         assert_eq!(joined, text, "流式切分不能吞字或串码");
+    }
+
+    #[test]
+    fn 这一轮的_preamble_里有被展开的_skill_正文_也有清单() {
+        use std::fs;
+        let tmp = tempfile::TempDir::new().unwrap();
+        for (n, d, b) in [
+            ("draft-outline", "起草大纲用", "照三幕铺，每幕两三场"),
+            ("write-shot-prompts", "补写提示词用", "景别术语开头"),
+        ] {
+            fs::create_dir_all(tmp.path().join(n)).unwrap();
+            fs::write(
+                tmp.path().join(n).join("SKILL.md"),
+                format!("---\nname: {n}\ndescription: {d}\n---\n\n{b}\n"),
+            )
+            .unwrap();
+        }
+        let store = SkillStore::scan(&[crate::skills::Root {
+            name: "内置".into(),
+            path: tmp.path().to_path_buf(),
+        }]);
+
+        let c = cfg(serde_json::json!({
+            "agentId": "writer",
+            "skills": ["draft-outline", "write-shot-prompts"],
+        }));
+        let g = globals();
+        let p = HashMap::new();
+        let i = input();
+        let run = OutlineRun {
+            cfg: &c, fallback_preamble: "出厂", globals: &g, providers: &p, input: &i,
+            skills: &store, skill: Some("draft-outline"),
+        };
+        let spec = agent::resolve(&c, "你是编剧。", &g, &p).unwrap();
+        let text = preamble_of(&run, &spec);
+
+        assert!(text.contains("你是编剧。"), "人格还在");
+        // 第 1 级：两个 skill 都以名字+说明出现
+        assert!(text.contains("起草大纲用") && text.contains("补写提示词用"));
+        // 第 2 级：只有这一轮要用的那个展开了正文
+        assert!(text.contains("照三幕铺"), "要用的那个正文要展开");
+        assert!(!text.contains("景别术语开头"), "没轮到的那个正文不该进上下文");
+    }
+
+    #[test]
+    fn 配置没授权的_skill_连名字都不进_preamble() {
+        use std::fs;
+        let tmp = tempfile::TempDir::new().unwrap();
+        for (n, d) in [("mine", "我能用的"), ("theirs", "别人的")] {
+            fs::create_dir_all(tmp.path().join(n)).unwrap();
+            fs::write(
+                tmp.path().join(n).join("SKILL.md"),
+                format!("---\nname: {n}\ndescription: {d}\n---\n\n正文\n"),
+            )
+            .unwrap();
+        }
+        let store = SkillStore::scan(&[crate::skills::Root {
+            name: "内置".into(), path: tmp.path().to_path_buf(),
+        }]);
+        let c = cfg(serde_json::json!({ "agentId": "writer", "skills": ["mine"] }));
+        let g = globals();
+        let p = HashMap::new();
+        let i = input();
+        let run = OutlineRun {
+            cfg: &c, fallback_preamble: "出厂", globals: &g, providers: &p, input: &i,
+            skills: &store, skill: None,
+        };
+        let spec = agent::resolve(&c, "你是编剧。", &g, &p).unwrap();
+        let text = preamble_of(&run, &spec);
+        assert!(text.contains("我能用的"));
+        assert!(!text.contains("别人的"), "没授权的 skill 模型不该知道它存在");
     }
 
     #[test]

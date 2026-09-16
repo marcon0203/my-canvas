@@ -3,12 +3,13 @@ import { StageBar } from '@/components/StageBar';
 import { Button, Chip, Icon } from '@/ui';
 import { ProviderDetail, ProviderList } from './ProviderSettings';
 import { AgentDetail, AgentList } from './AgentSettings';
-import { SkillDetail, SkillList } from './SkillSettings';
+import { SkillDetail, SkillFileDetail, SkillList } from './SkillSettings';
 import { SETTINGS_SUB } from '@/domain/nav';
 import { personaById, type AgentId } from '@/domain/agent/roster';
 import { providerOf } from '@/domain/providers/catalog';
 import type { ProviderId } from '@/domain/providers/model';
 import { isSkillId, skillOf } from '@/domain/agent/skills';
+import { builtinSkill } from '@/domain/skills/builtin';
 import { useReadyProviders, useSettings } from '@/store/settings';
 import { isDesktop } from '@/api/desktop';
 
@@ -41,6 +42,8 @@ export function SettingsPage({ section, detail, onOpen, onBack }: {
   const p = section === 'agents' && detail ? personaById(detail as AgentId) : undefined;
   const prov = section === 'models' && detail ? providerOf(detail as ProviderId) : undefined;
   const sk = section === 'skills' && isSkillId(detail) ? skillOf(detail) : undefined;
+  // 详情段可能是内置能力的 id（带点，如 outline.draft），也可能是真 skill 的名字
+  const file = section === 'skills' && !sk && detail ? builtinSkill(detail) : undefined;
 
   return (
     <div className="stage">
@@ -55,6 +58,12 @@ export function SettingsPage({ section, detail, onOpen, onBack }: {
           }
           pills={<span className="t-cap dim">{p.tagline}</span>}
           actions={<Button onClick={onBack}><Icon name="left" />返回智能体</Button>}
+        />
+      ) : file ? (
+        <StageBar
+          title={<span className="crumb"><Icon name="wand" />{file.meta.name}</span>}
+          pills={<span className="t-cap dim">{file.meta.source} Skill</span>}
+          actions={<Button onClick={onBack}><Icon name="left" />返回 Skill</Button>}
         />
       ) : sk ? (
         <StageBar
@@ -82,11 +91,13 @@ export function SettingsPage({ section, detail, onOpen, onBack }: {
           : <ProviderList onOpen={onOpen} />)}
         {section === 'skills' && (sk
           ? <SkillDetail id={sk.id} />
-          : <SkillList onOpen={onOpen} />)}
+          : file
+            ? <SkillFileDetail name={file.meta.name} />
+            : <SkillList onOpen={onOpen} />)}
         {section === 'agents' && (p
           ? <AgentDetail id={p.id} />
           : <AgentList onOpen={onOpen} />)}
-        {!p && !prov && !sk && (
+        {!p && !prov && !sk && !file && (
           <p className="t-cap dim setnote">
             <Icon name="bolt" />
             这是**应用级**设置，跨项目共用 —— 模型与 Agent 的配置不属于某一个项目。

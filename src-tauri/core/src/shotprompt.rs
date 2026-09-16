@@ -119,7 +119,7 @@ pub fn prompt_of(input: &PromptInput) -> String {
 }
 
 /// 跑一次。
-pub async fn draft(spec: &AgentSpec, api_key: &str, input: &PromptInput) -> Result<PromptDraft> {
+pub async fn draft(spec: &AgentSpec, api_key: &str, preamble: &str, input: &PromptInput) -> Result<PromptDraft> {
     use rig::prelude::*;
     use rig::providers::openai;
 
@@ -131,7 +131,7 @@ pub async fn draft(spec: &AgentSpec, api_key: &str, input: &PromptInput) -> Resu
 
     let extractor = client
         .extractor::<PromptDraft>(&spec.model.model)
-        .preamble(&spec.preamble)
+        .preamble(preamble)
         .build();
 
     let mut draft = extractor

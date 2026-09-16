@@ -39,6 +39,7 @@ npx tauri build   # 出三平台产物
 | `providers` | 端点解析：用户改过的优先，内置目录只是种子 |
 | `agent` | 配置 → `AgentSpec` → Rig agent。解析是纯函数，配置错误在花钱之前就报出来 |
 | `run` | 编排：`Run<I>` 带公共入参，每条链路只换输入与产物事件 |
+| `skills` | Skill 加载：扫目录只读 frontmatter，正文与附件按需取 |
 | `outline` | 起草大纲。`number()` 补场次键 |
 | `shotprompt` | 补写提示词。`reconcile()` 核对镜号 |
 
@@ -102,6 +103,37 @@ Rust 侧只负责「把几段文字合成一条提示词，并且别把镜号写
 补上忘了带的画风，并把漏写的镜号报回来 —— 产物卡标题如实写 `2/5 镜`，
 不假装全补上了。提示词写错了人一眼能看出来，**写到别的镜头上却是静默的错**，
 所以这层兜底比大纲那层更要紧，七条测试盯着它。
+
+## Skill 加载
+
+一个 Skill 是磁盘上的一个目录，不是代码里的枚举：
+
+```
+skills/write-shot-prompts/
+├── SKILL.md              frontmatter(name/description) + Markdown 指令
+└── references/
+    └── vocabulary.md     正文指到才读
+```
+
+**三级渐进披露**是这套东西的全部要点：
+
+| 级别 | 内容 | 什么时候进上下文 |
+|---|---|---|
+| 1 | name + description | 始终常驻，装一百个也只多一小段 |
+| 2 | SKILL.md 正文 | 这一轮真要用它时才读 |
+| 3 | references / scripts / assets | 正文指到哪个读哪个；scripts 是拿来执行的，根本不进上下文 |
+
+所以 `SkillStore::scan` **只解析 frontmatter**，正文留在磁盘上由 `body()` 按需取。
+把它写成「一次性全读进来」就等于没做这件事。
+
+扫描三处根目录，后面的盖前面的同名 skill：内置（打包进 resources）→
+用户（app_data_dir/skills）→ 项目。用户放一个同名目录就能改掉内置行为。
+
+`resource()` 按 canonicalize 之后的真实路径核前缀 —— skill 是用户往目录里放的东西，
+一个 `../../../.ssh/id_rsa` 就能把无关文件读进上下文再发给模型。
+
+现在只有起草大纲与补写提示词两条链路有 SKILL.md；其余十件内置能力还是写死在
+前端 `plans.ts` 里的逻辑，界面上如实标着「还没有」。
 
 ## 还没做
 
