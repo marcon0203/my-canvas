@@ -61,7 +61,7 @@ async function waitFor(matcher: () => boolean): Promise<void> {
 }
 
 describe('页面渲染烟雾测试', () => {
-  it('HomePage：主通道 + 最近项目（来自项目列表接口）', async () => {
+  it('HomePage：需求输入框 + 最近项目（来自工作空间）', async () => {
     ensureHost();
     let html = '';
     act(() => {
@@ -74,7 +74,9 @@ describe('页面渲染烟雾测试', () => {
     await waitFor(() => host.innerHTML.includes('The Dream of Cats'));
     html = host.innerHTML;
     act(() => { root!.render(null); });
-    expect(html).toContain('Start a story');
+    // 首页的入口是需求输入框，不再是那张 hero 卡
+    expect(html).toContain('brief__in');
+    expect(html).toContain('附件');
     expect(html).toContain('The Dream of Cats');
     expect(html).toContain('FMV Game');
   });

@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router';
 import { NewProjectModal } from './NewProjectModal';
+import { BriefBox } from './BriefBox';
 import { Icon } from '@/ui/Icon';
 import { imgUrlFor } from '@/lib/media';
 import { useProjectList } from '@/api/queries';
@@ -25,22 +26,11 @@ export function HomePage() {
       <div className="home__head">
         <div>
           <h1 className="home__t">开始创作</h1>
-          <p className="home__s">从一句灵感到成片，选一条创作路径开始。</p>
+          <p className="home__s">说一句你要做什么，Agent 规划好步骤，一步步跑给你看。</p>
         </div>
       </div>
 
-      <div className="hero" role="button" tabIndex={0}
-        onClick={() => { const first = list.data?.[0]; if (first) openProject(first.id); }}
-        onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); const first = list.data?.[0]; if (first) openProject(first.id); } }}>
-        <img className="ph" src={imgUrlFor('hero-cover2', 'wide')} alt="" />
-        <div className="hero__scrim" />
-        <div className="hero__b">
-          <span className="hero__tag"><Icon name="video" />主通道 · 短剧与动画</span>
-          <div className="hero__t">Start a story</div>
-          <div className="hero__d">一句话灵感 → 剧本 → 资产 → 分镜 → 成片</div>
-        </div>
-        <span className="hero__go"><Icon name="right" /></span>
-      </div>
+      <BriefBox />
 
       <div className="modes">
         {MODES.map((m) => (

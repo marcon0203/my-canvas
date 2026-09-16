@@ -4,6 +4,7 @@ import type { AgentContext } from '@/domain/agent/context';
 import type { AgentId } from '@/domain/agent/roster';
 import { personaById, personaForStep } from '@/domain/agent/roster';
 import type { AgentMessage, IntentKind, Proposal } from '@/domain/agent/types';
+import { pipelineFor, type ProjectKind, type Stage } from '@/domain/agent/pipeline';
 import { useProject } from './project';
 import { useUi } from './ui';
 import { effectiveGlobals, useSettings } from './settings';
@@ -26,6 +27,15 @@ export interface AgentState {
   agentId: AgentId;
   /** relay=true 时不再冒一次用户气泡：转交是同一个请求换人接，不是新请求 */
   send: (text: string, kind?: IntentKind, relayed?: boolean) => void;
+  /**
+   * 待跑的流水线。首页给一句需求，Agent 按 pipeline 一步步跑：
+   * 每步出产物 → 人采纳（或按自主度自动）→ 接着下一步。
+   * 丢弃或中断就停在这儿，不会自己往下冲。
+   */
+  queue: Stage[];
+  /** 这条流水线要做什么，摆在会话开头，也写进项目的 brief.md */
+  brief: string;
+  startPipeline: (brief: string, kind: ProjectKind) => void;
   /** 环节变了就清空。send 会先认领当前环节，所以「跳页并发起」不会被清掉 */
   syncStep: (step: string) => void;
   stop: () => void;
@@ -36,6 +46,21 @@ export interface AgentState {
 
 let seq = 1;
 let abort: AbortController | null = null;
+
+/**
+ * 跑流水线的下一步。
+ *
+ * 被挡住的一步（前置条件不满足）**跳过而不是停住** —— 比如空项目里没有
+ * 可用片段，自动成片本来就轮不到；为此把整条流水线卡死没有意义。
+ * 真正该停的是人主动丢弃或中断。
+ */
+function advance(get: () => AgentState, set: (p: Partial<AgentState>) => void): void {
+  const q = get().queue;
+  if (!q.length) return;
+  const [next, ...rest] = q;
+  set({ queue: rest });
+  get().send(`${next!.why}`, next!.kind, true);
+}
 
 /** 从两个 store 组装 Agent 看到的项目快照 */
 function snapshot(input: string, agentId: AgentId): AgentContext {
@@ -61,11 +86,19 @@ export const useAgent = create<AgentState>((set, get) => ({
   runningId: null,
   step: '',
   agentId: 'writer',
+  queue: [],
+  brief: '',
 
   syncStep: (step) => {
     if (get().step === step) return;
+    // 流水线自己会跳页（采纳产物后落到产物所在环节）。那不是用户换了话题，
+    // 是同一条流水线往下走了一步 —— 清掉会话等于把后面几步一起清掉。
+    if (get().queue.length) {
+      set({ step, agentId: personaForStep(step).id });
+      return;
+    }
     get().stop();
-    set({ messages: [], runningId: null, step, agentId: personaForStep(step).id });
+    set({ messages: [], runningId: null, queue: [], brief: '', step, agentId: personaForStep(step).id });
   },
 
   send: (text, kind, relayed = false) => {
@@ -74,7 +107,8 @@ export const useAgent = create<AgentState>((set, get) => ({
     const aiId = seq++;
     // 认领当前环节：随后 AgentPanel 的 syncStep 就不会把这轮清掉
     const step = useUi.getState().step;
-    const sameSession = get().step === step;
+    // 流水线跨环节，整条算一次会话；否则每跳一页就把前几步的消息清了
+    const sameSession = get().step === step || get().queue.length > 0;
     const agentId = sameSession ? get().agentId : personaForStep(step).id;
     set((s) => ({
       step, agentId,
@@ -121,10 +155,23 @@ export const useAgent = create<AgentState>((set, get) => ({
             relay = { text, kind: ev.handoff.kind };
             break;
           }
-          case 'done':
+          case 'done': {
             patch((m) => ({ ...m, streaming: false }));
             set({ runningId: null });
+            const done = get().messages.find((m) => m.id === aiId);
+            // 转交的那条消息本来就没有产物 —— 真正的产物由接手方那一轮出。
+            // 这里若当成「被挡住」去推进队列，就会和 relay 的那一轮并发跑。
+            if (get().queue.length && !ctrl.signal.aborted && !done?.handoff && !relay) {
+              if (!done?.proposal) {
+                // 这一步被前置条件挡住，没有产物可采纳 —— 跳过，别卡住整条流水线
+                setTimeout(() => advance(get, set), 300);
+              } else if (useSettings.getState().agents[agentId]?.autonomy === 'auto') {
+                // 自主执行：不等人点，自己采纳再往下走
+                setTimeout(() => get().accept(aiId), 300);
+              }
+            }
             break;
+          }
           case 'aborted':
             patch((m) => ({ ...m, streaming: false, text: m.text + (m.text ? '\n\n（已中断）' : '（已中断）') }));
             set({ runningId: null });
@@ -145,16 +192,32 @@ export const useAgent = create<AgentState>((set, get) => ({
     if (!msg?.proposal || msg.verdict !== 'pending') return;
     applyProposal(msg.proposal);
     set((s) => ({ messages: s.messages.map((m) => (m.id === msgId ? { ...m, verdict: 'accepted' } : m)) }));
+    // 采纳了才往下走 —— 上一步的产物是下一步的输入
+    if (get().queue.length) setTimeout(() => advance(get, set), 300);
   },
 
-  discard: (msgId) => set((s) => ({
-    messages: s.messages.map((m) => (m.id === msgId ? { ...m, verdict: 'discarded' } : m)),
-  })),
+  discard: (msgId) => {
+    set((s) => ({
+      messages: s.messages.map((m) => (m.id === msgId ? { ...m, verdict: 'discarded' } : m)),
+    }));
+    // 丢弃 = 这条路不走了。剩下的步骤基于这份产物，接着跑没有意义
+    if (get().queue.length) {
+      set({ queue: [] });
+      useUi.getState().toast('已停下 —— 后面的步骤要等这一步的产物，改完再让我接着跑');
+    }
+  },
+
+  startPipeline: (brief, kind) => {
+    const stages = pipelineFor(kind);
+    set({ brief, queue: stages.slice(1) });
+    // 第一步带上原始需求，后面几步靠项目里已有的内容推进
+    get().send(brief, stages[0]!.kind);
+  },
 
   reset: () => {
     get().stop();
     const step = useUi.getState().step;
-    set({ messages: [], runningId: null, step, agentId: personaForStep(step).id });
+    set({ messages: [], runningId: null, queue: [], brief: '', step, agentId: personaForStep(step).id });
   },
 }));
 
@@ -215,3 +278,4 @@ function focusProduct(p: Proposal, beatsBefore: ReadonlySet<string>): void {
     }
   }
 }
+
