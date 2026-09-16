@@ -1,5 +1,5 @@
 import { useLayoutEffect, useRef } from 'react';
-import { Group, BufferAttribute, LineSegments, PointLight } from 'three';
+import { Group, BufferAttribute, LineSegments } from 'three';
 import type { Color } from 'three';
 import { stageCamPos, stageLightPos, STAGE_EYE } from '@/domain/camera/geometry';
 import { useSceneColors } from './useSceneColors';
@@ -52,17 +52,20 @@ export function CameraGizmo({ rig, visible, onPick }: {
   );
 }
 
-/** 灯泡 + 辉光 + 朝向人体的光线 */
-export function LightGizmo({ rig, visible, color, intensity, onPick }: {
+/**
+ * 灯泡 + 辉光 + 朝向人体的光线。**纯指示物，不发光**。
+ * 这里原本挂着一盏 intensity×8 的 pointLight：它按色片染色，几乎把整个画面都染成
+ * 色片的颜色；又因为在 gizmo 组里（取景时隐藏），舞台和取景的打光还对不上 ——
+ * 参考图跟你看到的不是一回事。场景的光只由 StageScene 负责。
+ */
+export function LightGizmo({ rig, visible, color, onPick }: {
   rig: Rig;
   visible: boolean;
   color: Color;
-  intensity: number;
   onPick?: () => void;
 }) {
   const ref = useRef<Group>(null);
   const rayRef = useRef<LineSegments>(null);
-  const pointRef = useRef<PointLight>(null);
 
   useLayoutEffect(() => {
     const g = ref.current;
@@ -74,18 +77,13 @@ export function LightGizmo({ rig, visible, color, intensity, onPick }: {
       ray.geometry.setAttribute('position',
         new BufferAttribute(new Float32Array([0, 0, 0, -p.x, STAGE_EYE - p.y, -p.z]), 3));
     }
-    if (pointRef.current) {
-      pointRef.current.intensity = intensity * 8;
-      pointRef.current.distance = 900;
-    }
-  }, [rig, intensity]);
+  }, [rig]);
 
   return (
     <group ref={ref} visible={visible}
       onPointerDown={(e) => { e.stopPropagation(); onPick?.(); }}>
       <mesh><sphereGeometry args={[7, 20, 16]} /><meshBasicMaterial color={color} /></mesh>
       <mesh><sphereGeometry args={[16, 20, 16]} /><meshBasicMaterial color={color} transparent opacity={0.18} /></mesh>
-      <pointLight ref={pointRef} color={color} intensity={intensity * 8} distance={900} />
       <lineSegments ref={rayRef}>
         <bufferGeometry />
         <lineBasicMaterial color={color} transparent opacity={0.4} />

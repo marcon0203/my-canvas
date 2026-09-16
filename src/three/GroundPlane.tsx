@@ -10,14 +10,24 @@ export function GroundPlane({ labels = true }: { labels?: boolean }) {
   const c = useSceneColors('stage');
   return (
     <group>
-      <mesh rotation-x={-Math.PI / 2} receiveShadow>
+      {/*
+       * 地面不吃光：它是示意图元素，不是被照亮的实体。
+       * 用受光材质的话，一上饱和色片整片地就被染成同一个颜色 ——
+       * 舞台图看不清机位，参考图还会被无关色污染。
+       * 色片该落在人物身上；影子由下面单独一层接。
+       */}
+      <mesh rotation-x={-Math.PI / 2}>
         <planeGeometry args={[4000, 4000]} />
-        <meshLambertMaterial color={c.floor} />
+        <meshBasicMaterial color={c.floor} />
+      </mesh>
+      <mesh rotation-x={-Math.PI / 2} position-y={0.04} receiveShadow>
+        <planeGeometry args={[4000, 4000]} />
+        <shadowMaterial opacity={0.3} />
       </mesh>
       {[60, 110, 170, 240].map((r) => (
         <mesh key={r} rotation-x={-Math.PI / 2} position-y={0.1}>
           <ringGeometry args={[r - 0.6, r + 0.6, 96]} />
-          <meshBasicMaterial color={c.mark} transparent opacity={0.45} />
+          <meshBasicMaterial color={c.mark} transparent opacity={0.9} />
         </mesh>
       ))}
       {labels && <>

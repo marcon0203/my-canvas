@@ -23,10 +23,23 @@ export function StageScene({ rig, pose = 'stand', skin = 'blue', showGizmos = tr
   const keyColor = keyLightColor(rig);
   const keyIntensity = 0.3 + (rig.bright / 100) * 1.8;
   const lp = stageLightPos(rig);
+  /**
+   * 中性补光：色片只染主光，暗部与环境保持中性 —— 现场上色片就是这个样子。
+   * 少了它，主光与环境光差 6 倍，一上饱和色片整个画面就被染成一个颜色。
+   * 跟着「环境」滑块走：拉到 0 就允许纯色片氛围，那是用户自己要的。
+   */
+  const fillIntensity = 0.1 + ((rig.ambient ?? 25) / 100) * 0.9;
 
   return (
     <group>
       <hemisphereLight args={['#ffffff', '#33353f', 0.1 + ((rig.ambient ?? 25) / 100) * 0.55]} />
+      {/* 补光：与主光对位、不投影、不染色 */}
+      <directionalLight
+        position={[-lp.x, Math.max(lp.y * 0.6, STAGE_EYE * 0.8), -lp.z]}
+        target-position={[0, STAGE_EYE, 0]}
+        color="#FFFFFF"
+        intensity={fillIntensity}
+      />
       <directionalLight
         position={[lp.x, lp.y, lp.z]}
         target-position={[0, STAGE_EYE, 0]}
@@ -51,7 +64,7 @@ export function StageScene({ rig, pose = 'stand', skin = 'blue', showGizmos = tr
       <GroundPlane labels={showGizmos} />
       <WhiteModel pose={pose} skin={skin} />
       <CameraGizmo rig={rig} visible={showGizmos} onPick={onPickCam} />
-      <LightGizmo rig={rig} visible={showGizmos} color={keyColor} intensity={keyIntensity} onPick={onPickLight} />
+      <LightGizmo rig={rig} visible={showGizmos} color={keyColor} onPick={onPickLight} />
     </group>
   );
 }
