@@ -113,23 +113,37 @@ describe('agent/policy · 自主执行的边界', () => {
    */
   it('与 Rust 侧同一套判定（对照 core/src/policy.rs 的用例）', () => {
     const expected: Record<ToolId, Risk> = {
-      'project.read': 'read',
-      'metrics.read': 'read',
-      'stage.render': 'read',
-      'outline.write': 'write',
-      'script.write': 'write',
-      'asset.write': 'write',
-      'asset.lock': 'write',
-      'shot.write': 'write',
-      'prompt.compile': 'write',
-      'image.generate': 'spend',
-      'video.generate': 'spend',
-      'file.export': 'egress',
+      'project.read': 'read', 'project.search': 'read', 'metrics.read': 'read',
+      'cost.estimate': 'read', 'stage.render': 'read', 'prompt.translate': 'read',
+
+      'outline.write': 'write', 'script.write': 'write', 'asset.write': 'write',
+      'asset.lock': 'write', 'shot.write': 'write', 'prompt.compile': 'write',
+      'style.apply': 'write', 'shot.rig': 'write',
+      'edit.timeline': 'write', 'edit.subtitle': 'write',
+
+      'image.generate': 'spend', 'image.edit': 'spend', 'image.upscale': 'spend',
+      'video.generate': 'spend', 'video.extend': 'spend',
+      'audio.tts': 'spend', 'audio.music': 'spend', 'audio.sfx': 'spend',
+
+      'file.export': 'egress', 'web.search': 'egress', 'web.fetch': 'egress',
     };
     // 表里一件不多一件不少 —— 加了工具却没定风险，这条会红
     expect(TOOLS.map((t) => t.id).sort()).toEqual(Object.keys(expected).sort());
     for (const [id, risk] of Object.entries(expected)) {
       expect(riskOfTool(id as ToolId), id).toBe(risk);
+    }
+  });
+
+  it('没登记风险的工具按最高档算 —— 兜底要 fail-closed', () => {
+    // 加了工具却忘了登记时，后果该是「它跑不了，有人来问」，不是「它自动跑了」
+    expect(riskOfTool('某个还没登记的' as ToolId)).toBe('egress');
+    expect(autoAllowed(riskOfTool('某个还没登记的' as ToolId), 'spend')).toBe(false);
+  });
+
+  it('每个工具都标了实现状态，没实现的说得出缺什么', () => {
+    for (const t of TOOLS) {
+      expect(['ready', 'declared'], t.id).toContain(t.status);
+      if (t.status === 'declared') expect(t.blockedBy?.length ?? 0, t.id).toBeGreaterThan(4);
     }
   });
 

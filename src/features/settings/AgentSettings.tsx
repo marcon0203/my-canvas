@@ -2,7 +2,10 @@ import { useState } from 'react';
 import { Button, Icon, Segmented, Select, Switch, Textarea, ToggleChip } from '@/ui';
 import { PERSONAS, personaById, INTENT_META, intentName } from '@/domain/agent/roster';
 import type { AgentId } from '@/domain/agent/roster';
-import { TOOLS, TOOLS_FOR_INTENT, missingTools, toolOf, type ToolId } from '@/domain/agent/tools';
+import {
+  GROUP_LABEL, TOOLS, TOOLS_FOR_INTENT, missingTools, toolOf,
+  type ToolGroup, type ToolId,
+} from '@/domain/agent/tools';
 import {
   AUTONOMY_LABEL, AUTONOMY_HINT, checkConfig, defaultConfig, neededModalities, preambleOf,
   type Autonomy,
@@ -11,8 +14,11 @@ import { findModel, modelsOfModality } from '@/domain/providers/catalog';
 import { MODALITY_LABEL, modelKey, parseModelKey, type Modality, type ModelRef } from '@/domain/providers/model';
 import type { IntentKind } from '@/domain/agent/types';
 import {
-  AUTO_MAX_CHOICES, DEFAULT_AUTO_MAX, RISK_LABEL, RISK_WHY, riskOfIntent, type Risk,
+  AUTO_MAX_CHOICES, DEFAULT_AUTO_MAX, RISK_LABEL, RISK_WHY,
+  riskOfIntent, riskOfTool, type Risk,
 } from '@/domain/agent/policy';
+
+const GROUPS: ToolGroup[] = ['read', 'write', 'prompt', 'generate', 'camera', 'deliver', 'research'];
 import { useEffectiveGlobals, useExtraModels, useReadyProviders, useSettings } from '@/store/settings';
 import { useUi } from '@/store/ui';
 import { Field, Fields } from './Field';
@@ -194,15 +200,40 @@ export function AgentDetail({ id }: { id: AgentId }) {
               })}
             </div>
           </Field>
-          <Field wide label={`工具 · ${cfg.tools.length}`} hint="带「读」的只读项目，不改东西">
-            <div className="chipwall">
-              {TOOLS.map((t) => (
-                <ToggleChip key={t.id} on={cfg.tools.includes(t.id)} onClick={() => toggleTool(t.id)}
-                  title={`${t.desc}${t.needs ? `（需要${MODALITY_LABEL[t.needs]}模型）` : ''}`}>
-                  {t.name}{t.writes ? '' : ' ·读'}
-                </ToggleChip>
-              ))}
-            </div>
+          <Field wide label={`工具 · ${cfg.tools.length} / ${TOOLS.length}`}
+            hint={<>
+              ¥ 要花积分，↗ 会把东西送出本机 —— 这两类在自主模式下会停下来等你点头。
+              <b>灰的还没实现</b>，勾上也跑不了，鼠标停上去看缺什么。
+            </>}>
+            {GROUPS.map((g) => {
+              const list = TOOLS.filter((t) => t.group === g);
+              if (!list.length) return null;
+              return (
+                <div key={g} className="toolgrp">
+                  <span className="toolgrp__n">{GROUP_LABEL[g]}</span>
+                  <div className="chipwall">
+                    {list.map((t) => {
+                      const r = riskOfTool(t.id);
+                      const off = t.status !== 'ready';
+                      return (
+                        <ToggleChip key={t.id} on={cfg.tools.includes(t.id)}
+                          onClick={() => toggleTool(t.id)}
+                          className={off ? 'tchip--todo' : undefined}
+                          title={[
+                            t.desc,
+                            t.needs ? `需要${MODALITY_LABEL[t.needs]}模型` : '',
+                            RISK_WHY[r],
+                            off ? `还没实现：${t.blockedBy}` : '已实现',
+                          ].filter(Boolean).join(' · ')}>
+                          {t.name}
+                          {r === 'spend' ? ' ¥' : r === 'egress' ? ' ↗' : ''}
+                        </ToggleChip>
+                      );
+                    })}
+                  </div>
+                </div>
+              );
+            })}
           </Field>
         </Fields>
       </section>

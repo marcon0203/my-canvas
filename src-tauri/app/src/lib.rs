@@ -14,6 +14,8 @@ use studio_core::skills::{Root, SkillMeta, SkillStore, SkillWarning};
 use studio_core::workspace::{self, Workspace};
 use studio_core::project::{self, Bundle, Meta};
 use studio_core::store::{self, ConfigFile};
+use studio_core::tools::{self, Outcome, ToolSpec};
+use studio_core::policy::Risk;
 use studio_core::vault::{self, KeyStatus};
 
 /* ---------------- 密钥：明文只进钥匙串，出不来 ---------------- */
@@ -81,6 +83,29 @@ fn project_save(bundle: Bundle, workspace: Option<String>) -> Result<()> {
 #[tauri::command]
 fn project_delete(id: String, workspace: Option<String>) -> Result<()> {
     project::delete(&ws(workspace.as_deref())?.root, &id)
+}
+
+/* ---------------- 工具 ---------------- */
+
+/// 工具清单：id、描述、参数 schema、风险、实现到哪一步。
+/// 界面照这个渲染「能组装什么」，不另写一份。
+#[tauri::command]
+fn tools_list() -> Vec<ToolSpec> {
+    tools::all()
+}
+
+/// 调一次工具。**闸门在 core 的 dispatch 里**，这层只转发 ——
+/// 把判断放在调用方迟早会漏掉一处。
+#[tauri::command]
+async fn tool_call(
+    project_id: String,
+    tool: String,
+    args: serde_json::Value,
+    auto_max: Option<Risk>,
+    workspace: Option<String>,
+) -> Result<Outcome> {
+    let w = ws(workspace.as_deref())?;
+    tools::dispatch(&w.root, &project_id, &tool, args, auto_max).await
 }
 
 /* ---------------- Skill ---------------- */
@@ -302,6 +327,8 @@ pub fn run() {
             project_load,
             project_save,
             project_delete,
+            tools_list,
+            tool_call,
         ])
         .run(tauri::generate_context!())
         .expect("启动失败");

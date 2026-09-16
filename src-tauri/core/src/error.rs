@@ -28,6 +28,8 @@ pub enum Error {
     Workspace(String),
     #[error("读写失败：{0}")]
     Store(String),
+    #[error("没有这个工具：{0}")]
+    UnknownTool(String),
 }
 
 impl Error {
@@ -46,6 +48,7 @@ impl Error {
             Error::Skill(_) => "skill",
             Error::Workspace(_) => "workspace",
             Error::Store(_) => "store",
+            Error::UnknownTool(_) => "unknown_tool",
         }
     }
 }

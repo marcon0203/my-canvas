@@ -1,4 +1,4 @@
-import { TOOLS_FOR_INTENT, toolOf, type ToolId } from './tools';
+import { TOOLS_FOR_INTENT, type ToolId } from './tools';
 import type { IntentKind, Proposal } from './types';
 
 /**
@@ -41,11 +41,48 @@ export const RISK_WHY: Record<Risk, string> = {
   egress: '东西会离开这台机器，收不回来',
 };
 
-/** 工具的风险。**渲参考图是本地 WebGL，不花钱也不出网**，所以是只读那一档 */
+/**
+ * 工具 → 风险。**与 Rust 侧 `core/src/policy.rs` 同一张表**，有 parity 测试。
+ *
+ * 渲参考图是本地 WebGL，不花钱也不出网 —— 名字里带 render 容易让人误以为要花钱。
+ */
+const RISK: Record<ToolId, Risk> = {
+  'project.read': 'read',
+  'project.search': 'read',
+  'metrics.read': 'read',
+  'cost.estimate': 'read',
+  'stage.render': 'read',
+  'prompt.translate': 'read',
+
+  'outline.write': 'write',
+  'script.write': 'write',
+  'asset.write': 'write',
+  'asset.lock': 'write',
+  'shot.write': 'write',
+  'prompt.compile': 'write',
+  'style.apply': 'write',
+  'shot.rig': 'write',
+  'edit.timeline': 'write',
+  'edit.subtitle': 'write',
+
+  'image.generate': 'spend',
+  'image.edit': 'spend',
+  'image.upscale': 'spend',
+  'video.generate': 'spend',
+  'video.extend': 'spend',
+  'audio.tts': 'spend',
+  'audio.music': 'spend',
+  'audio.sfx': 'spend',
+
+  'file.export': 'egress',
+  'web.search': 'egress',
+  'web.fetch': 'egress',
+};
+
 export function riskOfTool(id: ToolId): Risk {
-  if (id === 'image.generate' || id === 'video.generate') return 'spend';
-  if (id === 'file.export') return 'egress';
-  return toolOf(id)?.writes ? 'write' : 'read';
+  // **不认识的按最高档算，不是最低档。** 加了工具却忘了登记风险时，
+  // 后果应该是「它跑不了，有人来问为什么」，而不是「它自动跑了」。
+  return RISK[id] ?? 'egress';
 }
 
 /** 一件活儿的风险 = 它要的工具里最高的那个 */

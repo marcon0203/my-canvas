@@ -445,6 +445,12 @@ body { background: var(--color-bg-canvas); overflow: hidden; }
 /* chip 墙：活儿与工具。行距比 .chiprow 松一点，一屏几十个才不糊成一片 */
 .chipwall { display: flex; flex-wrap: wrap; gap: 6px; }
 
+/* 工具按组排。二十几个平铺一片没法看 */
+.toolgrp { display: grid; grid-template-columns: 56px minmax(0, 1fr); gap: var(--space-3); padding: 6px 0; }
+.toolgrp__n { font-size: 11px; color: var(--color-text-tertiary); padding-top: 5px; }
+/* 还没实现的：勾得上但一眼看得出跑不了 */
+.tchip--todo { opacity: .5; border-style: dashed; }
+
 /* 自主执行被权限边界挡住：说清为什么停，而不是安静地不动 */
 .aprop__hold {
   display: flex; align-items: flex-start; gap: 6px;

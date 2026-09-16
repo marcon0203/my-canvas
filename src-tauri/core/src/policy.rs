@@ -44,11 +44,27 @@ impl Risk {
 /// 名字里带 render 容易让人误以为要花钱。
 pub fn risk_of_tool(id: &str) -> Risk {
     match id {
-        "image.generate" | "video.generate" => Risk::Spend,
-        "file.export" => Risk::Egress,
-        "outline.write" | "script.write" | "asset.write" | "asset.lock"
-        | "shot.write" | "prompt.compile" => Risk::Write,
-        _ => Risk::Read,
+        // 只读：不碰项目，也不花钱
+        "project.read" | "project.search" | "metrics.read" | "cost.estimate"
+        | "stage.render" | "prompt.translate" => Risk::Read,
+
+        // 改项目内容，进撤销历史
+        "outline.write" | "script.write" | "asset.write" | "asset.lock" | "shot.write"
+        | "prompt.compile" | "style.apply" | "shot.rig"
+        | "edit.timeline" | "edit.subtitle" => Risk::Write,
+
+        // 花积分，撤销退不回
+        "image.generate" | "image.edit" | "image.upscale"
+        | "video.generate" | "video.extend"
+        | "audio.tts" | "audio.music" | "audio.sfx" => Risk::Spend,
+
+        // 东西离开这台机器
+        "file.export" | "web.search" | "web.fetch" => Risk::Egress,
+
+        // **不认识的工具按最高档算，不是最低档。**
+        // 兜底要 fail-closed：新加了工具却忘了在这儿登记时，
+        // 后果应该是「它跑不了，有人来问为什么」，而不是「它自动跑了」。
+        _ => Risk::Egress,
     }
 }
 
@@ -95,9 +111,16 @@ mod tests {
     }
 
     #[test]
-    fn 不认识的工具按只读算_但那只是兜底() {
-        // 新工具没登记时宁可当只读也不要当成可以随便花钱的
-        assert_eq!(risk_of_tool("某个还没登记的工具"), Risk::Read);
+    fn 不认识的工具按最高档算_兜底要_fail_closed() {
+        // 加了工具却忘了登记风险时，后果应该是「它跑不了，有人来问」，
+        // 而不是「它自动跑了」。前者是个 bug 报告，后者是一次事故。
+        assert_eq!(risk_of_tool("某个还没登记的工具"), Risk::Egress);
+        assert!(!auto_allowed(risk_of_tool("某个还没登记的工具"), Some(Risk::Spend)));
+    }
+
+    #[test]
+    fn 空工具集是只读_那是真的没有能力_不是没登记() {
+        assert_eq!(risk_of_tools::<&str>(&[]), Risk::Read);
     }
 
     #[test]
@@ -105,7 +128,6 @@ mod tests {
         assert_eq!(risk_of_tools(&["project.read", "outline.write"]), Risk::Write);
         assert_eq!(risk_of_tools(&["project.read", "image.generate"]), Risk::Spend);
         assert_eq!(risk_of_tools(&["project.read", "file.export"]), Risk::Egress);
-        assert_eq!(risk_of_tools::<&str>(&[]), Risk::Read);
     }
 
     #[test]
