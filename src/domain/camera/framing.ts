@@ -31,6 +31,28 @@ export const SHOT_RADIUS: readonly number[] = [720, 300, 109, 65, 46, 29, 16];
 export const shotRadius = (d: DistStep): number => SHOT_RADIUS[d]!;
 
 /**
+ * 连续距离 → 拍摄半径。整数档等于 SHOT_RADIUS 原值，档与档之间按**对数**插值。
+ *
+ * 七档半径跨 16–720（约 45 倍），相邻档差 1.7–2.7 倍 —— 一格就是一大跳，
+ * 只能在「很近」和「很远」之间二选一。对数插值让中间值在感知上是均匀的：
+ * 每 0.1 档约 1.06 倍，推拉手感线性。
+ */
+export function shotRadiusAt(d: number): number {
+  const last = SHOT_RADIUS.length - 1;
+  const t = Math.min(last, Math.max(0, d));
+  // 整档直接取表值：exp(log(x)) 会有浮点漂移，不该让插值动到既有档位
+  if (Number.isInteger(t)) return SHOT_RADIUS[t]!;
+  const i = Math.min(last - 1, Math.floor(t));
+  const a = SHOT_RADIUS[i]!;
+  const b = SHOT_RADIUS[i + 1]!;
+  return Math.exp(Math.log(a) + (Math.log(b) - Math.log(a)) * (t - i));
+}
+
+/** 景别档 + 档内微调 → 连续距离。distFine 缺省为 0（正好落在该档上） */
+export const effectiveDist = (rig: { dist: number; distFine?: number }): number =>
+  rig.dist + (rig.distFine ?? 0);
+
+/**
  * 相对竖幅，本画幅下人物占画幅**高度**的倍率。
  *
  * 长边固定 36mm：竖幅（含 1:1）高就是 36mm，横幅高只有 36/aspect ——

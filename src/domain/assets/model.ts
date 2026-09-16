@@ -34,6 +34,11 @@ export const CINE_KEYS: readonly CineKey[] =
  */
 export interface Rig {
   dist: DistStep;            // 距离档即景别
+  /**
+   * 档内微调，[-0.5, 0.5]。景别仍由 dist 定，这里只在相邻两档之间连续插值拍摄距离 ——
+   * 一个「中景」在现场本来就有一段可用距离，不是一个点。
+   */
+  distFine?: number;
   az: number;                // 方位角：0 正面，±90 侧，180 背后
   el: number;                // 俯仰：负=仰拍，正=俯拍
   angle: '' | '荷兰角' | '过肩' | '主观' | '顶拍';

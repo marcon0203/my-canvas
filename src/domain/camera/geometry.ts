@@ -1,5 +1,5 @@
 import type { DistStep } from '@/domain/types';
-import { SHOT_RADIUS, verticalFov, ASPECT } from './framing';
+import { effectiveDist, shotRadiusAt, verticalFov, ASPECT } from './framing';
 import type { AspectRatio } from '@/domain/types';
 
 /**
@@ -13,9 +13,9 @@ export const DEG2RAD = Math.PI / 180;
 /** 舞台上约定的视线高（世界单位） */
 export const STAGE_EYE = 38;
 
-/** 舞台轨道半径：与 SHOT_RADIUS 同向，16–720 的跨度画不下，对数压到 42–132 */
-export function stageOrbitRadius(d: DistStep): number {
-  const r = SHOT_RADIUS[d]!;
+/** 舞台轨道半径：与拍摄半径同向，16–720 的跨度画不下，对数压到 42–132。接受连续档位 */
+export function stageOrbitRadius(d: number): number {
+  const r = shotRadiusAt(d);
   const t = (Math.log(r) - Math.log(16)) / (Math.log(720) - Math.log(16));
   return 42 + 90 * t;
 }
@@ -36,8 +36,8 @@ const onOrbit = (azDeg: number, elDeg: number, radius: number, eyeY: number): Ve
 };
 
 /** 摄影机指示物在舞台上的位置 */
-export const stageCamPos = (rig: { dist: DistStep; az: number; el: number }): Vec3 =>
-  onOrbit(rig.az, rig.el, stageOrbitRadius(rig.dist), STAGE_EYE);
+export const stageCamPos = (rig: { dist: DistStep; distFine?: number; az: number; el: number }): Vec3 =>
+  onOrbit(rig.az, rig.el, stageOrbitRadius(effectiveDist(rig)), STAGE_EYE);
 
 /** 灯指示物在舞台上的位置（固定轨道半径） */
 export const LIGHT_ORBIT = 150;
@@ -46,12 +46,12 @@ export const stageLightPos = (rig: { lightAz: number; lightEl: number }): Vec3 =
 
 /** 真实取景相机的定位：距离档定景别，焦段变则后退/前凑，取景不变、透视压缩变 */
 export function shotCamera(
-  rig: { dist: DistStep; az: number; el: number; angle: string; mm: string; ratio?: string },
+  rig: { dist: DistStep; distFine?: number; az: number; el: number; angle: string; mm: string; ratio?: string },
 ): { fov: number; position: Vec3; target: Vec3; roll: number } {
   const focal = parseInt(rig.mm, 10) || 50;
   const aspect = ASPECT[(rig.ratio || '9:16') as AspectRatio] ?? 9 / 16;
   const fov = Math.min(110, Math.max(6, verticalFov(aspect, focal)));
-  const R = SHOT_RADIUS[rig.dist]! * (focal / 50);
+  const R = shotRadiusAt(effectiveDist(rig)) * (focal / 50);
   const az = rig.az * DEG2RAD;
   const el = (rig.angle === '顶拍' ? 85 : rig.el) * DEG2RAD;
   const ty = STAGE_EYE; // 对准胸口，头顶自然留白

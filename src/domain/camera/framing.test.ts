@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { ASPECT, sensorHeight, verticalFov, shotRadius, SHOT_RADIUS, figureHeightFactor, refImageSize } from './framing';
+import { ASPECT, sensorHeight, verticalFov, shotRadius, SHOT_RADIUS, figureHeightFactor, refImageSize, shotRadiusAt, effectiveDist } from './framing';
 
 describe('画幅与视场角', () => {
   it('竖画幅长边是高，横画幅长边是宽', () => {
@@ -53,5 +53,41 @@ describe('画幅换算', () => {
       expect(width / height, name).toBeCloseTo(a, 2);
       expect(Math.max(width, height), name).toBe(1280);
     }
+  });
+});
+
+describe('档内连续距离', () => {
+  it('整数档与原表一致 —— 插值不改既有档位', () => {
+    SHOT_RADIUS.forEach((r, i) => expect(shotRadiusAt(i)).toBe(r));
+  });
+
+  it('档与档之间单调递减，不跳变', () => {
+    let prev = Infinity;
+    for (let d = 0; d <= 6.0001; d += 0.1) {
+      const r = shotRadiusAt(d);
+      expect(r).toBeLessThan(prev);
+      prev = r;
+    }
+  });
+
+  it('每 0.1 档的变化幅度远小于整档 —— 这就是"递增幅度减小"', () => {
+    const stepJump = shotRadiusAt(3) / shotRadiusAt(4);        // 中景 → 中近景
+    const fineJump = shotRadiusAt(3) / shotRadiusAt(3.1);
+    expect(stepJump).toBeGreaterThan(1.3);
+    expect(fineJump).toBeLessThan(1.08);
+  });
+
+  it('对数插值：档内中点是两端的几何平均，感知上才是均匀的', () => {
+    expect(shotRadiusAt(3.5)).toBeCloseTo(Math.sqrt(SHOT_RADIUS[3]! * SHOT_RADIUS[4]!), 6);
+  });
+
+  it('超出范围被夹住，不会算出负数或无穷', () => {
+    expect(shotRadiusAt(-2)).toBe(SHOT_RADIUS[0]);
+    expect(shotRadiusAt(99)).toBe(SHOT_RADIUS[6]);
+  });
+
+  it('effectiveDist：没有微调时就是档位本身', () => {
+    expect(effectiveDist({ dist: 3 })).toBe(3);
+    expect(effectiveDist({ dist: 3, distFine: -0.4 })).toBeCloseTo(2.6);
   });
 });

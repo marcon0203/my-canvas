@@ -23,6 +23,7 @@ const LIGHT_PRESETS: readonly [string, number, number][] = [
 const CINE_TITLES: Record<string, string> = { lens: '焦段', dof: '景深', light: '光线', comp: '构图', time: '时间天气', mood: '氛围' };
 
 const wrap180 = (a: number) => ((a + 180) % 360 + 360) % 360 - 180;
+const clampStep = (n: number): Rig['dist'] => Math.min(6, Math.max(0, n)) as Rig['dist'];
 const clamp = (v: number, a: number, b: number) => Math.max(a, Math.min(b, v));
 
 /** 布光台：原型 modalStage 同构（.stagegrid/.sbox/.params/.pgrp/.mr/.gels/.pose） */
@@ -130,13 +131,33 @@ export function StageModal({ open, onClose, rig, onPatch, title = '机位与光�
               onChange={(v) => onPatch({ az: v })} />
             <Slider label="俯仰" min={RIG_EL.min} max={RIG_EL.max} value={Math.round(rig.el)} unit="°"
               onChange={(v) => onPatch({ el: v })} />
-            <Slider label="距离" min={0} max={6} value={rig.dist}
-              onChange={(v) => onPatch({ dist: v as Rig['dist'], size: SIZE_ORDER[v as Rig['dist']] })} />
+            {/* 0.1 档一格：景别仍取最近整档，档与档之间连续插值拍摄距离。
+                七档半径差 1.7–2.7 倍，整档走就只能在「很近」和「很远」之间二选一 */}
+            <Slider label="距离" min={0} max={6} step={0.1}
+              value={Number((rig.dist + (rig.distFine ?? 0)).toFixed(1))}
+              format={(v) => {
+                const step = clampStep(Math.round(v));
+                const fine = v - step;
+                return (
+                  <span title={`${SIZE_ORDER[step]}，档内${fine === 0 ? '正中' : fine > 0 ? '偏近' : '偏远'}`}>
+                    {SIZE_ORDER[step]}
+                    {Math.abs(fine) >= 0.05 && (
+                      <span className="dim" style={{ marginLeft: 4, fontSize: 11 }}>
+                        {fine > 0 ? '+' : '−'}{Math.abs(fine).toFixed(1)}
+                      </span>
+                    )}
+                  </span>
+                );
+              }}
+              onChange={(v) => {
+                const step = clampStep(Math.round(v));
+                onPatch({ dist: step, distFine: Number((v - step).toFixed(2)), size: SIZE_ORDER[step] });
+              }} />
             <div className="mo__hint">距离档即景别：{SIZE_ORDER.join(' → ')}</div>
             <div className="row wrap" style={{ marginTop: 10, gap: 6 }}>
               {CAM_PRESETS.map(([n, az, el, dist]) => (
                 <Button key={n}
-                  onClick={() => onPatch({ az, el, dist: dist as Rig['dist'], size: SIZE_ORDER[dist as Rig['dist']] })}>
+                  onClick={() => onPatch({ az, el, dist: dist as Rig['dist'], distFine: 0, size: SIZE_ORDER[dist as Rig['dist']] })}>
                   {n}
                 </Button>
               ))}

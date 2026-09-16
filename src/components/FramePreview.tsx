@@ -1,6 +1,6 @@
 import { FIGURE_SCALE } from '@/domain/camera/geometry';
 import { ASPECT, figureHeightFactor } from '@/domain/camera/framing';
-import type { AspectRatio } from '@/domain/types';
+import { SIZE_ORDER, type AspectRatio } from '@/domain/types';
 
 /**
  * 取景示意 SVG（无 WebGL 时的回退，也当意图卡的小图）。
@@ -15,6 +15,8 @@ export function FramePreview({ rig, width = 120 }: {
     dof?: string;
     cam?: string;
     ratio?: string;
+    dist?: number;
+    distFine?: number;
   };
   width?: number;
 }) {
@@ -31,7 +33,7 @@ export function FramePreview({ rig, width = 120 }: {
   const dof = rig.dof || '中等';
   const cam = rig.cam || '固定';
 
-  const fh = (FIGURE_SCALE[size] ?? 0.66) * figureHeightFactor(aspect) * H;
+  const fh = figureFraction(size, rig.dist, rig.distFine) * figureHeightFactor(aspect) * H;
   const eye = clamp(0.42 - el * 0.0029, 0.26, 0.58) * H;
   const face = Math.cos(az * Math.PI / 180);
   const side = Math.sin(az * Math.PI / 180);
@@ -110,3 +112,18 @@ export function FramePreview({ rig, width = 120 }: {
 }
 
 const clamp = (v: number, a: number, b: number) => Math.max(a, Math.min(b, v));
+
+/**
+ * 人物占画幅高度的比例。有档内微调时在相邻景别之间插值 ——
+ * 否则档内拖距离，3D 里变了、这张示意图却纹丝不动。
+ */
+function figureFraction(size: string, dist?: number, distFine?: number): number {
+  const base = FIGURE_SCALE[size] ?? 0.66;
+  if (dist === undefined || !distFine) return base;
+  const d = clamp(dist + distFine, 0, SIZE_ORDER.length - 1);
+  const i = Math.min(SIZE_ORDER.length - 2, Math.floor(d));
+  const a = FIGURE_SCALE[SIZE_ORDER[i]!] ?? base;
+  const b = FIGURE_SCALE[SIZE_ORDER[i + 1]!] ?? base;
+  // 与 shotRadiusAt 同为对数插值：占幅大致与距离成反比
+  return Math.exp(Math.log(a) + (Math.log(b) - Math.log(a)) * (d - i));
+}

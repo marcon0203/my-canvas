@@ -31,8 +31,9 @@ export function applyIntentToRig(r: Rig, it: Intent): void {
     if (!r.dims.includes(k)) r.dims.push(k);
   }
   // 尺寸档与距离档同步：意图给的是景别词，rig 存的是距离档
-  if (p.size) r.dist = sizeToDist(p.size);
-  else if (p.dist !== undefined) r.dist = p.dist as Rig['dist'];
+  // 换景别就回到该档正中，别把上一次的档内微调带过来
+  if (p.size) { r.dist = sizeToDist(p.size); r.distFine = 0; }
+  else if (p.dist !== undefined) { r.dist = p.dist as Rig['dist']; r.distFine = 0; }
 }
 
 function sizeToDist(size: string): Rig['dist'] {
