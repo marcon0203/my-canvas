@@ -450,6 +450,8 @@ body { background: var(--color-bg-canvas); overflow: hidden; }
 .toolgrp__n { font-size: 11px; color: var(--color-text-tertiary); padding-top: 5px; }
 /* 还没实现的：勾得上但一眼看得出跑不了 */
 .tchip--todo { opacity: .5; border-style: dashed; }
+/* 实现了但没拿真 key 验过 —— 比未实现近一步，所以点线不是虚线 */
+.tchip--soon { border-style: dotted; border-color: var(--color-warning); }
 
 /* 自主执行被权限边界挡住：说清为什么停，而不是安静地不动 */
 .aprop__hold {

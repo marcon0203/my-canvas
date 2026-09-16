@@ -102,10 +102,44 @@ async fn tool_call(
     tool: String,
     args: serde_json::Value,
     auto_max: Option<Risk>,
+    /// 生成类工具要靠它找模型；其余工具不用传
+    cfg: Option<AgentConfig>,
+    globals: Option<HashMap<String, ModelRef>>,
+    providers: Option<HashMap<String, ProviderSetting>>,
     workspace: Option<String>,
 ) -> Result<Outcome> {
     let w = ws(workspace.as_deref())?;
-    tools::dispatch(&w.root, &project_id, &tool, args, auto_max).await
+
+    // 生成类工具要模型、端点、密钥、厂商适配。任何一样拿不到就不给 GenCtx，
+    // 由 dispatch 去说「缺模型或密钥」—— **不要在这层编一个错误**，
+    // 那样闸门的判断会被绕过（缺密钥应该先过完闸门再报，不是提前失败）。
+    let mut owned: Option<(ModelRef, String, String, studio_core::generate::TaskApi)> = None;
+    if tool == "image.generate" || tool == "video.generate" {
+        let modality = if tool == "image.generate" { "image" } else { "video" };
+        let globals = globals.unwrap_or_default();
+        let provs = providers.unwrap_or_default();
+        if let Some(c) = cfg.as_ref() {
+            if let Some(m) = c.model_for(modality, &globals) {
+                let base = studio_core::providers::resolve_base_url(&m.provider, provs.get(&m.provider));
+                let api = studio_core::generate::adapters::of(&m.provider, modality);
+                // 密钥最后取，且只在这一处 —— 明文不进返回值、不进日志
+                if let (Ok(base), Some(api), Ok(key)) = (base, api, studio_core::vault_key(&m.provider)) {
+                    owned = Some((m.clone(), base, key, api));
+                }
+            }
+        }
+    }
+
+    let gen_ctx = owned.as_ref().map(|(m, base, key, api)| tools::GenCtx {
+        model: m,
+        base_url: base,
+        api_key: key,
+        api: api.clone(),
+        // 出视频可能几分钟，给宽一点；到点会如实说「先不等了」而不是挂死
+        timeout: std::time::Duration::from_secs(300),
+    });
+
+    tools::dispatch(&w.root, &project_id, &tool, args, auto_max, gen_ctx).await
 }
 
 /* ---------------- Skill ---------------- */

@@ -37,8 +37,18 @@ export const GROUP_LABEL: Record<ToolGroup, string> = {
   generate: '生成', camera: '镜头', deliver: '成片', research: '查资料',
 };
 
-/** 实现到什么程度。与 Rust 侧 tools.rs 的 Status 同义 */
-export type ToolStatus = 'ready' | 'declared';
+/**
+ * 实现到什么程度。与 Rust 侧 tools.rs 的 Status 同义。
+ *
+ * `unverified` 单独一档是刻意的：协议实现了、测过了，只是厂商字段映射
+ * 没对过真实文档。算作 ready 是撒谎，算作 declared 又低估了 ——
+ * 它离能用只差一次真实调用。
+ */
+export type ToolStatus = 'ready' | 'unverified' | 'declared';
+
+export const STATUS_LABEL: Record<ToolStatus, string> = {
+  ready: '可用', unverified: '待验证', declared: '未实现',
+};
 
 export interface ToolSpec {
   readonly id: ToolId;
@@ -81,14 +91,14 @@ export const TOOLS: readonly ToolSpec[] = [
   { id: 'style.apply', group: 'prompt', name: '换画风', desc: '换画风并重算受影响的提示词', needs: 'text', writes: true, status: 'declared', blockedBy: '要先解决与前端 store 的同步' },
 
   /* 生成 */
-  { id: 'image.generate', group: 'generate', name: '出图', desc: '生成形状照与关键帧', needs: 'image', writes: true, status: 'declared', blockedBy: '缺厂商适配器（异步任务接口）' },
-  { id: 'image.edit', group: 'generate', name: '改图', desc: '局部重绘或扩图，比重出整张省', needs: 'image', writes: true, status: 'declared', blockedBy: '缺厂商适配器（异步任务接口）' },
-  { id: 'image.upscale', group: 'generate', name: '放大', desc: '定稿后放大到成片分辨率', needs: 'image', writes: true, status: 'declared', blockedBy: '缺厂商适配器（异步任务接口）' },
-  { id: 'video.generate', group: 'generate', name: '出视频', desc: '关键帧 → 片段', needs: 'video', writes: true, status: 'declared', blockedBy: '缺厂商适配器（异步任务接口）' },
-  { id: 'video.extend', group: 'generate', name: '续接片段', desc: '把已有片段往后续几秒', needs: 'video', writes: true, status: 'declared', blockedBy: '缺厂商适配器（异步任务接口）' },
-  { id: 'audio.tts', group: 'generate', name: '配音', desc: '台词 → 语音，音色按角色配', writes: true, status: 'declared', blockedBy: '缺厂商适配器（异步任务接口）' },
-  { id: 'audio.music', group: 'generate', name: '配乐', desc: '按情绪与时长生成背景音乐', writes: true, status: 'declared', blockedBy: '缺厂商适配器（异步任务接口）' },
-  { id: 'audio.sfx', group: 'generate', name: '音效', desc: '雨声、脚步、关门这类单个音效', writes: true, status: 'declared', blockedBy: '缺厂商适配器（异步任务接口）' },
+  { id: 'image.generate', group: 'generate', name: '出图', desc: '生成形状照与关键帧', needs: 'image', writes: true, status: 'unverified', blockedBy: '协议已实现并测过，厂商字段映射还没对过真实文档 —— 接第一家时拿真 key 调一次就知道要不要改' },
+  { id: 'image.edit', group: 'generate', name: '改图', desc: '局部重绘或扩图，比重出整张省', needs: 'image', writes: true, status: 'declared', blockedBy: '音频接口与图片视频不同家，适配器还没写' },
+  { id: 'image.upscale', group: 'generate', name: '放大', desc: '定稿后放大到成片分辨率', needs: 'image', writes: true, status: 'declared', blockedBy: '音频接口与图片视频不同家，适配器还没写' },
+  { id: 'video.generate', group: 'generate', name: '出视频', desc: '关键帧 → 片段', needs: 'video', writes: true, status: 'unverified', blockedBy: '同出图，共用一套异步任务协议' },
+  { id: 'video.extend', group: 'generate', name: '续接片段', desc: '把已有片段往后续几秒', needs: 'video', writes: true, status: 'declared', blockedBy: '音频接口与图片视频不同家，适配器还没写' },
+  { id: 'audio.tts', group: 'generate', name: '配音', desc: '台词 → 语音，音色按角色配', writes: true, status: 'declared', blockedBy: '音频接口与图片视频不同家，适配器还没写' },
+  { id: 'audio.music', group: 'generate', name: '配乐', desc: '按情绪与时长生成背景音乐', writes: true, status: 'declared', blockedBy: '音频接口与图片视频不同家，适配器还没写' },
+  { id: 'audio.sfx', group: 'generate', name: '音效', desc: '雨声、脚步、关门这类单个音效', writes: true, status: 'declared', blockedBy: '音频接口与图片视频不同家，适配器还没写' },
 
   /* 镜头 */
   { id: 'stage.render', group: 'camera', name: '渲参考图', desc: '布光台白模离屏渲染，本地不花钱', status: 'declared', blockedBy: '要由前端执行再把结果回传' },

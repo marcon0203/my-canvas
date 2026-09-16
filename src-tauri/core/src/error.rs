@@ -30,6 +30,8 @@ pub enum Error {
     Store(String),
     #[error("没有这个工具：{0}")]
     UnknownTool(String),
+    #[error("生成失败：{0}")]
+    Generate(String),
 }
 
 impl Error {
@@ -49,6 +51,7 @@ impl Error {
             Error::Workspace(_) => "workspace",
             Error::Store(_) => "store",
             Error::UnknownTool(_) => "unknown_tool",
+            Error::Generate(_) => "generate",
         }
     }
 }

@@ -18,7 +18,9 @@
 //! `dispatch` 里先过 `policy`，超出自主上限的直接返回「要人点头」，
 //! 不执行。把判断放在每个调用方那儿迟早会漏掉一处。
 
+use crate::config::ModelRef;
 use crate::error::{Error, Result};
+use crate::generate::{self, Job, TaskApi};
 use crate::policy::{Risk, auto_allowed};
 use crate::project;
 use serde::{Deserialize, Serialize};
@@ -39,8 +41,16 @@ pub enum RunsIn {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub enum Status {
-    /// 真能调
+    /// 真能调，跑通过
     Ready,
+    /// **实现了，但厂商字段没对过真实文档。**
+    ///
+    /// 协议机制（提交/轮询/退避/超时/取消）是测过的；
+    /// 「task_id 在响应的哪个字段」这类映射写这段代码时出网被挡，核不了。
+    /// 接第一家时拿真 key 调一次，照报错改 `generate::adapters` 里那一两行。
+    /// 单独列一档是因为：把它算作 Ready 是在撒谎，算作 Declared 又低估了 ——
+    /// 它离能用只差一次真实调用。
+    Unverified,
     /// 契约在，实现没有。缺什么写在 `blocked_by`
     Declared,
 }
@@ -98,11 +108,11 @@ pub fn all() -> Vec<ToolSpec> {
     use Group::*;
     use RunsIn::{Browser, Rust};
     use Risk::{Egress, Read as R, Spend, Write as W};
-    use Status::{Declared, Ready};
+    use Status::{Declared, Ready, Unverified};
 
     // 没实现时的共同原因，写一次
     const SYNC: &str = "写类工具要先解决与前端 store 的同步：Rust 直接写盘，界面上那份还是旧的";
-    const ADAPTER: &str = "缺厂商适配器：图片/视频/音频走各家自有的异步任务接口（提交拿 task_id 再轮询），不是 OpenAI 兼容那套，Rig 不管这层";
+    const ADAPTER: &str = "协议已实现并测过，但厂商字段映射（task_id 在哪个字段等）没对过真实文档 —— 接第一家时拿真 key 调一次，照报错改 generate::adapters 里那一两行";
 
     vec![
         /* ---------------- 读 ---------------- */
@@ -171,7 +181,7 @@ pub fn all() -> Vec<ToolSpec> {
         /* ---------------- 生成 ---------------- */
         t("image.generate", "出图", Generate,
           "按提示词生成形状照或关键帧。要花积分。",
-          Spend, Rust, Declared, Some(ADAPTER),
+          Spend, Rust, Unverified, Some(ADAPTER),
           obj(json!({ "prompt": { "type": "string" }, "ratio": { "type": "string" },
               "batch": { "type": "integer", "minimum": 1, "maximum": 4 },
               "refs": { "type": "array", "items": { "type": "string" }, "description": "参考图的资产 aid" } }),
@@ -193,7 +203,7 @@ pub fn all() -> Vec<ToolSpec> {
 
         t("video.generate", "出视频", Generate,
           "关键帧 → 视频片段。要花积分，而且比出图贵得多。",
-          Spend, Rust, Declared, Some(ADAPTER),
+          Spend, Rust, Unverified, Some(ADAPTER),
           obj(json!({ "shotId": { "type": "string" }, "dur": { "type": "number" },
               "firstFrame": { "type": "string", "description": "首帧图，可选" } }), &["shotId"])),
 
@@ -205,19 +215,19 @@ pub fn all() -> Vec<ToolSpec> {
 
         t("audio.tts", "配音", Generate,
           "把台词读成语音。音色在资产里按角色配。",
-          Spend, Rust, Declared, Some(ADAPTER),
+          Spend, Rust, Declared, Some("音频接口与图片视频不同家，适配器还没写"),
           obj(json!({ "text": { "type": "string" }, "voice": { "type": "string" },
               "speed": { "type": "number" } }), &["text"])),
 
         t("audio.music", "配乐", Generate,
           "按情绪与时长生成背景音乐。",
-          Spend, Rust, Declared, Some(ADAPTER),
+          Spend, Rust, Declared, Some("音频接口与图片视频不同家，适配器还没写"),
           obj(json!({ "mood": { "type": "string" }, "seconds": { "type": "number" } }),
               &["mood", "seconds"])),
 
         t("audio.sfx", "音效", Generate,
           "生成单个音效，比如雨声、脚步、关门。",
-          Spend, Rust, Declared, Some(ADAPTER),
+          Spend, Rust, Declared, Some("音频接口与图片视频不同家，适配器还没写"),
           obj(json!({ "desc": { "type": "string" }, "seconds": { "type": "number" } }), &["desc"])),
 
         /* ---------------- 镜头 ---------------- */
@@ -287,12 +297,23 @@ pub enum Outcome {
 /// 顺序刻意是「先查有没有这个工具 → 再过闸门 → 最后才看实现了没有」：
 /// 一个没实现的高风险工具，也应该先因为越权被挡，而不是先告诉调用方「还没做」——
 /// 否则将来补上实现，拦截行为会悄悄变。
+/// 生成类工具要的东西：用哪个模型、端点、密钥。
+/// **密钥只在这儿传一次，不进 Outcome、不进日志。**
+pub struct GenCtx<'a> {
+    pub model: &'a ModelRef,
+    pub base_url: &'a str,
+    pub api_key: &'a str,
+    pub api: TaskApi,
+    pub timeout: std::time::Duration,
+}
+
 pub async fn dispatch(
     root: &Path,
     project_id: &str,
     tool_id: &str,
     args: Value,
     auto_max: Option<Risk>,
+    gen_ctx: Option<GenCtx<'_>>,
 ) -> Result<Outcome> {
     let Some(t) = spec(tool_id) else {
         return Err(Error::UnknownTool(tool_id.to_string()));
@@ -310,7 +331,19 @@ pub async fn dispatch(
         return Ok(Outcome::Elsewhere { tool: t.id.into(), runs_in: t.runs_in });
     }
 
-    if t.status == Status::Declared {
+    // 出图/出视频：有 GenCtx 才跑得起来。没有就说清缺什么，不要假装跑了
+    if t.id == "image.generate" || t.id == "video.generate" {
+        let Some(ctx) = gen_ctx else {
+            return Ok(Outcome::NotImplemented {
+                tool: t.id.into(),
+                blocked_by: format!("{}没有可用的模型或密钥", t.name),
+            });
+        };
+        let urls = run_generate(t.id, &ctx, &args).await?;
+        return Ok(Outcome::Ok { value: json!({ "urls": urls, "model": ctx.model.model }) });
+    }
+
+    if t.status != Status::Ready {
         return Ok(Outcome::NotImplemented {
             tool: t.id.into(),
             blocked_by: t.blocked_by.unwrap_or("还没实现").into(),
@@ -351,6 +384,49 @@ fn read_project(root: &Path, id: &str, args: &Value) -> Result<Value> {
             "assets": b.assets, "shots": b.shots,
         }),
     })
+}
+
+/// 出图/出视频：拼 body → 走异步任务协议。
+///
+/// body 的形状按各家来，与 `generate::adapters` 里的字段路径成对 ——
+/// 那张表还没对过真实文档，接第一家时一起改。
+async fn run_generate(tool: &str, ctx: &GenCtx<'_>, args: &Value) -> Result<Vec<String>> {
+    let mut body = json!({ "model": ctx.model.model });
+    let o = body.as_object_mut().unwrap();
+    if tool == "image.generate" {
+        let prompt = args.get("prompt").and_then(Value::as_str).unwrap_or("").trim();
+        if prompt.is_empty() {
+            return Err(Error::Generate("提示词是空的 —— 不拿空提示词去花钱".into()));
+        }
+        o.insert("prompt".into(), json!(prompt));
+        if let Some(r) = args.get("ratio") {
+            o.insert("size".into(), r.clone());
+        }
+        // batch 封顶 4：这是花钱的东西，别让一个笔误变成四十张图
+        let n = args.get("batch").and_then(Value::as_u64).unwrap_or(1).clamp(1, 4);
+        o.insert("n".into(), json!(n));
+    } else {
+        let shot = args.get("shotId").and_then(Value::as_str).unwrap_or("").trim();
+        if shot.is_empty() {
+            return Err(Error::Generate("没说给哪一镜出视频".into()));
+        }
+        o.insert("shot_id".into(), json!(shot));
+        if let Some(d) = args.get("dur") {
+            o.insert("duration".into(), d.clone());
+        }
+    }
+
+    generate::run(
+        Job {
+            api: &ctx.api,
+            base_url: ctx.base_url,
+            api_key: ctx.api_key,
+            body,
+            timeout: ctx.timeout,
+        },
+        || false,
+    )
+    .await
 }
 
 /// 在项目里找关键词。返回**命中在哪儿**而不是整段内容 —— 让模型自己决定要不要细读
@@ -465,7 +541,7 @@ mod tests {
     #[tokio::test]
     async fn 读项目能只读一部分_整份太长塞进上下文是浪费() {
         let tmp = setup();
-        let o = dispatch(tmp.path(), "p1", "project.read", json!({ "part": "outline" }), None)
+        let o = dispatch(tmp.path(), "p1", "project.read", json!({ "part": "outline" }), None, None)
             .await.unwrap();
         let Outcome::Ok { value } = o else { panic!("{o:?}") };
         assert!(value.get("acts").is_some());
@@ -475,7 +551,7 @@ mod tests {
     #[tokio::test]
     async fn 读项目_all_给全份() {
         let tmp = setup();
-        let o = dispatch(tmp.path(), "p1", "project.read", json!({ "part": "all" }), None).await.unwrap();
+        let o = dispatch(tmp.path(), "p1", "project.read", json!({ "part": "all" }), None, None).await.unwrap();
         let Outcome::Ok { value } = o else { panic!() };
         for k in ["meta", "acts", "blocks", "assets", "shots"] {
             assert!(value.get(k).is_some(), "缺 {k}");
@@ -485,7 +561,7 @@ mod tests {
     #[tokio::test]
     async fn 记账算出的数对得上() {
         let tmp = setup();
-        let Outcome::Ok { value } = dispatch(tmp.path(), "p1", "metrics.read", json!({}), None).await.unwrap()
+        let Outcome::Ok { value } = dispatch(tmp.path(), "p1", "metrics.read", json!({}), None, None).await.unwrap()
             else { panic!() };
         assert_eq!(value["shots"], 3);
         assert_eq!(value["takes"], 5);      // 3 + 2 + 0
@@ -501,7 +577,7 @@ mod tests {
             meta: Meta { id: "空".into(), ..Meta::default() },
             shots: json!([]), ..Default::default()
         }).unwrap();
-        let Outcome::Ok { value } = dispatch(tmp.path(), "空", "metrics.read", json!({}), None).await.unwrap()
+        let Outcome::Ok { value } = dispatch(tmp.path(), "空", "metrics.read", json!({}), None, None).await.unwrap()
             else { panic!() };
         assert!(value["hitRate"].is_null());
         assert!(value["note"].as_str().unwrap().contains("算不出"));
@@ -511,7 +587,7 @@ mod tests {
     async fn 超出自主上限的工具不执行_返回要人点头() {
         let tmp = setup();
         // 出厂上限是 write，出图是 spend
-        let o = dispatch(tmp.path(), "p1", "image.generate", json!({ "prompt": "x" }), None).await.unwrap();
+        let o = dispatch(tmp.path(), "p1", "image.generate", json!({ "prompt": "x" }), None, None).await.unwrap();
         match o {
             Outcome::NeedsApproval { tool, risk, why } => {
                 assert_eq!(tool, "image.generate");
@@ -527,27 +603,38 @@ mod tests {
         let tmp = setup();
         // image.generate 既没实现、风险又超标。必须报越权而不是「还没做」——
         // 否则将来补上实现，拦截行为会悄悄变
-        let o = dispatch(tmp.path(), "p1", "image.generate", json!({}), None).await.unwrap();
+        let o = dispatch(tmp.path(), "p1", "image.generate", json!({}), None, None).await.unwrap();
         assert!(matches!(o, Outcome::NeedsApproval { .. }));
     }
 
     #[tokio::test]
-    async fn 上限放开后_没实现的工具如实说没实现() {
+    async fn 上限放开但没给模型密钥时_如实说缺什么_不假装跑了() {
         let tmp = setup();
-        let o = dispatch(tmp.path(), "p1", "image.generate", json!({}), Some(Risk::Spend)).await.unwrap();
+        let o = dispatch(tmp.path(), "p1", "image.generate", json!({ "prompt": "cat" }),
+            Some(Risk::Spend), None).await.unwrap();
         match o {
             Outcome::NotImplemented { tool, blocked_by } => {
                 assert_eq!(tool, "image.generate");
-                assert!(blocked_by.contains("适配器"));
+                assert!(blocked_by.contains("模型或密钥"), "{blocked_by}");
             }
             x => panic!("{x:?}"),
+        }
+    }
+
+    #[test]
+    fn 未验证这一档要说清它离能用差什么() {
+        let list: Vec<_> = all().into_iter().filter(|t| t.status == Status::Unverified).collect();
+        assert!(!list.is_empty(), "出图出视频应该在这一档");
+        for t in list {
+            let b = t.blocked_by.unwrap_or("");
+            assert!(b.contains("没对过") && b.contains("真 key"), "{}: {b}", t.id);
         }
     }
 
     #[tokio::test]
     async fn 出本机的工具上限调到最高也执行不了() {
         let tmp = setup();
-        let o = dispatch(tmp.path(), "p1", "file.export", json!({ "what": "script" }), Some(Risk::Egress))
+        let o = dispatch(tmp.path(), "p1", "file.export", json!({ "what": "script" }), Some(Risk::Egress), None)
             .await.unwrap();
         assert!(matches!(o, Outcome::NeedsApproval { .. }));
     }
@@ -555,7 +642,7 @@ mod tests {
     #[tokio::test]
     async fn 浏览器里跑的工具明说在别处跑() {
         let tmp = setup();
-        let o = dispatch(tmp.path(), "p1", "stage.render", json!({ "shotId": "s1-1" }), None).await.unwrap();
+        let o = dispatch(tmp.path(), "p1", "stage.render", json!({ "shotId": "s1-1" }), None, None).await.unwrap();
         match o {
             Outcome::Elsewhere { runs_in, .. } => assert_eq!(runs_in, RunsIn::Browser),
             x => panic!("{x:?}"),
@@ -565,7 +652,7 @@ mod tests {
     #[tokio::test]
     async fn 不存在的工具报错_而不是悄悄当成没实现() {
         let tmp = setup();
-        let e = dispatch(tmp.path(), "p1", "rm.rf", json!({}), None).await.unwrap_err();
+        let e = dispatch(tmp.path(), "p1", "rm.rf", json!({}), None, None).await.unwrap_err();
         assert_eq!(e.code(), "unknown_tool");
     }
 
@@ -577,6 +664,84 @@ mod tests {
                 "{} 标成 Ready 但 dispatch 里没有分支", t.id
             );
         }
+    }
+
+    /// 起个假厂商，验证「工具调用 → 闸门 → 真发 HTTP → 拿回结果」整条链
+    async fn fake_image_provider() -> String {
+        use tokio::io::{AsyncReadExt, AsyncWriteExt};
+        let l = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = l.local_addr().unwrap();
+        tokio::spawn(async move {
+            while let Ok((mut sock, _)) = l.accept().await {
+                tokio::spawn(async move {
+                    let mut buf = vec![0u8; 4096];
+                    let n = sock.read(&mut buf).await.unwrap_or(0);
+                    let req = String::from_utf8_lossy(&buf[..n]).to_string();
+                    let body = if req.starts_with("POST") {
+                        // 顺带验证 body 真的带上了提示词与 batch
+                        assert!(req.contains("\"prompt\""), "提交里没有 prompt");
+                        json!({ "data": { "task_id": "t-9" } })
+                    } else {
+                        json!({ "data": { "status": "succeeded", "urls": ["http://img/1.png"] } })
+                    };
+                    let sbody = body.to_string();
+                    let resp = format!(
+                        "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
+                        sbody.len(), sbody);
+                    let _ = sock.write_all(resp.as_bytes()).await;
+                });
+            }
+        });
+        format!("http://{addr}")
+    }
+
+    fn gen_ctx<'a>(base: &'a str, model: &'a ModelRef) -> GenCtx<'a> {
+        GenCtx {
+            model,
+            base_url: base,
+            api_key: "sk-test",
+            api: TaskApi {
+                submit_path: "/gen".into(), poll_path: "/gen/{id}".into(),
+                id_at: "data.task_id".into(), status_at: "data.status".into(),
+                done_when: vec!["succeeded".into()], failed_when: vec!["failed".into()],
+                urls_at: "data.urls".into(), error_at: "error.message".into(),
+            },
+            timeout: std::time::Duration::from_secs(20),
+        }
+    }
+
+    #[tokio::test]
+    async fn 出图整条链跑通_闸门放行后真发请求拿回图() {
+        let tmp = setup();
+        let base = fake_image_provider().await;
+        let m = ModelRef { provider: "volcengine".into(), model: "doubao-seedream".into() };
+        let o = dispatch(tmp.path(), "p1", "image.generate",
+            json!({ "prompt": "a cat in the rain", "batch": 2 }),
+            Some(Risk::Spend), Some(gen_ctx(&base, &m))).await.unwrap();
+        let Outcome::Ok { value } = o else { panic!("{o:?}") };
+        assert_eq!(value["urls"][0], "http://img/1.png");
+        assert_eq!(value["model"], "doubao-seedream");
+    }
+
+    #[tokio::test]
+    async fn 出图仍然过闸门_上限没放开时连请求都不发() {
+        let tmp = setup();
+        let base = fake_image_provider().await;
+        let m = ModelRef { provider: "volcengine".into(), model: "x".into() };
+        // 出厂上限是 write，出图是 spend
+        let o = dispatch(tmp.path(), "p1", "image.generate", json!({ "prompt": "x" }),
+            None, Some(gen_ctx(&base, &m))).await.unwrap();
+        assert!(matches!(o, Outcome::NeedsApproval { .. }), "该被挡住，实际 {o:?}");
+    }
+
+    #[tokio::test]
+    async fn 空提示词不拿去花钱() {
+        let tmp = setup();
+        let base = fake_image_provider().await;
+        let m = ModelRef { provider: "volcengine".into(), model: "x".into() };
+        let e = dispatch(tmp.path(), "p1", "image.generate", json!({ "prompt": "   " }),
+            Some(Risk::Spend), Some(gen_ctx(&base, &m))).await.unwrap_err();
+        assert!(e.to_string().contains("空的"));
     }
 
     #[test]
@@ -592,7 +757,7 @@ mod tests {
     async fn 找内容返回命中在哪儿_不把整份项目倒出来() {
         let tmp = setup();
         let Outcome::Ok { value } = dispatch(tmp.path(), "p1", "project.search",
-            json!({ "q": "画猫" }), None).await.unwrap() else { panic!() };
+            json!({ "q": "画猫" }), None, None).await.unwrap() else { panic!() };
         assert_eq!(value["hits"], 1);
         assert_eq!(value["results"][0]["where"], "outline");
         assert_eq!(value["results"][0]["key"], "场景1");
@@ -601,17 +766,17 @@ mod tests {
     #[tokio::test]
     async fn 找内容_关键词为空时报错_而不是把全部倒出来() {
         let tmp = setup();
-        assert!(dispatch(tmp.path(), "p1", "project.search", json!({ "q": "  " }), None).await.is_err());
+        assert!(dispatch(tmp.path(), "p1", "project.search", json!({ "q": "  " }), None, None).await.is_err());
     }
 
     #[tokio::test]
     async fn 估花费按价目表算_不让模型自己编一个数() {
         let tmp = setup();
         let Outcome::Ok { value } = dispatch(tmp.path(), "p1", "cost.estimate",
-            json!({ "kind": "video", "count": 18 }), None).await.unwrap() else { panic!() };
+            json!({ "kind": "video", "count": 18 }), None, None).await.unwrap() else { panic!() };
         assert_eq!(value["credits"], 216);   // 12 × 18 × 1
         let Outcome::Ok { value } = dispatch(tmp.path(), "p1", "cost.estimate",
-            json!({ "kind": "image", "count": 4, "batch": 2 }), None).await.unwrap() else { panic!() };
+            json!({ "kind": "image", "count": 4, "batch": 2 }), None, None).await.unwrap() else { panic!() };
         assert_eq!(value["credits"], 24);    // 3 × 4 × 2
     }
 
@@ -619,7 +784,7 @@ mod tests {
     async fn 估花费是只读的_自主模式下不用等人点头() {
         let tmp = setup();
         // 「先报个数」这件事本身不该被闸门挡住，否则报数也要人点头就没意义了
-        let o = dispatch(tmp.path(), "p1", "cost.estimate", json!({ "kind": "image", "count": 1 }), None)
+        let o = dispatch(tmp.path(), "p1", "cost.estimate", json!({ "kind": "image", "count": 1 }), None, None)
             .await.unwrap();
         assert!(matches!(o, Outcome::Ok { .. }));
     }
@@ -649,7 +814,7 @@ mod tests {
 
     #[test]
     fn 没实现的工具都说得出缺什么() {
-        for t in all().into_iter().filter(|t| t.status == Status::Declared) {
+        for t in all().into_iter().filter(|t| t.status != Status::Ready) {
             assert!(t.blocked_by.is_some_and(|b| b.len() > 8), "{} 没说清缺什么", t.id);
         }
     }

@@ -203,7 +203,8 @@ export function AgentDetail({ id }: { id: AgentId }) {
           <Field wide label={`工具 · ${cfg.tools.length} / ${TOOLS.length}`}
             hint={<>
               ¥ 要花积分，↗ 会把东西送出本机 —— 这两类在自主模式下会停下来等你点头。
-              <b>灰的还没实现</b>，勾上也跑不了，鼠标停上去看缺什么。
+              <b>虚线的还没实现</b>，<b>点线的实现了但还没拿真 key 验过</b>；
+              鼠标停上去看具体缺什么。
             </>}>
             {GROUPS.map((g) => {
               const list = TOOLS.filter((t) => t.group === g);
@@ -214,16 +215,18 @@ export function AgentDetail({ id }: { id: AgentId }) {
                   <div className="chipwall">
                     {list.map((t) => {
                       const r = riskOfTool(t.id);
-                      const off = t.status !== 'ready';
+                      const off = t.status === 'declared';
+                      const soon = t.status === 'unverified';
                       return (
                         <ToggleChip key={t.id} on={cfg.tools.includes(t.id)}
                           onClick={() => toggleTool(t.id)}
-                          className={off ? 'tchip--todo' : undefined}
+                          className={off ? 'tchip--todo' : soon ? 'tchip--soon' : undefined}
                           title={[
                             t.desc,
                             t.needs ? `需要${MODALITY_LABEL[t.needs]}模型` : '',
                             RISK_WHY[r],
-                            off ? `还没实现：${t.blockedBy}` : '已实现',
+                            off ? `还没实现：${t.blockedBy}`
+                              : soon ? `待验证：${t.blockedBy}` : '已实现',
                           ].filter(Boolean).join(' · ')}>
                           {t.name}
                           {r === 'spend' ? ' ¥' : r === 'egress' ? ' ↗' : ''}

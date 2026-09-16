@@ -140,10 +140,16 @@ describe('agent/policy · 自主执行的边界', () => {
     expect(autoAllowed(riskOfTool('某个还没登记的' as ToolId), 'spend')).toBe(false);
   });
 
-  it('每个工具都标了实现状态，没实现的说得出缺什么', () => {
+  it('每个工具都标了实现状态，还不能用的说得出缺什么', () => {
     for (const t of TOOLS) {
-      expect(['ready', 'declared'], t.id).toContain(t.status);
-      if (t.status === 'declared') expect(t.blockedBy?.length ?? 0, t.id).toBeGreaterThan(4);
+      expect(['ready', 'unverified', 'declared'], t.id).toContain(t.status);
+      if (t.status !== 'ready') expect(t.blockedBy?.length ?? 0, t.id).toBeGreaterThan(4);
+    }
+  });
+
+  it('出图出视频是「待验证」不是「未实现」—— 协议写完了，差一次真实调用', () => {
+    for (const id of ['image.generate', 'video.generate'] as ToolId[]) {
+      expect(TOOLS.find((t) => t.id === id)?.status, id).toBe('unverified');
     }
   });
 
