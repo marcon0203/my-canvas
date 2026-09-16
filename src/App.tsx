@@ -108,7 +108,7 @@ export function SettingsRoute() {
 /** 资源管理：入口先放着，点进来说明白还没实现 —— 比灰掉一个按钮诚实 */
 export function ResourcesRoute() {
   const setRoute = useUi((s) => s.setRoute);
-  useEffect(() => { setRoute('settings'); }, [setRoute]);
+  useEffect(() => { setRoute('resources'); }, [setRoute]);
   return (
     <Shell section="resources">
       <div className="stage"><div className="stage__body"><div className="pad">

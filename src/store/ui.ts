@@ -10,7 +10,7 @@ export interface Toast {
 
 /** UI 态：选中、弹窗、折叠、画布相机 —— 全部不进撤销历史 */
 export interface UiState {
-  route: 'home' | 'project' | 'settings';
+  route: 'home' | 'project' | 'settings' | 'resources';
   projectId: string;
   step: Step;
   nodeSel: string;

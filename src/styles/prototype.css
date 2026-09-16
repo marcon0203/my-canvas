@@ -637,10 +637,20 @@ body { background: var(--color-bg-canvas); overflow: hidden; }
 .card__b { padding: 10px 12px; }
 .card__n { font-size: 13px; font-weight: 600; margin-bottom: 2px; }
 .card__m { font-size: 11px; color: var(--color-text-tertiary); }
+/* 图片格子里的「未生成」覆盖层。**只能放在 position 非 static 的格子里** ——
+   放到普通容器里会以视口为基准铺满整屏，成为一层点不透的挡板。
+   通用空态请用 .empty（EmptyState 组件），那个走正常文档流。 */
 .card__none {
   position: absolute; inset: 0; display: flex; flex-direction: column; gap: 6px;
   align-items: center; justify-content: center; color: var(--color-text-tertiary); font-size: 11px;
 }
+.empty {
+  display: flex; flex-direction: column; gap: 6px; align-items: center; justify-content: center;
+  padding: var(--space-12) var(--space-6); text-align: center;
+  color: var(--color-text-tertiary); font-size: 12px; line-height: 1.8;
+  max-width: 52ch; margin-inline: auto;
+}
+.empty svg { width: 22px; height: 22px; }
 
 /* 图标底 chip —— Apple 柔和的彩色圆角方底 */
 .ds-chip {
