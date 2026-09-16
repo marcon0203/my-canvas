@@ -5,6 +5,7 @@ import type { AgentId } from '@/domain/agent/roster';
 import { personaById, personaForStep } from '@/domain/agent/roster';
 import type { AgentMessage, IntentKind, Proposal } from '@/domain/agent/types';
 import { pipelineFor, type ProjectKind, type Stage } from '@/domain/agent/pipeline';
+import { autoAllowed, holdReason, riskOfProposal } from '@/domain/agent/policy';
 import { useProject } from './project';
 import { useUi } from './ui';
 import { effectiveGlobals, useSettings } from './settings';
@@ -166,8 +167,16 @@ export const useAgent = create<AgentState>((set, get) => ({
                 // 这一步被前置条件挡住，没有产物可采纳 —— 跳过，别卡住整条流水线
                 setTimeout(() => advance(get, set), 300);
               } else if (useSettings.getState().agents[agentId]?.autonomy === 'auto') {
-                // 自主执行：不等人点，自己采纳再往下走
-                setTimeout(() => get().accept(aiId), 300);
+                // 自主执行也有边界：花钱与出本机的动作照样停下来等人点头。
+                // 「自主」省的是点采纳的手，不是取消把关。
+                const cfg = useSettings.getState().agents[agentId];
+                const risk = riskOfProposal(done.proposal);
+                if (autoAllowed(risk, cfg?.autoMax)) {
+                  setTimeout(() => get().accept(aiId), 300);
+                } else {
+                  patch((m) => ({ ...m, hold: holdReason(risk) }));
+                  useUi.getState().toast(holdReason(risk));
+                }
               }
             }
             break;

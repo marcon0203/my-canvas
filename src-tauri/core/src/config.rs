@@ -57,6 +57,9 @@ pub struct AgentConfig {
     pub preamble: Option<String>,
     #[serde(default)]
     pub autonomy: Autonomy,
+    /// 自主执行时最多允许到哪一档风险。None = 用出厂默认（能改项目，不能花钱）
+    #[serde(default)]
+    pub auto_max: Option<crate::policy::Risk>,
     #[serde(default = "yes")]
     pub enabled: bool,
 }

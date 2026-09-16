@@ -445,6 +445,16 @@ body { background: var(--color-bg-canvas); overflow: hidden; }
 /* chip 墙：活儿与工具。行距比 .chiprow 松一点，一屏几十个才不糊成一片 */
 .chipwall { display: flex; flex-wrap: wrap; gap: 6px; }
 
+/* 自主执行被权限边界挡住：说清为什么停，而不是安静地不动 */
+.aprop__hold {
+  display: flex; align-items: flex-start; gap: 6px;
+  margin-top: var(--space-2); padding: 8px 10px;
+  border-radius: var(--radius-control);
+  background: var(--color-warning-bg); color: var(--color-warning);
+  font-size: 11px; line-height: 1.7;
+}
+.aprop__hold svg { width: 12px; height: 12px; flex: 0 0 auto; margin-top: 3px; }
+
 /* 能力勾选：新增模型弹窗里 */
 .capbox {
   display: inline-flex; align-items: center; gap: 5px;

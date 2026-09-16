@@ -65,7 +65,8 @@ export const TOOLS_FOR_INTENT: Record<Exclude<IntentKind, 'chat'>, readonly Tool
   'shots.generate': ['project.read', 'shot.write'],
   'shots.prompt': ['project.read', 'prompt.compile'],
   'video.batch': ['project.read', 'video.generate'],
-  'edit.autocut': ['project.read', 'file.export'],
+  // 只排时间线，不导出 —— 导出是剪辑页上另一个按钮，别把它捆进来
+  'edit.autocut': ['project.read', 'shot.write'],
   'cost.report': ['metrics.read'],
 };
 

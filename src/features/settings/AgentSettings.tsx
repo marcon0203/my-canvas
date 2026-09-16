@@ -10,6 +10,9 @@ import {
 import { findModel, modelsOfModality } from '@/domain/providers/catalog';
 import { MODALITY_LABEL, modelKey, parseModelKey, type Modality, type ModelRef } from '@/domain/providers/model';
 import type { IntentKind } from '@/domain/agent/types';
+import {
+  AUTO_MAX_CHOICES, DEFAULT_AUTO_MAX, RISK_LABEL, RISK_WHY, riskOfIntent, type Risk,
+} from '@/domain/agent/policy';
 import { useEffectiveGlobals, useExtraModels, useReadyProviders, useSettings } from '@/store/settings';
 import { useUi } from '@/store/ui';
 import { Field, Fields } from './Field';
@@ -130,6 +133,21 @@ export function AgentDetail({ id }: { id: AgentId }) {
               value={cfg.autonomy}
               onChange={(v) => patch(id, { autonomy: v as Autonomy })} />
           </Field>
+          {cfg.autonomy === 'auto' && (
+            <Field label="自主上限"
+              hint={<>
+                自主执行时最多做到这一档，超过的照样停下来等你点头 ——
+                「自主」省的是点采纳的手，不是取消把关。
+                <b>导出文件这类会把东西送出本机的动作，调到最高也不会自动做。</b>
+              </>}>
+              <Segmented ariaLabel="自主上限"
+                items={AUTO_MAX_CHOICES.map((r) => ({
+                  key: r, label: RISK_LABEL[r], title: RISK_WHY[r],
+                }))}
+                value={cfg.autoMax ?? DEFAULT_AUTO_MAX}
+                onChange={(v) => patch(id, { autoMax: v as Risk })} />
+            </Field>
+          )}
           {needs.map((m) => (
             <Field key={m} label={MODALITY_LABEL[m]}>
               <ModelSelect modality={m} value={cfg.models[m]}
@@ -165,8 +183,12 @@ export function AgentDetail({ id }: { id: AgentId }) {
                 const miss = on ? missingTools(cfg.tools, k) : [];
                 return (
                   <ToggleChip key={k} on={on} onClick={() => toggleSkill(k)}
-                    title={miss.length ? `缺工具：${miss.map((t) => toolOf(t)?.name).join('、')}` : intentName(k)}>
-                    {INTENT_META[k].name}{miss.length ? ' ⚠' : ''}
+                    title={miss.length
+                      ? `缺工具：${miss.map((t) => toolOf(t)?.name).join('、')}`
+                      : `${intentName(k)} · ${RISK_WHY[riskOfIntent(k)]}`}>
+                    {INTENT_META[k].name}
+                    {miss.length ? ' ⚠' : riskOfIntent(k) === 'spend' ? ' ¥'
+                      : riskOfIntent(k) === 'egress' ? ' ↗' : ''}
                   </ToggleChip>
                 );
               })}

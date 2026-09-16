@@ -4,6 +4,7 @@ import type { AgentId, Persona } from './roster';
 import { PERSONAS, personaById } from './roster';
 import { EXTRA_TOOLS, canRun, defaultTools, missingTools, type ToolId } from './tools';
 import type { IntentKind } from './types';
+import type { Risk } from './policy';
 
 /**
  * 每个 Agent 单独一套配置：接哪些活、用什么模型、给哪些工具。
@@ -34,6 +35,11 @@ export interface AgentConfig {
    * 执行前交回人，auto 走完整循环。
    */
   readonly autonomy: Autonomy;
+  /**
+   * 自主执行时最多允许到哪一档风险。超过的照样停下来等人点头。
+   * 「自主」省的是点采纳的手，不是取消把关。
+   */
+  readonly autoMax?: Risk;
   readonly enabled: boolean;
 }
 

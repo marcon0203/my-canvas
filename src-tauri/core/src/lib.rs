@@ -8,6 +8,7 @@ pub mod config;
 pub mod error;
 pub mod md;
 pub mod outline;
+pub mod policy;
 pub mod project;
 pub mod providers;
 pub mod run;

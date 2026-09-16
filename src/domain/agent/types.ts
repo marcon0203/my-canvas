@@ -84,6 +84,8 @@ export interface Handoff {
 
 /** 一条消息。run 消息承载步骤卡与产物卡 */
 export interface AgentMessage {
+  /** 自主模式下被权限边界挡住时，这里放为什么停 */
+  hold?: string;
   readonly id: number;
   readonly who: 'me' | 'ai';
   /** 哪位 Agent 说的 —— 一条会话里可能有多位，转交后由新人接着说 */

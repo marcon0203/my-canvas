@@ -110,7 +110,7 @@ function MessageView({ msg }: { msg: AgentMessage }) {
         ? <div className="amsg__body">{renderRich(msg.text)}{msg.streaming && <span className="caret" />}</div>
         : msg.streaming && !msg.steps?.length ? <span className="caret" /> : null}
       {msg.handoff && <HandoffCard to={personaById(msg.handoff.to)} />}
-      {msg.proposal && <ProposalCard msgId={msg.id} p={msg.proposal} verdict={msg.verdict ?? 'pending'} />}
+      {msg.proposal && <ProposalCard msgId={msg.id} p={msg.proposal} verdict={msg.verdict ?? 'pending'} hold={msg.hold} />}
     </div>
   );
 }
@@ -155,7 +155,12 @@ function StepList({ steps, done }: { steps: AgentMessage['steps'] & object; done
   );
 }
 
-function ProposalCard({ msgId, p, verdict }: { msgId: number; p: Proposal; verdict: NonNullable<AgentMessage['verdict']> }) {
+function ProposalCard({ msgId, p, verdict, hold }: {
+  msgId: number; p: Proposal;
+  verdict: NonNullable<AgentMessage['verdict']>;
+  /** 自主模式被边界挡住时的说明 */
+  hold?: string;
+}) {
   const accept = useAgent((s) => s.accept);
   const discard = useAgent((s) => s.discard);
   return (
@@ -173,6 +178,11 @@ function ProposalCard({ msgId, p, verdict }: { msgId: number; p: Proposal; verdi
           </div>
         ))}
       </div>
+      {hold && (
+        <div className="aprop__hold">
+          <Icon name="bolt" />{hold}
+        </div>
+      )}
       {verdict === 'pending' ? (
         <div className="aprop__act">
           <button className="tbtn tbtn--pri" onClick={() => accept(msgId)}><Icon name="check" />采纳</button>
