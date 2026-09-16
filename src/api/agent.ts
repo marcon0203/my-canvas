@@ -6,6 +6,7 @@ import { canHandleConfigured, ownerOfConfigured } from '@/domain/agent/config';
 import type { Handoff, IntentKind, Plan } from '@/domain/agent/types';
 import { isDesktop, outlineDraft, shotsPrompt, type OutlineDraft, type PromptDraft, type RunEvent, type ShotBrief } from './desktop';
 import { allBeats } from '@/domain/story/model';
+import { useSettings } from '@/store/settings';
 import type { Shot } from '@/domain/shots/model';
 import { SIZE_EN, shotsMissingPrompt } from '@/domain/agent/drafts';
 import { ctxAssets } from '@/domain/agent/context';
@@ -175,6 +176,7 @@ async function* runOutlineOnDesktop(
           beatCount: allBeats(ctx.acts).length,
         },
         skill: SKILL_FOR_INTENT['outline.draft'],
+        workspace: useSettings.getState().workspace,
       },
       (e) => emit(e, (d) => outlineProposal(d as OutlineDraft, fresh, ctx)),
     ),
@@ -216,6 +218,7 @@ async function* runShotPromptsOnDesktop(
           shots: shotBriefs(ctx, miss),
         },
         skill: SKILL_FOR_INTENT['shots.prompt'],
+        workspace: useSettings.getState().workspace,
       },
       (e) => emit(e, (d) => promptProposal(d as PromptDraft, miss.length)),
     ),

@@ -34,6 +34,13 @@ export interface SettingsState {
   providers: Partial<Record<ProviderId, ProviderSetting>>;
   /** 没给 Agent 单独配时用的默认模型 */
   globalModels: Partial<Record<Modality, ModelRef>>;
+  /**
+   * 工作空间根目录。空串 = 用默认的 `~/.hitv`。
+   *
+   * **路径本身不能存在工作空间里** —— 那是先有鸡还是先有蛋，所以它跟着
+   * 其他设置一起持久化在前端，每次调用桌面端命令时传下去。
+   */
+  workspace: string;
   agents: Record<AgentId, AgentConfig>;
 
   setBaseUrl: (id: ProviderId, url: string) => void;
@@ -47,6 +54,7 @@ export interface SettingsState {
   removeModel: (id: ProviderId, modelId: string) => void;
 
   setGlobalModel: (m: Modality, ref: ModelRef | undefined) => void;
+  setWorkspace: (path: string) => void;
   patchAgent: (id: AgentId, patch: Partial<AgentConfig>) => void;
   resetAgent: (id: AgentId) => void;
 }
@@ -59,6 +67,7 @@ export const useSettings = create<SettingsState>()(
     (set) => ({
       providers: {},
       globalModels: {},
+      workspace: '',
       agents: defaultConfigs(),
 
       setBaseUrl: (id, url) => set((s) => ({
@@ -115,6 +124,7 @@ export const useSettings = create<SettingsState>()(
         };
       }),
 
+      setWorkspace: (workspace) => set({ workspace: workspace.trim() }),
       setGlobalModel: (m, ref) => set((s) => {
         const next = { ...s.globalModels };
         if (ref) next[m] = ref; else delete next[m];

@@ -103,6 +103,8 @@ export interface RunArgs<I> {
   input: I;
   /** 这一轮要展开哪个 skill 的正文。不给就只有清单，没有指令 */
   skill?: string;
+  /** 工作空间根目录，Rust 侧据此找用户放的 skill */
+  workspace?: string;
 }
 
 /**
@@ -135,25 +137,71 @@ export interface SkillList {
   warnings: SkillWarning[];
 }
 
+/* ---------------- 工作空间 ---------------- */
+
+export interface SubdirInfo {
+  name: string;
+  desc: string;
+  /** 现在真的在用，还是只是规划里的 */
+  used: boolean;
+  exists: boolean;
+}
+
+export interface WorkspaceInfo {
+  root: string;
+  source: 'default' | 'user';
+  /** 不填时会落在哪儿 */
+  defaultRoot: string;
+  exists: boolean;
+  writable: boolean;
+  subdirs: SubdirInfo[];
+}
+
+/**
+ * 当前工作空间的情况。
+ *
+ * 浏览器里没有文件系统，只能回一份「说明性」的结果：路径按规则算给人看，
+ * 但 exists / writable 一律 false，界面据此说明白「这里看不到真实情况」。
+ */
+export async function workspaceInfo(configured: string): Promise<WorkspaceInfo> {
+  if (!isDesktop()) {
+    const root = configured.trim() || '~/.hitv';
+    return {
+      root, source: configured.trim() ? 'user' : 'default', defaultRoot: '~/.hitv',
+      exists: false, writable: false,
+      subdirs: [
+        { name: 'skills', desc: '用户自己放的 skill，与内置同名时盖过内置', used: true, exists: false },
+        { name: 'projects', desc: '项目数据', used: false, exists: false },
+      ],
+    };
+  }
+  return invoke<WorkspaceInfo>('workspace_info', { configured });
+}
+
+/** 校验并建出目录。只建不搬 —— 旧工作空间里的东西不会被移动或删除 */
+export async function workspacePrepare(path: string): Promise<WorkspaceInfo> {
+  return invoke<WorkspaceInfo>('workspace_prepare', { path });
+}
+
 /**
  * 装了哪些 skill（第 1 级：只有名字与说明，不含正文）。
  *
  * 桌面端扫真实目录，能看到用户自己放进去的；浏览器里没有文件系统，
  * 只能列出构建期嵌进来的内置那几个 —— 内容是真的，但看不到用户的。
  */
-export async function skillsList(): Promise<SkillList> {
+export async function skillsList(workspace = ''): Promise<SkillList> {
   if (!isDesktop()) return { skills: BUILTIN_SKILLS.map((s) => s.meta), warnings: [] };
-  return invoke<SkillList>('skills_list');
+  return invoke<SkillList>('skills_list', { workspace });
 }
 
 /** 某个 skill 的正文（第 2 级：点进详情才读） */
-export async function skillBody(name: string): Promise<string> {
+export async function skillBody(name: string, workspace = ''): Promise<string> {
   if (!isDesktop()) return builtinSkill(name)?.body ?? '';
-  return invoke<string>('skill_body', { name });
+  return invoke<string>('skill_body', { name, workspace });
 }
 
 /** skill 里的附件（第 3 级：正文指到哪个读哪个）。浏览器里读不到 */
-export async function skillResource(name: string, rel: string): Promise<string> {
+export async function skillResource(name: string, rel: string, workspace = ''): Promise<string> {
   if (!isDesktop()) return '';
-  return invoke<string>('skill_resource', { name, rel });
+  return invoke<string>('skill_resource', { name, rel, workspace });
 }

@@ -24,6 +24,8 @@ pub enum Error {
     UnknownSkill(String),
     #[error("skill 加载失败：{0}")]
     Skill(String),
+    #[error("工作空间：{0}")]
+    Workspace(String),
 }
 
 impl Error {
@@ -40,6 +42,7 @@ impl Error {
             Error::Decode(_) => "decode",
             Error::UnknownSkill(_) => "unknown_skill",
             Error::Skill(_) => "skill",
+            Error::Workspace(_) => "workspace",
         }
     }
 }

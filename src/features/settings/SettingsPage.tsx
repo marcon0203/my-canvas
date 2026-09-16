@@ -4,6 +4,7 @@ import { Button, Chip, Icon } from '@/ui';
 import { ProviderDetail, ProviderList } from './ProviderSettings';
 import { AgentDetail, AgentList } from './AgentSettings';
 import { SkillDetail, SkillFileDetail, SkillList } from './SkillSettings';
+import { WorkspaceSettings } from './WorkspaceSettings';
 import { SETTINGS_SUB } from '@/domain/nav';
 import { personaById, type AgentId } from '@/domain/agent/roster';
 import { providerOf } from '@/domain/providers/catalog';
@@ -13,9 +14,10 @@ import { builtinSkill } from '@/domain/skills/builtin';
 import { useReadyProviders, useSettings } from '@/store/settings';
 import { isDesktop } from '@/api/desktop';
 
-export type SettingsSection = 'models' | 'skills' | 'agents';
+export type SettingsSection = 'workspace' | 'models' | 'skills' | 'agents';
 
 const TITLE: Record<SettingsSection, string> = {
+  workspace: '工作空间',
   models: '模型设置',
   skills: 'Skill 管理',
   agents: '智能体管理',
@@ -86,6 +88,7 @@ export function SettingsPage({ section, detail, onOpen, onBack }: {
         />
       )}
       <div className="stage__body"><div className="pad" style={{ maxWidth: 1080 }}>
+        {section === 'workspace' && <WorkspaceSettings />}
         {section === 'models' && (prov
           ? <ProviderDetail id={prov.id} />
           : <ProviderList onOpen={onOpen} />)}

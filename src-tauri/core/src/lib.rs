@@ -12,6 +12,7 @@ pub mod run;
 pub mod shotprompt;
 pub mod skills;
 pub mod vault;
+pub mod workspace;
 
 pub use error::{Error, Result};
 

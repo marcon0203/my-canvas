@@ -61,7 +61,8 @@ function OwnerSelect({ kind }: { kind: SkillId }) {
 export function SkillList({ onOpen }: { onOpen: (id: string) => void }) {
   const agents = useSettings((s) => s.agents);
   const [loaded, setLoaded] = useState<SkillList_ | null>(null);
-  useEffect(() => { void skillsList().then(setLoaded); }, []);
+  const workspace = useSettings((s) => s.workspace);
+  useEffect(() => { void skillsList(workspace).then(setLoaded); }, [workspace]);
 
   const orphans = SKILLS.filter((s) => !ownerOfConfigured(s.id, agents));
   const migrated = new Set(Object.values(SKILL_FOR_INTENT));
@@ -184,10 +185,11 @@ export function SkillFileDetail({ name }: { name: string }) {
   const [meta, setMeta] = useState<SkillMeta | null>(null);
   const [body, setBody] = useState<string | null>(null);
 
+  const workspace = useSettings((s) => s.workspace);
   useEffect(() => {
-    void skillsList().then((l) => setMeta(l.skills.find((s) => s.name === name) ?? null));
-    void skillBody(name).then(setBody);
-  }, [name]);
+    void skillsList(workspace).then((l) => setMeta(l.skills.find((s) => s.name === name) ?? null));
+    void skillBody(name, workspace).then(setBody);
+  }, [name, workspace]);
 
   return (
     <>

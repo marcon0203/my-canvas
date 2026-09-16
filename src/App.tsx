@@ -25,12 +25,11 @@ import { providerOf } from '@/domain/providers/catalog';
 import { isSkillId } from '@/domain/agent/skills';
 import { builtinSkill } from '@/domain/skills/builtin';
 import type { ProviderId } from '@/domain/providers/model';
-import { SETTINGS_SUB, WORKBENCH_SUB, isValidSub, type SectionId } from '@/domain/nav';
+import { SETTINGS_SUB, STEPS, WORKBENCH_SUB, defaultSub, isValidSub, type SectionId } from '@/domain/nav';
 import { TokenGallery } from './routes/TokenGallery';
 
 const queryClient = new QueryClient();
 
-const STEPS: Step[] = ['outline', 'script', 'assets', 'storyboard', 'editing', 'overview', 'metrics'];
 
 const PAGES: Record<Step, () => React.JSX.Element> = {
   outline: OutlinePage,
@@ -91,7 +90,7 @@ function Shell({ section, sub, onSub, top = false, children, aside }: {
   const go = (id: SectionId) => {
     if (id === 'workbench') { navigate('/'); return; }
     if (id === 'resources') { navigate('/resources'); return; }
-    navigate('/settings/models');
+    navigate(`/settings/${defaultSub('settings')}`);
   };
   return (
     <div className="app">
@@ -114,7 +113,7 @@ export function SettingsRoute() {
   const setRoute = useUi((s) => s.setRoute);
   useEffect(() => { setRoute('settings'); }, [setRoute]);
 
-  const active = (isValidSub('settings', section ?? '') ? section! : 'models') as SettingsSection;
+  const active = (isValidSub('settings', section ?? '') ? section! : defaultSub('settings')) as SettingsSection;
   // 详情段只有模型与智能体两个分区有；乱填的名字当没填，回列表而不是白屏
   const valid = active === 'agents' ? isAgentId(detail)
     : active === 'models' ? !!providerOf(detail as ProviderId)
