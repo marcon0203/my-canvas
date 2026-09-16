@@ -4,6 +4,8 @@ import { route } from '@/domain/agent/router';
 import { personaById } from '@/domain/agent/roster';
 import { canHandleConfigured, ownerOfConfigured } from '@/domain/agent/config';
 import type { Handoff, IntentKind, Plan } from '@/domain/agent/types';
+import { isDesktop, outlineDraft, type OutlineDraft } from './desktop';
+import { allBeats } from '@/domain/story/model';
 
 /**
  * Agent 传输层：本地模拟一次流式应答。
@@ -84,6 +86,12 @@ export async function* runAgent(
     return;
   }
 
+  // 桌面端 + 这件活已经接上真模型：走 IPC，不再用本地草稿
+  if (isDesktop() && resolved === 'outline.draft') {
+    yield* runOutlineOnDesktop(ctx, signal);
+    return;
+  }
+
   const p = plan(resolved, ctx);
   // 先只下发步骤：产物等正文说完再交付
   yield { t: 'plan', plan: { ...p, proposal: undefined } };
@@ -110,4 +118,132 @@ export async function* runAgent(
     if (e === ABORT) { yield { t: 'aborted' }; return; }
     throw e;
   }
+}
+
+
+/* ---------------- 真模型：起草大纲 ---------------- */
+
+const OUTLINE_STEPS = [
+  { icon: 'spark', label: '读取灵感与现有结构' },
+  { icon: 'map', label: '让模型出结构' },
+  { icon: 'book', label: '编号并落成场次' },
+];
+
+/**
+ * 桌面端的「起草大纲」：Rust 侧跑 Rig，事件经 Channel 回来。
+ *
+ * 这里把 Rust 的 RunEvent 翻译成本地 AgentEvent —— 两套事件**故意不合并**：
+ * 前端的 AgentEvent 还要伺候浏览器 mock 那条路，合并会让 mock 背上 IPC 的形状。
+ */
+async function* runOutlineOnDesktop(
+  ctx: AgentContext,
+  signal: AbortSignal,
+): AsyncGenerator<AgentEvent> {
+  const steps = OUTLINE_STEPS;
+  yield { t: 'plan', plan: { kind: 'outline.draft', steps, reply: '' } };
+
+  const queue: AgentEvent[] = [];
+  let finished = false;
+  let wake: (() => void) | null = null;
+  const push = (e: AgentEvent) => {
+    queue.push(e);
+    wake?.();
+  };
+
+  const fresh = ctx.acts.length === 0;
+  void outlineDraft(
+    {
+      cfg: ctx.agents[ctx.agentId],
+      fallbackPreamble: personaById(ctx.agentId).preamble,
+      globals: ctx.globalModels,
+      providers: {},
+      input: {
+        project: ctx.proj,
+        idea: ctx.input,
+        actCount: ctx.acts.length,
+        beatCount: allBeats(ctx.acts).length,
+      },
+    },
+    (e) => {
+      switch (e.t) {
+        case 'step':
+          push({ t: 'step', index: e.index });
+          break;
+        case 'delta':
+          push({ t: 'delta', text: e.text });
+          break;
+        case 'proposal':
+          push({ t: 'proposal', proposal: outlineProposal(e.draft, fresh, ctx) });
+          break;
+        case 'done':
+          finished = true;
+          push({ t: 'done' });
+          break;
+        case 'failed':
+          finished = true;
+          // 失败当成一段正文说出来：用户要知道为什么没成，而不是看一个空面板
+          push({ t: 'delta', text: failureText(e.code, e.message) });
+          push({ t: 'done' });
+          break;
+      }
+    },
+  ).catch((err: unknown) => {
+    finished = true;
+    push({ t: 'delta', text: `调用失败：${String(err)}` });
+    push({ t: 'done' });
+  });
+
+  while (!finished || queue.length) {
+    if (signal.aborted) { yield { t: 'aborted' }; return; }
+    if (!queue.length) {
+      await new Promise<void>((r) => { wake = r; setTimeout(r, 40); });
+      wake = null;
+      continue;
+    }
+    yield queue.shift()!;
+  }
+}
+
+/** 常见失败给人话，而不是把错误码甩出去 */
+function failureText(code: string, message: string): string {
+  switch (code) {
+    case 'no_key':
+      return `${message}。去设置 → 模型服务商里填一个。`;
+    case 'no_model':
+      return `${message}。去设置 → Agent 配置里给它选一个文本模型。`;
+    case 'no_base_url':
+      return `${message}。自定义端点必须填 baseURL。`;
+    case 'decode':
+      return `模型没按要求的结构返回，重试几次都没成：${message}`;
+    default:
+      return message;
+  }
+}
+
+/** Rust 产物 → 前端产物卡。id 在这里生成 —— 前端才知道现有 id 用到哪 */
+function outlineProposal(draft: OutlineDraft, fresh: boolean, ctx: AgentContext) {
+  const known = new Set(ctx.acts.map((a) => a.id));
+  let n = 1;
+  const nextId = () => {
+    let id = `a${n++}`;
+    while (known.has(id)) id = `a${n++}`;
+    known.add(id);
+    return id;
+  };
+  let beatSeq = allBeats(ctx.acts).length;
+  const acts = draft.acts.map((a) => ({
+    id: nextId(),
+    t: a.t,
+    span: a.span,
+    beats: a.beats.map((b) => ({ id: `b${++beatSeq}`, k: b.k, t: b.t })),
+  }));
+  const merged = fresh ? acts : [...ctx.acts, ...acts];
+  const added = acts.flatMap((a) => a.beats);
+  return {
+    title: fresh ? `新大纲 · ${acts.length} 幕 ${added.length} 场` : `补 ${added.length} 场`,
+    rows: added.map((b) => ({ k: b.k, v: b.t })),
+    patch: { t: 'acts' as const, acts: merged },
+    cost: 2,
+    goto: 'outline',
+  };
 }

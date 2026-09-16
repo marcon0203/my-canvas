@@ -1,0 +1,245 @@
+//! 一次 Agent 运行的编排：事件序列与失败处理。
+//!
+//! **刻意放在 core 而不是 tauri 层**：tauri 层在没有 GUI 系统库的机器上编译不了，
+//! 把编排放那儿等于这段代码永远没被类型检查过。这里能编、能测、能换 sink。
+
+use crate::agent::{self, AgentSpec};
+use crate::config::{AgentConfig, ModelRef, ProviderSetting};
+use crate::error::Error;
+use crate::outline::{self, OutlineDraft, OutlineInput};
+use std::collections::HashMap;
+
+/// 与前端 `AgentEvent` 同形。契约一致，前端换 transport 不用改事件处理。
+#[derive(Debug, Clone, PartialEq, serde::Serialize)]
+#[serde(tag = "t", rename_all = "camelCase")]
+pub enum RunEvent {
+    Step { index: usize },
+    Delta { text: String },
+    Proposal { draft: OutlineDraft },
+    Done,
+    /// **失败也走事件**，不走 Result —— 否则前端要同时处理
+    /// 「Promise reject」和「事件里的错误」两条路径。
+    Failed { code: String, message: String },
+}
+
+impl RunEvent {
+    fn failed(e: &Error) -> Self {
+        RunEvent::Failed { code: e.code().into(), message: e.to_string() }
+    }
+}
+
+/// 事件出口。tauri 侧传 Channel，测试里传个收集器。
+pub trait Sink {
+    fn emit(&self, event: RunEvent);
+}
+
+impl<F: Fn(RunEvent)> Sink for F {
+    fn emit(&self, event: RunEvent) {
+        self(event)
+    }
+}
+
+/// 取密钥的方式。测试里换成假的，免得碰真钥匙串。
+pub trait Keys {
+    fn get(&self, provider: &str) -> crate::Result<String>;
+}
+
+/// 真实现：系统钥匙串
+pub struct SystemKeys;
+
+impl Keys for SystemKeys {
+    fn get(&self, provider: &str) -> crate::Result<String> {
+        crate::vault::load(provider)
+    }
+}
+
+pub struct OutlineRun<'a> {
+    pub cfg: &'a AgentConfig,
+    pub fallback_preamble: &'a str,
+    pub globals: &'a HashMap<String, ModelRef>,
+    pub providers: &'a HashMap<String, ProviderSetting>,
+    pub input: &'a OutlineInput,
+}
+
+/// 解析阶段：不发请求，所以能独立测。失败时发 Failed 并返回 None。
+fn prepare<S: Sink, K: Keys>(run: &OutlineRun<'_>, sink: &S, keys: &K) -> Option<(AgentSpec, String)> {
+    sink.emit(RunEvent::Step { index: 1 });
+    let spec = match agent::resolve(run.cfg, run.fallback_preamble, run.globals, run.providers) {
+        Ok(s) => s,
+        Err(e) => {
+            sink.emit(RunEvent::failed(&e));
+            return None;
+        }
+    };
+    // 密钥在这里才取，且不出这个函数 —— 它不进事件、不进返回值
+    match keys.get(&spec.model.provider) {
+        Ok(k) => Some((spec, k)),
+        Err(e) => {
+            sink.emit(RunEvent::failed(&e));
+            None
+        }
+    }
+}
+
+/// 把正文按小块吐出去，观感与浏览器 mock 一致
+fn stream_reply<S: Sink>(sink: &S, reply: &str) {
+    for chunk in reply.chars().collect::<Vec<_>>().chunks(2) {
+        sink.emit(RunEvent::Delta { text: chunk.iter().collect() });
+    }
+}
+
+/// 跑一次「起草大纲」。
+pub async fn outline_draft<S: Sink, K: Keys>(run: OutlineRun<'_>, sink: S, keys: K) {
+    let Some((spec, key)) = prepare(&run, &sink, &keys) else { return };
+
+    sink.emit(RunEvent::Step { index: 2 });
+    let draft = match outline::draft(&spec, &key, run.input).await {
+        Ok(d) => d,
+        Err(e) => return sink.emit(RunEvent::failed(&e)),
+    };
+
+    sink.emit(RunEvent::Step { index: 3 });
+    stream_reply(&sink, &draft.reply);
+    sink.emit(RunEvent::Proposal { draft });
+    sink.emit(RunEvent::Done);
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::sync::{Arc, Mutex};
+
+    #[derive(Clone, Default)]
+    struct Collector(Arc<Mutex<Vec<RunEvent>>>);
+
+    impl Sink for Collector {
+        fn emit(&self, e: RunEvent) {
+            self.0.lock().unwrap().push(e);
+        }
+    }
+
+    impl Collector {
+        fn events(&self) -> Vec<RunEvent> {
+            self.0.lock().unwrap().clone()
+        }
+        fn codes(&self) -> Vec<String> {
+            self.events()
+                .into_iter()
+                .filter_map(|e| match e {
+                    RunEvent::Failed { code, .. } => Some(code),
+                    _ => None,
+                })
+                .collect()
+        }
+    }
+
+    struct FakeKeys(Option<&'static str>);
+
+    impl Keys for FakeKeys {
+        fn get(&self, provider: &str) -> crate::Result<String> {
+            self.0
+                .map(str::to_string)
+                .ok_or_else(|| Error::NoKey(provider.into()))
+        }
+    }
+
+    fn globals() -> HashMap<String, ModelRef> {
+        HashMap::from([(
+            "text".to_string(),
+            ModelRef { provider: "deepseek".into(), model: "deepseek-chat".into() },
+        )])
+    }
+
+    fn cfg(v: serde_json::Value) -> AgentConfig {
+        serde_json::from_value(v).unwrap()
+    }
+
+    fn input() -> OutlineInput {
+        OutlineInput { project: "猫".into(), idea: "".into(), act_count: 0, beat_count: 0 }
+    }
+
+    fn run_prepare(c: &AgentConfig, keys: FakeKeys) -> Collector {
+        let sink = Collector::default();
+        let g = globals();
+        let p = HashMap::new();
+        let i = input();
+        prepare(
+            &OutlineRun { cfg: c, fallback_preamble: "出厂", globals: &g, providers: &p, input: &i },
+            &sink,
+            &keys,
+        );
+        sink
+    }
+
+    #[test]
+    fn 配置有问题时不发请求_先发_step_再发_failed() {
+        let c = cfg(serde_json::json!({ "agentId": "writer", "enabled": false }));
+        let sink = run_prepare(&c, FakeKeys(Some("sk-x")));
+        assert_eq!(sink.events()[0], RunEvent::Step { index: 1 });
+        assert_eq!(sink.codes(), ["unknown_agent"]);
+    }
+
+    #[test]
+    fn 没配密钥时明确报_no_key_而不是让请求去撞未授权() {
+        let c = cfg(serde_json::json!({ "agentId": "writer" }));
+        let sink = run_prepare(&c, FakeKeys(None));
+        assert_eq!(sink.codes(), ["no_key"]);
+    }
+
+    #[test]
+    fn 没有模型时报_no_model_且不去取密钥() {
+        let c = cfg(serde_json::json!({ "agentId": "writer" }));
+        let sink = Collector::default();
+        let no_models: HashMap<String, ModelRef> = HashMap::new();
+        let no_providers: HashMap<String, ProviderSetting> = HashMap::new();
+        let i = input();
+        prepare(
+            &OutlineRun {
+                cfg: &c, fallback_preamble: "出厂",
+                globals: &no_models, providers: &no_providers, input: &i,
+            },
+            &sink,
+            // 取密钥就 panic：证明模型都没解析出来时不该碰钥匙串
+            &FakeKeys(None),
+        );
+        assert_eq!(sink.codes(), ["no_model"]);
+    }
+
+    #[test]
+    fn 解析通过时不发任何失败事件() {
+        let c = cfg(serde_json::json!({ "agentId": "writer" }));
+        let sink = run_prepare(&c, FakeKeys(Some("sk-x")));
+        assert!(sink.codes().is_empty());
+    }
+
+    #[test]
+    fn 正文按小块吐出_拼回去要和原文一致() {
+        let sink = Collector::default();
+        let text = "补在第二幕：那里只有一场，撑不住转折。";
+        stream_reply(&sink, text);
+        let joined: String = sink
+            .events()
+            .into_iter()
+            .filter_map(|e| match e {
+                RunEvent::Delta { text } => Some(text),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(joined, text, "流式切分不能吞字或串码");
+    }
+
+    #[test]
+    fn 事件序列化成前端认识的形状() {
+        let v = serde_json::to_value(RunEvent::Step { index: 2 }).unwrap();
+        assert_eq!(v["t"], "step");
+        assert_eq!(v["index"], 2);
+
+        let v = serde_json::to_value(RunEvent::Failed {
+            code: "no_key".into(),
+            message: "没有配置 DeepSeek 的密钥".into(),
+        })
+        .unwrap();
+        assert_eq!(v["t"], "failed");
+        assert_eq!(v["code"], "no_key");
+    }
+}

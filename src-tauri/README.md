@@ -51,6 +51,32 @@ npx tauri build   # 出三平台产物
 - OpenAI 兼容客户端：`openai::Client::builder().api_key(k).base_url(u).build()`。
   国内六家的文本接口都走这条；图片/视频是各家自有的异步任务接口，不进 Rig，作为 tool 挂上去。
 
+## 第一条打通的链路：起草大纲
+
+```
+技能卡「从一句灵感起草大纲」
+  └ api/agent.ts  isDesktop() ? IPC : 本地 mock
+      └ agent_outline_draft（app/：只转发，不放逻辑）
+          └ core::run::outline_draft   ← 编排在这里，能编能测
+              ├ agent::resolve         配置 → AgentSpec（错了就在花钱前报）
+              ├ vault_key              取密钥，不出这个函数
+              ├ outline::draft         Rig Extractor 填 schema，失败自动重试
+              └ RunEvent               step / delta / proposal / done / failed
+  └ 产物卡 → 采纳 → applyAgentPatch（一条撤销记录）
+```
+
+两个刻意的设计：
+
+**编排放 core 不放 tauri 层。** tauri 层在没有 GUI 系统库的机器上编译不了，
+把编排写那儿等于这段代码永远没被类型检查过。现在 `app/src/lib.rs` 85 行、5 个命令，
+每个都只做转发；编排在 `core::run`，用假 Sink 和假 Keys 测了 6 条。
+
+**失败走事件，不走 Result。** 否则前端要同时处理「Promise reject」和「事件里的错误」
+两条路径。常见失败在前端翻成人话：没配密钥就说去哪配，模型没按 schema 返回就直说。
+
+**场次编号由 Rust 补，不让模型编。** 模型编 id 会重复、会跳号、会和已有的撞 ——
+`outline::number` 是纯函数，三条测试盯着它（跨幕连续、接着已有编号、覆盖模型瞎写的）。
+
 ## 还没做
 
 - SQLite（项目、生成记录、成本流水）

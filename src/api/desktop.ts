@@ -46,3 +46,45 @@ export const vault = {
 export function maskHint(key: string): string {
   return [...key].length <= 8 ? '••••' : `••••${key.slice(-4)}`;
 }
+
+/* ---------------- Agent 运行 ---------------- */
+
+/** 与 Rust 侧 `studio_core::run::RunEvent` 同形 */
+export type RunEvent =
+  | { t: 'step'; index: number }
+  | { t: 'delta'; text: string }
+  | { t: 'proposal'; draft: OutlineDraft }
+  | { t: 'done' }
+  | { t: 'failed'; code: string; message: string };
+
+/** 与 Rust 侧 `outline::OutlineDraft` 同形；采纳时直接进项目树 */
+export interface OutlineDraft {
+  reply: string;
+  acts: { t: string; span: string; beats: { k: string; t: string }[] }[];
+}
+
+export interface OutlineInput {
+  project: string;
+  idea: string;
+  actCount: number;
+  beatCount: number;
+}
+
+export interface RunArgs {
+  cfg: unknown;
+  fallbackPreamble: string;
+  globals: unknown;
+  providers: unknown;
+  input: OutlineInput;
+}
+
+/**
+ * 起草大纲：桌面端走 IPC 流式通道。
+ * 浏览器里没有实现 —— 调用方应先用 `isDesktop()` 判断，走 mock 那条路。
+ */
+export async function outlineDraft(args: RunArgs, onEvent: (e: RunEvent) => void): Promise<void> {
+  const { invoke: call, Channel } = await import('@tauri-apps/api/core');
+  const ch = new Channel<RunEvent>();
+  ch.onmessage = onEvent;
+  await call('agent_outline_draft', { ...args, onEvent: ch });
+}
