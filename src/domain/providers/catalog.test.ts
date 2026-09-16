@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { BUILTIN_MODELS, PROVIDERS, defaultModel, findModel, modelsOfModality, providerOf } from './catalog';
-import { modelKey, parseModelKey } from './model';
+import { makeModel, modelKey, parseModelKey } from './model';
 
 describe('providers/catalog', () => {
   it('六家国内厂商 + 自定义端点都在', () => {
@@ -58,5 +58,61 @@ describe('providers/catalog', () => {
     expect(findModel({ provider: 'deepseek', model: '不存在' })).toBeUndefined();
     expect(parseModelKey('没有斜杠')).toBeUndefined();
     expect(providerOf('custom')!.userDefined).toBe(true);
+  });
+});
+
+describe('providers · 新增模型：表单 → ModelSpec', () => {
+  const caps = { stream: true, tools: true, refImage: true, vision: true };
+
+  it('类型决定协议族，不让用户选 —— 选错只会在发请求时才炸', () => {
+    expect(makeModel({ provider: 'deepseek', id: 'x', modality: 'text', caps }).protocol)
+      .toBe('openai-chat');
+    for (const m of ['image', 'video'] as const) {
+      expect(makeModel({ provider: 'deepseek', id: 'x', modality: m, caps }).protocol)
+        .toBe('async-task');
+    }
+  });
+
+  it('能力按类型过滤 —— 切过类型的表单里留着的上一类勾不能混进去', () => {
+    // 表单勾着文本那套，却按图片提交
+    const img = makeModel({ provider: 'volcengine', id: 'x', modality: 'image', caps });
+    expect(img.caps).toEqual({ refImage: true });
+    expect(img.caps.tools).toBeUndefined();
+
+    const txt = makeModel({ provider: 'volcengine', id: 'x', modality: 'text', caps });
+    expect(txt.caps).toEqual({ stream: true, tools: true, vision: true });
+    expect(txt.caps.refImage).toBeUndefined();
+  });
+
+  it('没勾的能力不写成 false，而是不出现 —— 与目录里的种子同形', () => {
+    const m = makeModel({ provider: 'deepseek', id: 'x', modality: 'text', caps: {} });
+    expect(m.caps).toEqual({});
+    expect('stream' in m.caps).toBe(false);
+  });
+
+  it('上下文按 K 换算，只有文本模型有', () => {
+    expect(makeModel({ provider: 'deepseek', id: 'x', modality: 'text', contextK: 64, caps }).context)
+      .toBe(65536);
+    expect(makeModel({ provider: 'deepseek', id: 'x', modality: 'image', contextK: 64, caps }).context)
+      .toBeUndefined();
+  });
+
+  it('上下文留空或填了非数字就不写这个字段，而不是写个 0 或 NaN', () => {
+    for (const v of [undefined, NaN, 0, -3]) {
+      expect(makeModel({ provider: 'deepseek', id: 'x', modality: 'text', contextK: v, caps }).context)
+        .toBeUndefined();
+    }
+  });
+
+  it('显示名留空就用 id；id 两边的空白修掉', () => {
+    const m = makeModel({ provider: 'deepseek', id: '  deepseek-chat  ', name: '  ', modality: 'text', caps });
+    expect(m.id).toBe('deepseek-chat');
+    expect(m.name).toBe('deepseek-chat');
+  });
+
+  it('自加的模型能被 findModel 查到，且盖过同 id 的内置项', () => {
+    const mine = makeModel({ provider: 'deepseek', id: 'deepseek-chat', name: '我改的名', modality: 'text', caps: {} });
+    const hit = findModel({ provider: 'deepseek', model: 'deepseek-chat' }, [mine]);
+    expect(hit?.name).toBe('我改的名');
   });
 });

@@ -21,6 +21,8 @@ import { SettingsPage, type SettingsSection } from '@/features/settings/Settings
 import { Rail } from '@/components/shell/Rail';
 import { SubNav } from '@/components/shell/SubNav';
 import { isAgentId } from '@/domain/agent/roster';
+import { providerOf } from '@/domain/providers/catalog';
+import type { ProviderId } from '@/domain/providers/model';
 import { SETTINGS_SUB, WORKBENCH_SUB, isValidSub, type SectionId } from '@/domain/nav';
 import { TokenGallery } from './routes/TokenGallery';
 
@@ -111,16 +113,19 @@ export function SettingsRoute() {
   useEffect(() => { setRoute('settings'); }, [setRoute]);
 
   const active = (isValidSub('settings', section ?? '') ? section! : 'models') as SettingsSection;
-  // 详情段只有智能体分区有；乱填的名字当没填，回列表而不是白屏
-  const agent = active === 'agents' && isAgentId(detail) ? detail : undefined;
+  // 详情段只有模型与智能体两个分区有；乱填的名字当没填，回列表而不是白屏
+  const valid = active === 'agents' ? isAgentId(detail)
+    : active === 'models' ? !!providerOf(detail as ProviderId)
+    : false;
+  const item = valid ? detail : undefined;
 
   return (
     <Shell section="settings"
       sub={{ title: '设置', items: SETTINGS_SUB, active }}
       onSub={(k) => navigate(`/settings/${k}`)}>
-      <SettingsPage section={active} detail={agent}
-        onOpenAgent={(id) => navigate(`/settings/agents/${id}`)}
-        onBack={() => navigate('/settings/agents')} />
+      <SettingsPage section={active} detail={item}
+        onOpen={(id) => navigate(`/settings/${active}/${id}`)}
+        onBack={() => navigate(`/settings/${active}`)} />
     </Shell>
   );
 }

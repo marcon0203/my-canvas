@@ -22,28 +22,10 @@ const ALL_INTENTS = Object.keys(INTENT_META) as Exclude<IntentKind, 'chat'>[];
  * 具体怎么配（提示词、模型、活儿、工具）进详情页，那儿是一位一屏，不用挤。
  */
 export function AgentList({ onOpen }: { onOpen: (id: AgentId) => void }) {
-  const globals = useEffectiveGlobals();
-  const setGlobal = useSettings((s) => s.setGlobalModel);
-
   return (
-    <>
-      <section className="pcard">
-        <header className="pcard__h">
-          <span className="pcard__n">全局默认模型</span>
-          <span className="t-cap dim">Agent 没单独指定时用这里的</span>
-        </header>
-        {(['text', 'image', 'video'] as Modality[]).map((m) => (
-          <label key={m} className="pcard__row">
-            <span className="pcard__k">{MODALITY_LABEL[m]}</span>
-            <ModelSelect modality={m} value={globals[m]} onChange={(ref) => setGlobal(m, ref)} allowInherit={false} />
-          </label>
-        ))}
-      </section>
-
-      <div className="agrid">
-        {PERSONAS.map((p) => <AgentTile key={p.id} id={p.id} onOpen={onOpen} />)}
-      </div>
-    </>
+    <div className="agrid">
+      {PERSONAS.map((p) => <AgentTile key={p.id} id={p.id} onOpen={onOpen} />)}
+    </div>
   );
 }
 
@@ -275,13 +257,18 @@ function Preamble({ id }: { id: AgentId }) {
   );
 }
 
-/** 模型下拉：按模态过滤，只列已接入厂商的（未接入的灰显带标记） */
-function ModelSelect({ modality, value, inherited, onChange, allowInherit = true }: {
+/**
+ * 模型下拉：按模态过滤，只列已接入厂商的（未接入的灰显带标记）。
+ *
+ * 缺省项是「自动」而不是「跟随全局」—— 全局默认模型那一栏已经去掉，
+ * 不选时就按已接入的厂商挑一个，没有一个需要人去维护的全局值。
+ */
+function ModelSelect({ modality, value, inherited, onChange }: {
   modality: Modality;
   value: ModelRef | undefined;
+  /** 不选时实际会用哪个，摆出来省得人猜 */
   inherited?: ModelRef;
   onChange: (ref: ModelRef | undefined) => void;
-  allowInherit?: boolean;
 }) {
   const extra = useExtraModels();
   const ready = new Set<string>(useReadyProviders());
@@ -290,9 +277,7 @@ function ModelSelect({ modality, value, inherited, onChange, allowInherit = true
   const inheritedSpec = inherited ? findModel(inherited, extra) : undefined;
 
   const options = [
-    ...(allowInherit
-      ? [{ value: '', label: inheritedSpec ? `跟随全局 · ${inheritedSpec.name}` : '跟随全局（未设置）' }]
-      : [{ value: '', label: '未设置' }]),
+    { value: '', label: inheritedSpec ? `自动 · ${inheritedSpec.name}` : '自动（还没有可用模型）' },
     ...list.map((m) => ({
       value: modelKey({ provider: m.provider, model: m.id }),
       label: `${m.name}${ready.has(m.provider) ? '' : '（未接入）'}`,

@@ -1,11 +1,13 @@
 import { useEffect } from 'react';
 import { StageBar } from '@/components/StageBar';
 import { Button, Chip, Icon } from '@/ui';
-import { ProviderSettings } from './ProviderSettings';
+import { ProviderDetail, ProviderList } from './ProviderSettings';
 import { AgentDetail, AgentList } from './AgentSettings';
 import { SkillSettings } from './SkillSettings';
 import { SETTINGS_SUB } from '@/domain/nav';
 import { personaById, type AgentId } from '@/domain/agent/roster';
+import { providerOf } from '@/domain/providers/catalog';
+import type { ProviderId } from '@/domain/providers/model';
 import { useReadyProviders, useSettings } from '@/store/settings';
 import { isDesktop } from '@/api/desktop';
 
@@ -19,13 +21,14 @@ const TITLE: Record<SettingsSection, string> = {
 
 /**
  * 设置：二级菜单选分区，这里只渲染当前分区。
- * `detail` 有值时是分区内的详情页（目前只有智能体），标题栏换成「返回 + 这位是谁」。
+ * `detail` 有值时是分区内的详情页（供应商 / 智能体），标题栏换成「返回 + 这是谁」。
  */
-export function SettingsPage({ section, detail, onOpenAgent, onBack }: {
+export function SettingsPage({ section, detail, onOpen, onBack }: {
   section: SettingsSection;
-  detail?: AgentId;
+  /** 分区内的详情对象：智能体分区是 AgentId，模型分区是 ProviderId */
+  detail?: string;
   /** 列表里点一张卡 → 进详情。导航靠 URL，刷新和后退都对 */
-  onOpenAgent: (id: AgentId) => void;
+  onOpen: (id: string) => void;
   onBack: () => void;
 }) {
   const ready = useReadyProviders();
@@ -34,7 +37,8 @@ export function SettingsPage({ section, detail, onOpenAgent, onBack }: {
   useEffect(() => { syncKeys(); }, [syncKeys]);
 
   const hint = SETTINGS_SUB.find((s) => s.k === section)?.hint;
-  const p = detail ? personaById(detail) : undefined;
+  const p = section === 'agents' && detail ? personaById(detail as AgentId) : undefined;
+  const prov = section === 'models' && detail ? providerOf(detail as ProviderId) : undefined;
 
   return (
     <div className="stage">
@@ -48,7 +52,13 @@ export function SettingsPage({ section, detail, onOpenAgent, onBack }: {
             </span>
           }
           pills={<span className="t-cap dim">{p.tagline}</span>}
-          actions={<Button onClick={onBack}><Icon name="undo" />返回智能体</Button>}
+          actions={<Button onClick={onBack}><Icon name="left" />返回智能体</Button>}
+        />
+      ) : prov ? (
+        <StageBar
+          title={<span className="crumb">{prov.name}<span className="crumb__en">{prov.en}</span></span>}
+          pills={<span className="t-cap dim">端点、密钥与模型清单</span>}
+          actions={<Button onClick={onBack}><Icon name="left" />返回供应商</Button>}
         />
       ) : (
         <StageBar
@@ -59,12 +69,14 @@ export function SettingsPage({ section, detail, onOpenAgent, onBack }: {
         />
       )}
       <div className="stage__body"><div className="pad" style={{ maxWidth: 1080 }}>
-        {section === 'models' && <ProviderSettings />}
+        {section === 'models' && (prov
+          ? <ProviderDetail id={prov.id} />
+          : <ProviderList onOpen={onOpen} />)}
         {section === 'skills' && <SkillSettings />}
         {section === 'agents' && (p
           ? <AgentDetail id={p.id} />
-          : <AgentList onOpen={onOpenAgent} />)}
-        {!p && (
+          : <AgentList onOpen={onOpen} />)}
+        {!p && !prov && (
           <p className="t-cap dim setnote">
             <Icon name="bolt" />
             这是**应用级**设置，跨项目共用 —— 模型与 Agent 的配置不属于某一个项目。
