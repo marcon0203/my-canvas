@@ -203,6 +203,125 @@ impl SkillStore {
     }
 }
 
+/* ---------------- 导入 ---------------- */
+
+/// 一次导入最多带多少个文件、多大。
+///
+/// 不是为了省磁盘，是为了挡住「选错了目录」：用户很容易把整个项目文件夹、
+/// 甚至家目录选进来。超了就停下来问，而不是默默复制两万个文件。
+pub const MAX_FILES: usize = 200;
+pub const MAX_BYTES: u64 = 8 * 1024 * 1024;
+
+/// 把一个目录导入成用户 Skill：校验 → 复制到 `<workspace>/skills/<名字>`。
+///
+/// 为什么要复制而不是记一个路径：Skill 的正文和附件在每次运行时都要读，
+/// 指向用户桌面上某个临时文件夹的话，文件夹一挪、一删，Agent 就少一段指令，
+/// 而且没人知道是什么时候开始少的。
+///
+/// 名字取 frontmatter 的 `name`，不是源目录名 —— 目录叫什么无所谓，
+/// 加载时认的是 `name`（同名会盖掉内置的那个，这一点要在界面上说清）。
+pub fn import_dir(skills_dir: &Path, src: &Path) -> Result<SkillMeta> {
+    if !src.is_dir() {
+        return Err(Error::Skill(format!("{} 不是一个目录", src.display())));
+    }
+    let md = src.join("SKILL.md");
+    if !md.is_file() {
+        return Err(Error::Skill(
+            "这个目录里没有 SKILL.md。一个 Skill 至少要有这个文件，里面写清它叫什么、什么时候用".into(),
+        ));
+    }
+    let text = fs::read_to_string(&md).map_err(|e| Error::Skill(format!("读 SKILL.md 失败：{e}")))?;
+    let meta = parse_meta(src, "用户", &text).map_err(Error::Skill)?;
+
+    // 先数一遍再复制：复制到一半发现太大，留下的是半个 skill
+    let (files, bytes) = measure(src)?;
+    if files > MAX_FILES || bytes > MAX_BYTES {
+        return Err(Error::Skill(format!(
+            "这个目录有 {files} 个文件、{:.1} MB，超出单个 Skill 的上限（{MAX_FILES} 个文件、{} MB）。是不是选错了目录？",
+            bytes as f64 / 1024.0 / 1024.0,
+            MAX_BYTES / 1024 / 1024
+        )));
+    }
+
+    let name = studio_doc::md::safe_name(&meta.name);
+    if name.is_empty() {
+        return Err(Error::Skill(format!("名字「{}」不能当目录名", meta.name)));
+    }
+    let dest = skills_dir.join(&name);
+
+    // 源在目标里面（比如直接选了 skills/xxx 自己）：复制会无限套娃
+    if let (Ok(s), Ok(d)) = (src.canonicalize(), skills_dir.canonicalize()) {
+        if s.starts_with(&d) {
+            return Err(Error::Skill(
+                "这个目录已经在 skills 里了，不用导入。改完文件直接刷新就生效".into(),
+            ));
+        }
+    }
+    if dest.exists() {
+        return Err(Error::Skill(format!(
+            "已经有一个叫「{}」的 Skill 了。先把它删掉或改个名字，再导入",
+            meta.name
+        )));
+    }
+
+    copy_tree(src, &dest).map_err(|e| {
+        // 复制失败就把半个目录清掉，别留下一个坏 skill
+        let _ = fs::remove_dir_all(&dest);
+        Error::Skill(format!("复制失败：{e}"))
+    })?;
+
+    let mut out = meta;
+    out.dir = dest;
+    Ok(out)
+}
+
+/// 数文件个数与总字节。跟随子目录，不跟随符号链接
+fn measure(dir: &Path) -> Result<(usize, u64)> {
+    let mut files = 0usize;
+    let mut bytes = 0u64;
+    let mut stack = vec![dir.to_path_buf()];
+    while let Some(d) = stack.pop() {
+        let entries = fs::read_dir(&d).map_err(|e| Error::Skill(format!("读 {} 失败：{e}", d.display())))?;
+        for e in entries.flatten() {
+            let p = e.path();
+            let Ok(md) = e.metadata() else { continue };
+            if md.is_symlink() {
+                continue;
+            }
+            if md.is_dir() {
+                stack.push(p);
+            } else {
+                files += 1;
+                bytes += md.len();
+                if files > MAX_FILES || bytes > MAX_BYTES {
+                    return Ok((files, bytes));   // 超了就不用数完
+                }
+            }
+        }
+    }
+    Ok((files, bytes))
+}
+
+/// 递归复制。**跳过符号链接**：一个指向家目录的链接会把无关文件复制进来
+fn copy_tree(src: &Path, dest: &Path) -> std::io::Result<()> {
+    fs::create_dir_all(dest)?;
+    for e in fs::read_dir(src)?.flatten() {
+        let from = e.path();
+        let md = e.metadata()?;
+        if md.is_symlink() {
+            continue;
+        }
+        let Some(name) = from.file_name() else { continue };
+        let to = dest.join(name);
+        if md.is_dir() {
+            copy_tree(&from, &to)?;
+        } else {
+            fs::copy(&from, &to)?;
+        }
+    }
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -395,5 +514,135 @@ mod compose_tests {
     fn 没有_skill_时就是原来的人格_一个字不多() {
         assert_eq!(compose_preamble("你是编剧。", "", None), "你是编剧。");
         assert_eq!(compose_preamble("你是编剧。", "  \n ", Some("  ")), "你是编剧。");
+    }
+}
+
+#[cfg(test)]
+mod import_tests {
+    use super::*;
+    use tempfile::TempDir;
+
+    fn skill_src(root: &Path, dirname: &str, front: &str) -> PathBuf {
+        let d = root.join(dirname);
+        fs::create_dir_all(d.join("references")).unwrap();
+        fs::write(d.join("SKILL.md"), format!("---\n{front}\n---\n\n正文\n")).unwrap();
+        fs::write(d.join("references/词表.md"), "# 词表").unwrap();
+        d
+    }
+
+    #[test]
+    fn 导入后按_frontmatter_的名字落地_不是源目录名() {
+        let tmp = TempDir::new().unwrap();
+        let skills = tmp.path().join("skills");
+        fs::create_dir_all(&skills).unwrap();
+        let src = skill_src(tmp.path(), "随便起的文件夹名", "name: write-ad-copy\ndescription: 写广告文案");
+
+        let meta = import_dir(&skills, &src).unwrap();
+        assert_eq!(meta.name, "write-ad-copy");
+        assert!(skills.join("write-ad-copy/SKILL.md").is_file());
+        assert!(skills.join("write-ad-copy/references/词表.md").is_file(), "附件要一起带过来");
+        assert_eq!(meta.source, "用户");
+        assert!(meta.has_references);
+    }
+
+    #[test]
+    fn 导入之后扫得到_这才叫真的生效() {
+        let tmp = TempDir::new().unwrap();
+        let skills = tmp.path().join("skills");
+        fs::create_dir_all(&skills).unwrap();
+        let src = skill_src(tmp.path(), "src", "name: my-skill\ndescription: 我的");
+        import_dir(&skills, &src).unwrap();
+
+        let store = SkillStore::scan(&[Root { name: "用户".into(), path: skills }]);
+        assert!(store.get("my-skill").is_some(), "导入完却扫不到，等于没导入");
+    }
+
+    #[test]
+    fn 没有_skill_md_的目录说清缺什么() {
+        let tmp = TempDir::new().unwrap();
+        let skills = tmp.path().join("skills");
+        fs::create_dir_all(&skills).unwrap();
+        let bare = tmp.path().join("空目录");
+        fs::create_dir_all(&bare).unwrap();
+        let e = import_dir(&skills, &bare).unwrap_err();
+        assert!(e.to_string().contains("SKILL.md"), "{e}");
+    }
+
+    #[test]
+    fn frontmatter_坏了不导入_而不是导入一个坏的() {
+        let tmp = TempDir::new().unwrap();
+        let skills = tmp.path().join("skills");
+        fs::create_dir_all(&skills).unwrap();
+        let src = skill_src(tmp.path(), "src", "name: x");          // 没有 description
+        let e = import_dir(&skills, &src).unwrap_err();
+        assert!(e.to_string().contains("description"), "{e}");
+        assert!(!skills.join("x").exists(), "校验没过就不该留下目录");
+    }
+
+    #[test]
+    fn 同名的不覆盖_先让人自己处理() {
+        let tmp = TempDir::new().unwrap();
+        let skills = tmp.path().join("skills");
+        fs::create_dir_all(&skills).unwrap();
+        let src = skill_src(tmp.path(), "a", "name: dup\ndescription: 第一个");
+        import_dir(&skills, &src).unwrap();
+
+        let src2 = skill_src(tmp.path(), "b", "name: dup\ndescription: 第二个");
+        let e = import_dir(&skills, &src2).unwrap_err();
+        assert!(e.to_string().contains("已经有"), "{e}");
+        // 原来那个不能被动过
+        let text = fs::read_to_string(skills.join("dup/SKILL.md")).unwrap();
+        assert!(text.contains("第一个"));
+    }
+
+    #[test]
+    fn 选了_skills_里面的目录时说不用导入() {
+        let tmp = TempDir::new().unwrap();
+        let skills = tmp.path().join("skills");
+        fs::create_dir_all(&skills).unwrap();
+        let inside = skill_src(&skills, "已经在里面", "name: inner\ndescription: d");
+        let e = import_dir(&skills, &inside).unwrap_err();
+        assert!(e.to_string().contains("已经在 skills 里"), "{e}");
+    }
+
+    #[test]
+    fn 文件太多时停下来问_是不是选错了目录() {
+        let tmp = TempDir::new().unwrap();
+        let skills = tmp.path().join("skills");
+        fs::create_dir_all(&skills).unwrap();
+        let src = skill_src(tmp.path(), "巨大目录", "name: big\ndescription: d");
+        for i in 0..(MAX_FILES + 5) {
+            fs::write(src.join(format!("f{i}.txt")), "x").unwrap();
+        }
+        let e = import_dir(&skills, &src).unwrap_err();
+        assert!(e.to_string().contains("选错了目录"), "{e}");
+        assert!(!skills.join("big").exists());
+    }
+
+    #[test]
+    fn 符号链接不跟随_否则一个指向家目录的链接会把无关文件带进来() {
+        let tmp = TempDir::new().unwrap();
+        let skills = tmp.path().join("skills");
+        fs::create_dir_all(&skills).unwrap();
+        let src = skill_src(tmp.path(), "src", "name: lnk\ndescription: d");
+        let outside = tmp.path().join("别的地方");
+        fs::create_dir_all(&outside).unwrap();
+        fs::write(outside.join("秘密.txt"), "不该被复制").unwrap();
+        #[cfg(unix)]
+        std::os::unix::fs::symlink(&outside, src.join("链接")).unwrap();
+
+        import_dir(&skills, &src).unwrap();
+        assert!(!skills.join("lnk/链接").exists(), "跟着链接复制了");
+    }
+
+    #[test]
+    fn 名字里有路径分隔符时不落地() {
+        let tmp = TempDir::new().unwrap();
+        let skills = tmp.path().join("skills");
+        fs::create_dir_all(&skills).unwrap();
+        let src = skill_src(tmp.path(), "src", "name: ../../跑出去\ndescription: d");
+        let meta = import_dir(&skills, &src).unwrap();
+        // safe_name 把分隔符换掉，落点仍在 skills 里面
+        assert!(meta.dir.starts_with(&skills), "{:?}", meta.dir);
     }
 }

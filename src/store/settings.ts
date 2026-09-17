@@ -3,6 +3,7 @@ import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import type { AgentConfig } from '@/domain/agent/config';
 import { defaultConfig, defaultConfigs } from '@/domain/agent/config';
+import { missingTools, type ToolId } from '@/domain/agent/tools';
 import type { AgentId } from '@/domain/agent/roster';
 import { personaById } from '@/domain/agent/roster';
 import type { Modality, ModelRef, ModelSpec, ProviderId } from '@/domain/providers/model';
@@ -163,11 +164,28 @@ export const useSettings = create<SettingsState>()(
     }),
     {
       name: 'studio.settings',
-      version: 1,
-      // 旧版本可能缺 agent 字段（班底加人了）—— 补上默认值，不整份丢弃
+      version: 2,
+      /**
+       * 存过的配置要能跟上代码的变化。
+       *
+       * 两种情况：
+       * - **班底加人了**：存的那份里缺某个 agent → 补默认值，不整份丢弃。
+       * - **某件活儿需要的工具变了**：比如「按节拍自动成片」以前要 file.export，
+       *   后来改成 shot.write。存的那份里还是旧工具，于是这位 agent 接不了它
+       *   认领的活儿，界面上就变成「没人接」。这不是用户的选择，是配置过期了，
+       *   所以把缺的工具补回去。
+       *
+       * 补工具只补**它自己认领的活儿**要用的那些，不会顺带给它别的能力。
+       */
       merge: (persisted, current) => {
         const p = (persisted ?? {}) as Partial<SettingsState>;
-        return { ...current, ...p, agents: { ...defaultConfigs(), ...(p.agents ?? {}) } };
+        const agents = { ...defaultConfigs(), ...(p.agents ?? {}) };
+        for (const [id, cfg] of Object.entries(agents) as [AgentId, AgentConfig][]) {
+          const need = new Set<ToolId>(cfg.tools);
+          for (const kind of cfg.skills) for (const t of missingTools(cfg.tools, kind)) need.add(t);
+          if (need.size !== cfg.tools.length) agents[id] = { ...cfg, tools: [...need] };
+        }
+        return { ...current, ...p, agents };
       },
     },
   ),

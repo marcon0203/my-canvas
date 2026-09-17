@@ -52,7 +52,7 @@ export const AUTONOMY_LABEL: Record<Autonomy, string> = {
 };
 
 export const AUTONOMY_HINT: Record<Autonomy, string> = {
-  propose: '出计划和产物，等你点采纳才写进项目',
+  propose: '先给结果，你点采纳才写进项目',
   auto: '能干的自己干完，只在要花钱或动定稿资产时停下来问',
 };
 
@@ -124,7 +124,7 @@ export function checkConfig(
   const out: ConfigIssue[] = [];
   const p = personaById(cfg.agentId);
 
-  if (!cfg.enabled) return [{ level: 'warn', text: `${p.name}已停用，它的活儿不会有人接` }];
+  if (!cfg.enabled) return [{ level: 'warn', text: `${p.name}已停用，它负责的功能没人做` }];
 
   // 技能缺工具
   for (const k of cfg.skills) {

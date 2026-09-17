@@ -68,7 +68,7 @@ function AgentTile({ id, onOpen }: { id: AgentId; onOpen: (id: AgentId) => void 
         </header>
         <p className="atile__tag">{p.tagline}</p>
         <dl className="atile__stats">
-          <div><dt>活儿</dt><dd>{cfg.skills.length}</dd></div>
+          <div><dt>功能</dt><dd>{cfg.skills.length}</dd></div>
           <div><dt>工具</dt><dd>{cfg.tools.length}</dd></div>
           <div><dt>自主度</dt><dd>{AUTONOMY_LABEL[cfg.autonomy]}</dd></div>
         </dl>
@@ -80,7 +80,7 @@ function AgentTile({ id, onOpen }: { id: AgentId; onOpen: (id: AgentId) => void 
         </p>
         <p className={`atile__st${errs ? ' atile__st--bad' : ''}`}>
           {!cfg.enabled
-            ? '已停用，它的活儿不会有人接'
+            ? '已停用，它负责的功能没人做'
             : errs
               ? `${errs} 个问题要处理`
               : issues.length

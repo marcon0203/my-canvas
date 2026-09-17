@@ -127,7 +127,7 @@ export function AssetInspector({ asset, view }: { asset: Asset; view: AssetView 
               toast(`${asset.name} · ${view.name} 已生成（第 ${view.redo + 1} 次）`);
             }}
             cost={2}
-            hint="改这条会脱管；不改则跟着下面的画风与镜头语言走。⌘/Ctrl + Enter 直接运行。"
+            hint="改了就按你写的用，不再跟着下面的画风与镜头语言变。⌘/Ctrl + Enter 直接运行。"
             params={<>
               <Popover align="start" className="stypop"
                 trigger={() => <ParamChip label="画风" value={view.style === '全局' ? `全局 · ${projectStyle}` : view.style} pick

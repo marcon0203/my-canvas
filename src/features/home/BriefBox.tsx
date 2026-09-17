@@ -154,7 +154,7 @@ export function BriefBox() {
             <span key={s.kind} className="t-cap dim">跳过「{s.name}」—— {s.why}</span>
           ))}
           <span className="t-cap dim">
-            每一步出产物等你点头再往下走。想让它自己跑完，去设置 → 智能体管理把自主度改成「自主执行」。
+            每一步都等你确认再往下走。想让它自己跑完，去设置 → 智能体管理把自主度改成「自主执行」。
           </span>
         </div>
       )}

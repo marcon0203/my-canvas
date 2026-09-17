@@ -1,6 +1,9 @@
 import { useEffect, useState } from 'react';
-import { Chip, Icon, Select } from '@/ui';
-import { isDesktop, skillBody, skillsList, type SkillList as SkillList_ } from '@/api/desktop';
+import { Button, Chip, Icon, Input, Select } from '@/ui';
+import {
+  isDesktop, skillBody, skillImport, skillsDir, skillsList, skillsReveal,
+  type SkillList as SkillList_,
+} from '@/api/desktop';
 import { SKILL_FOR_INTENT } from '@/api/agent';
 import type { SkillMeta } from '@/domain/skills/loader';
 import { INTENT_META, PERSONAS, personaById } from '@/domain/agent/roster';
@@ -15,7 +18,7 @@ import { useSettings } from '@/store/settings';
 import { useUi } from '@/store/ui';
 import { Field, Fields } from './Field';
 
-/** 换归属：从旧主人那儿摘掉，给新主人补上技能与所需工具 */
+/** 换负责人：从原来那位身上摘掉，给新的一位补上这个功能与它需要的工具 */
 function useReassign() {
   const agents = useSettings((s) => s.agents);
   const patch = useSettings((s) => s.patchAgent);
@@ -34,7 +37,9 @@ function useReassign() {
         patch(p.id, { skills: cur.skills.filter((x) => x !== kind) });
       }
     }
-    toast(to ? `「${INTENT_META[kind].name}」已归${personaById(to).name}` : `「${INTENT_META[kind].name}」暂时没人接`);
+    toast(to
+      ? `「${INTENT_META[kind].name}」交给${personaById(to).name}`
+      : `「${INTENT_META[kind].name}」暂时没有负责人，用户提到时会被告知做不了`);
   };
 }
 
@@ -42,10 +47,10 @@ function OwnerSelect({ kind }: { kind: SkillId }) {
   const agents = useSettings((s) => s.agents);
   const reassign = useReassign();
   return (
-    <Select ariaLabel={`${INTENT_META[kind].name} 的归属`}
+    <Select ariaLabel={`${INTENT_META[kind].name} 由谁负责`}
       value={ownerOfConfigured(kind, agents) ?? ''}
       options={[
-        { value: '', label: '没人接' },
+        { value: '', label: '无人负责' },
         ...PERSONAS.map((p) => ({ value: p.id, label: p.name })),
       ]}
       onChange={(v) => reassign(kind, v as AgentId | '')} />
@@ -53,15 +58,16 @@ function OwnerSelect({ kind }: { kind: SkillId }) {
 }
 
 /**
- * Skill 管理 · 列表页。从**活儿**的角度看分工，而不是从 Agent 的角度。
+ * Skill 管理 · 列表页。按**功能**看分工，不是按智能体看。
  *
- * 智能体管理页回答「这位 Agent 能干什么」；这页回答「这件活归谁、有没有人接」。
- * 一件活没人接是真问题，从 Agent 那边一个个翻很难发现。
+ * 智能体管理页回答「这位智能体能做什么」；这页回答「这个功能由谁负责、
+ * 有没有人负责」。一个功能没有负责人是真问题，从智能体那边一个个翻很难发现。
  */
 export function SkillList({ onOpen }: { onOpen: (id: string) => void }) {
   const agents = useSettings((s) => s.agents);
   const [loaded, setLoaded] = useState<SkillList_ | null>(null);
   const workspace = useSettings((s) => s.workspace);
+  const reload = () => { void skillsList(workspace).then(setLoaded); };
   useEffect(() => { void skillsList(workspace).then(setLoaded); }, [workspace]);
 
   const orphans = SKILLS.filter((s) => !ownerOfConfigured(s.id, agents));
@@ -71,14 +77,14 @@ export function SkillList({ onOpen }: { onOpen: (id: string) => void }) {
     <>
       <section className="pcard">
         <header className="pcard__h">
-          <span className="pcard__n">已装载的 Skill · {loaded?.skills.length ?? 0}</span>
+          <span className="pcard__n">已安装 · {loaded?.skills.length ?? 0}</span>
           <span className="t-cap dim">
-            {isDesktop() ? '扫描内置目录与用户目录' : '浏览器里没有文件系统，只能看到内置的'}
+            {isDesktop() ? '内置的 + 你自己放进去的' : '浏览器里没有文件系统，只能看到内置的'}
           </span>
         </header>
         <p className="skdesc dim">
-          一个 Skill 是一个目录，放进工作空间的 <span className="mono">skills/</span> 就生效，
-          同名的盖过内置。
+          Skill 是一份写给智能体的操作说明。放进 <span className="mono">skills/</span> 目录就生效；
+          和内置同名时，用你的那份。
         </p>
         {loaded?.skills.length
           ? (
@@ -107,19 +113,24 @@ export function SkillList({ onOpen }: { onOpen: (id: string) => void }) {
               ))}
             </div>
           )
-          : <p className="t-cap dim" style={{ margin: 0 }}>还没有装载任何 Skill。</p>}
+          : <p className="t-cap dim" style={{ margin: 0 }}>还没有安装任何 Skill。</p>}
       </section>
+
+      <AddSkill onAdded={reload} />
 
       {!!loaded?.warnings.length && (
         <section className="pcard pcard--warn">
           <header className="pcard__h">
             <Icon name="bolt" />
-            <span className="pcard__n">{loaded.warnings.length} 个目录没被当成 Skill</span>
+            <span className="pcard__n">{loaded.warnings.length} 个目录没能识别</span>
           </header>
+          <p className="skdesc dim" style={{ marginTop: 0 }}>
+            这些目录在 skills 里，但不是有效的 Skill，所以没有加载：
+          </p>
           <ul className="issues">
             {loaded.warnings.map((w) => (
               <li key={w.dir} className="issue issue--warn">
-                <Icon name="x" /><span className="mono">{w.dir}</span> —— {w.reason}
+                <Icon name="x" /><span className="mono">{w.dir}</span>：{w.reason}
               </li>
             ))}
           </ul>
@@ -130,25 +141,26 @@ export function SkillList({ onOpen }: { onOpen: (id: string) => void }) {
         <section className="pcard pcard--warn">
           <header className="pcard__h">
             <Icon name="bolt" />
-            <span className="pcard__n">{orphans.length} 件活儿没人接</span>
+            <span className="pcard__n">{orphans.length} 个功能没有负责人</span>
           </header>
-          <p className="t-cap dim" style={{ margin: 0, lineHeight: 1.8 }}>
-            {orphans.map((s) => s.name).join('、')}
-            —— 用户提到这些需求时 Agent 会明说「没人接」，而不是硬着头皮做。
+          <p className="skdesc" style={{ margin: 0 }}>
+            <b>{orphans.map((s) => s.name).join('、')}</b>
+            ：现在谁都不会做。用户要求时会被告知做不了。
+            在下面表格最右边的「负责人」里选一位即可。
           </p>
         </section>
       )}
 
       <section className="pcard">
         <header className="pcard__h">
-          <span className="pcard__n">内置能力 · {SKILLS.length}</span>
+          <span className="pcard__n">功能清单 · {SKILLS.length}</span>
           <span className="t-cap dim">
-            {migrated.size} 件已经有 SKILL.md，其余还是写死在代码里的逻辑
+            其中 {migrated.size} 个的做法写在 Skill 文件里，可以改；其余内置在程序里
           </span>
         </header>
         <div className="sktable">
           <div className="skhead">
-            <span /><span>活儿</span><span>产出</span><span>Skill</span><span>归属</span>
+            <span /><span>功能</span><span>结果写到</span><span>做法</span><span>负责人</span>
           </div>
           {SKILLS.map((s) => {
             const owner = ownerOfConfigured(s.id, agents);
@@ -157,7 +169,7 @@ export function SkillList({ onOpen }: { onOpen: (id: string) => void }) {
               <div key={s.id} className={`skrow${owner ? '' : ' skrow--orphan'}`}>
                 <span className="skrow__ic"><Icon name={s.icon} /></span>
                 <button className="skrow__main" onClick={() => onOpen(s.id)}
-                  title="查看这件活的触发词、前置条件与产出">
+                  title="查看它在什么情况下触发、需要什么前置条件、结果写到哪儿">
                   <span className="skrow__n">{s.name}</span>
                   <span className="mono dim skrow__k">{s.id}</span>
                 </button>
@@ -165,7 +177,7 @@ export function SkillList({ onOpen }: { onOpen: (id: string) => void }) {
                 <span>
                   {skill
                     ? <Chip tone="ok">{skill}</Chip>
-                    : <span className="t-cap dim">还没有</span>}
+                    : <span className="t-cap dim">内置</span>}
                 </span>
                 <span className="skrow__own"><OwnerSelect kind={s.id} /></span>
               </div>
@@ -177,7 +189,89 @@ export function SkillList({ onOpen }: { onOpen: (id: string) => void }) {
   );
 }
 
-/** 真 Skill 的详情：正文（第 2 级）与附件（第 3 级）都在点进来之后才读 */
+/**
+ * 添加自己的 Skill。
+ *
+ * 做成「填目录路径 + 导入」而不是系统文件选择框：选择框要再装一个 Tauri 插件，
+ * 而这一步不常做，路径粘贴够用。导入会把整个目录**复制**进工作空间 ——
+ * 指向桌面上某个临时文件夹的话，文件夹一挪，智能体就少一段说明，
+ * 而且不知道是什么时候开始少的。
+ */
+function AddSkill({ onAdded }: { onAdded: () => void }) {
+  const workspace = useSettings((s) => s.workspace);
+  const toast = useUi((s) => s.toast);
+  const [dir, setDir] = useState('');
+  const [path, setPath] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState('');
+
+  useEffect(() => { void skillsDir(workspace).then(setDir); }, [workspace]);
+
+  const submit = async () => {
+    const v = path.trim();
+    if (!v) { setErr('先填一个目录路径'); return; }
+    setBusy(true); setErr('');
+    try {
+      const meta = await skillImport(v, workspace);
+      setPath('');
+      toast(`已添加「${meta.name}」，现在就能用`);
+      onAdded();
+    } catch (e) {
+      // 失败原因都是可操作的（没有 SKILL.md、同名、选错目录），原话给人看
+      setErr(String((e as { message?: string })?.message ?? e));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <section className="pcard">
+      <header className="pcard__h">
+        <span className="pcard__n">添加自己的 Skill</span>
+        <div className="spacer" />
+        {isDesktop() && (
+          <Button onClick={() => {
+            void skillsReveal(workspace).catch((e: unknown) =>
+              toast(String((e as { message?: string })?.message ?? e)));
+          }}>
+            <Icon name="home" />打开目录
+          </Button>
+        )}
+      </header>
+
+      <p className="skdesc dim" style={{ marginTop: 0 }}>
+        一个 Skill 就是一个文件夹，里面必须有一个 <span className="mono">SKILL.md</span>：
+        开头写它叫什么、什么时候用，下面写做法。可以另带
+        <span className="mono"> references/</span>（资料）和
+        <span className="mono"> scripts/</span>（脚本）。
+      </p>
+
+      <Fields>
+        <Field label="放在哪儿" hint="也可以直接把文件夹拷进这个目录，效果一样">
+          <span className="skplain mono">{dir || '读取中…'}</span>
+        </Field>
+        <Field label="从别处导入"
+          hint={isDesktop()
+            ? '填文件夹的完整路径，导入时会复制一份进上面那个目录'
+            : '浏览器里没有文件系统，这一步要在桌面端做'}>
+          <Input value={path} placeholder="例如 /Users/me/我的skill/write-ad-copy"
+            disabled={!isDesktop() || busy}
+            onChange={(e) => { setPath(e.target.value); setErr(''); }}
+            onKeyDown={(e) => { if (e.key === 'Enter') void submit(); }} />
+          <Button variant="primary" disabled={!isDesktop() || busy} onClick={() => void submit()}>
+            <Icon name="check" />{busy ? '导入中' : '导入'}
+          </Button>
+        </Field>
+      </Fields>
+
+      {err && (
+        <p className="skdesc" style={{ color: 'var(--color-warning)', marginBottom: 0 }}>{err}</p>
+      )}
+    </section>
+  );
+}
+
+/** 一个 Skill 文件的详情。操作说明与附带文件都是点进来才读，不常驻 */
 export function SkillFileDetail({ name }: { name: string }) {
   const [meta, setMeta] = useState<SkillMeta | null>(null);
   const [body, setBody] = useState<string | null>(null);
@@ -192,8 +286,8 @@ export function SkillFileDetail({ name }: { name: string }) {
     <>
       <section className="pcard">
         <header className="pcard__h">
-          <span className="pcard__n">description</span>
-          <span className="t-cap dim">常驻在上下文里的就这一句，模型靠它决定用不用</span>
+          <span className="pcard__n">什么时候用它</span>
+          <span className="t-cap dim">智能体只凭这一句判断要不要用这个 Skill</span>
           <div className="spacer" />
           {meta && <Chip>{meta.source}</Chip>}
         </header>
@@ -203,8 +297,8 @@ export function SkillFileDetail({ name }: { name: string }) {
 
       <section className="pcard">
         <header className="pcard__h">
-          <span className="pcard__n">SKILL.md 正文</span>
-          <span className="t-cap dim">第 2 级：轮到这个 skill 时才读进上下文</span>
+          <span className="pcard__n">操作说明</span>
+          <span className="t-cap dim">真用到它的那一轮才会读进去</span>
         </header>
         <pre className="skbody">{body ?? '读取中…'}</pre>
       </section>
@@ -212,8 +306,8 @@ export function SkillFileDetail({ name }: { name: string }) {
       {meta && (meta.hasReferences || meta.hasScripts || meta.hasAssets) && (
         <section className="pcard">
           <header className="pcard__h">
-            <span className="pcard__n">附件</span>
-            <span className="t-cap dim">第 3 级：正文指到哪个才读哪个</span>
+            <span className="pcard__n">附带文件</span>
+            <span className="t-cap dim">操作说明里点到哪个才读哪个</span>
           </header>
           <div className="chipwall">
             {meta.hasReferences && <Chip tone="a">references/</Chip>}
@@ -221,7 +315,7 @@ export function SkillFileDetail({ name }: { name: string }) {
             {meta.hasAssets && <Chip tone="a">assets/</Chip>}
           </div>
           <p className="t-cap dim" style={{ marginTop: 12, marginBottom: 0 }}>
-            scripts 里的东西是拿来**执行**的，不进上下文。
+            scripts 里的是脚本，直接运行，不当文字读。
           </p>
         </section>
       )}
@@ -229,7 +323,7 @@ export function SkillFileDetail({ name }: { name: string }) {
   );
 }
 
-/** Skill 管理 · 详情页：这件活到底怎么干 */
+/** Skill 管理 · 详情页：这个功能怎么做、由谁做、什么时候触发 */
 export function SkillDetail({ id }: { id: SkillId }) {
   const agents = useSettings((s) => s.agents);
   const s = skillOf(id)!;
@@ -241,25 +335,25 @@ export function SkillDetail({ id }: { id: SkillId }) {
     <>
       <section className="pcard">
         <header className="pcard__h">
-          <span className="pcard__n">这件活干什么</span>
+          <span className="pcard__n">这个功能做什么</span>
           <div className="spacer" />
-          {s.impl.by === 'model' ? <Chip tone="ok">已接模型</Chip> : <Chip>本地草稿</Chip>}
+          {s.impl.by === 'model' ? <Chip tone="ok">调模型</Chip> : <Chip>本地生成</Chip>}
         </header>
         <p className="skdesc">{s.summary}</p>
         <Fields>
-          <Field label="归属" hint={owner
-            ? `${personaById(owner).name}接这件活。换人时所需工具会自动补给新主人。`
-            : '现在没人接。用户提到时 Agent 会明说做不了。'}>
+          <Field label="负责人" hint={owner
+            ? `由${personaById(owner).name}执行。换人时它需要的工具会自动补给新的那位。`
+            : '现在无人负责，用户要求时会被告知做不了。'}>
             <OwnerSelect kind={id} />
           </Field>
-          <Field label="前置条件" hint="不满足时 Agent 说不行，而不是假装做了">
+          <Field label="前置条件" hint="不满足时会明确说做不了，而不是假装做完">
             <span className="skplain">{s.needs}</span>
           </Field>
-          <Field label="产出">
+          <Field label="结果">
             <span className="skplain">
               {s.goto
-                ? <>一份待采纳的产物（<span className="mono">{s.patch}</span>），采纳后落到「{GOTO_LABEL[s.goto]}」页，计一条撤销记录</>
-                : '只出报告，不改项目'}
+                ? <>先给你一份待确认的结果，点采纳后写进「{GOTO_LABEL[s.goto]}」，可以撤销</>
+                : '只给一份报告，不改项目内容'}
             </span>
           </Field>
         </Fields>
@@ -267,21 +361,21 @@ export function SkillDetail({ id }: { id: SkillId }) {
 
       <section className="pcard">
         <header className="pcard__h">
-          <span className="pcard__n">什么时候轮到它</span>
-          <span className="t-cap dim">自由输入按这些词打分：动词决定意图，主题词只加权</span>
+          <span className="pcard__n">什么时候会触发</span>
+          <span className="t-cap dim">你随手打一句话时，按这些词判断该做哪件事</span>
         </header>
         <Fields>
-          <Field wide label={`动作词 · 每命中一个 +${TRIGGER_WEIGHT.act}`}>
+          <Field wide label={`动作词 · 命中一个记 ${TRIGGER_WEIGHT.act} 分`}>
             <div className="chipwall">
               {t.act.map((w) => <Chip key={w} tone="a">{w}</Chip>)}
             </div>
           </Field>
-          <Field wide label={`主题词 · 每命中一个 +${TRIGGER_WEIGHT.topic}`}
-            hint="「按大纲拆镜」里「大纲」是主题、「拆镜」是动作，所以落到分镜而不是大纲">
+          <Field wide label={`主题词 · 命中一个记 ${TRIGGER_WEIGHT.topic} 分`}
+            hint="说「按大纲拆镜」时，「拆镜」是动作、「大纲」只是背景，所以做的是分镜">
             <div className="chipwall">
               {t.topic.length
                 ? t.topic.map((w) => <Chip key={w}>{w}</Chip>)
-                : <span className="t-cap dim">没有主题词，只认动作</span>}
+                : <span className="t-cap dim">没有主题词，只看动作</span>}
             </div>
           </Field>
         </Fields>
@@ -311,7 +405,7 @@ export function SkillDetail({ id }: { id: SkillId }) {
             return (
               <li key={tid} className="issue">
                 <Icon name={spec?.writes ? 'wand' : 'book'} />
-                <span><b>{spec?.name}</b> —— {spec?.desc}</span>
+                <span><b>{spec?.name}</b>：{spec?.desc}</span>
               </li>
             );
           })}
@@ -325,7 +419,7 @@ export function SkillDetail({ id }: { id: SkillId }) {
         <p className="skdesc">
           {s.impl.by === 'model'
             ? <>桌面端走 Rust + Rig 真发请求，实现在 <span className="mono">{s.impl.module}</span>。浏览器里没有这条链路，会回落到本地草稿。</>
-            : '还没接模型：产物由前端按项目现状算出来，形状与真产物一致，所以接模型时界面不用改。'}
+            : '还没接模型：结果按项目现状本地算出来，格式和接模型后一致。'}
         </p>
         <p className="skdesc dim">{s.impl.note}</p>
       </section>

@@ -203,6 +203,28 @@ export async function skillBody(name: string, workspace = ''): Promise<string> {
   return invoke<string>('skill_body', { name, workspace });
 }
 
+/** 用户自己的 Skill 该放在哪个目录。界面上要把它摆出来 */
+export async function skillsDir(workspace = ''): Promise<string> {
+  if (!isDesktop()) return `${workspace.trim() || '~/.hitv'}/skills`;
+  return invoke<string>('skills_dir', { workspace });
+}
+
+/**
+ * 导入一个目录当 Skill。校验与复制都在 Rust 侧。
+ *
+ * 浏览器里没有文件系统，所以这条只能在桌面端跑 —— 如实报错，不假装成功。
+ */
+export async function skillImport(path: string, workspace = ''): Promise<SkillMeta> {
+  if (!isDesktop()) throw new Error('浏览器里没有文件系统，导入 Skill 要在桌面端');
+  return invoke<SkillMeta>('skill_import', { path, workspace });
+}
+
+/** 在文件管理器里打开 skills 目录 */
+export async function skillsReveal(workspace = ''): Promise<string> {
+  if (!isDesktop()) throw new Error('浏览器里打不开本机目录，要在桌面端');
+  return invoke<string>('skills_reveal', { workspace });
+}
+
 /** skill 里的附件（第 3 级：正文指到哪个读哪个）。浏览器里读不到 */
 export async function skillResource(name: string, rel: string, workspace = ''): Promise<string> {
   if (!isDesktop()) return '';

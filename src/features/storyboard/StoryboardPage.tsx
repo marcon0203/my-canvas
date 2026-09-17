@@ -313,7 +313,7 @@ function ShotInspector({ shot, running, onRun }: { shot: Shot; running: boolean;
                 value={shot.custom ?? segmentsText(segs)}
                 onChange={(e) => patch({ custom: e.target.value })} />
               <div className="t-cap" style={{ color: 'var(--color-warning)', marginTop: 6 }}>
-                已脱管 — 手写内容优先，上面的选择器不再影响它
+                用你手写的这条，上面的选择不再影响它
               </div>
             </>
           ) : (
@@ -329,7 +329,7 @@ function ShotInspector({ shot, running, onRun }: { shot: Shot; running: boolean;
           <VerdictToggle verdict={shot.verdict} onVerdict={verdict} extra={
             <Button onClick={() => {
               patch({ ejected: !shot.ejected });
-              toast(shot.ejected ? '已恢复自动合成' : '此镜已脱管：资产升版时不再自动同步，会单独列出来让你确认');
+              toast(shot.ejected ? '已改回自动合成' : '这一镜改用手写的提示词：资产升版时不跟着变，会单独列出来让你确认');
             }}>
               {shot.ejected ? '恢复自动合成' : '手改提示词'}
             </Button>

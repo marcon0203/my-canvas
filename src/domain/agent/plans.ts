@@ -264,8 +264,8 @@ function planChat(c: AgentContext): Plan {
     kind: 'chat',
     steps: [],
     reply: [
-      `我没把这句话对上具体的活儿，说说现在的进度：《${c.proj}》${c.acts.length} 幕 ${allBeats(c.acts).length} 场，${shots} 个镜头，${locked}/${ctxAssets(c).length} 个资产已定稿，余额 ${c.credits} 积分。`,
-      '可以直接说「起草大纲」「拆镜」「补写提示词」「统一画风」「算一下成本」，或者点上面的技能卡。',
+      `没匹配到具体功能，说一下现在的进度：《${c.proj}》${c.acts.length} 幕 ${allBeats(c.acts).length} 场，${shots} 个镜头，${locked}/${ctxAssets(c).length} 个资产已定稿，余额 ${c.credits} 积分。`,
+      '可以直接说「起草大纲」「拆镜」「补写提示词」「统一画风」「算一下成本」，或者点上面的按钮。',
     ].join('\n'),
   };
 }

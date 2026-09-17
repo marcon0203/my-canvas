@@ -423,7 +423,7 @@ export function toolProposal(tool: ToolId, patch: ProposalPatch, value: unknown)
       };
     default:
       // 其余补丁形状（大纲、分镜、定稿…）已经有各自的入口，这里只兜个底
-      return { title, rows: [{ k: '补丁', v: patch.t }], patch, cost: 0 };
+      return { title, rows: [{ k: '改动', v: patch.t }], patch, cost: 0 };
   }
 }
 

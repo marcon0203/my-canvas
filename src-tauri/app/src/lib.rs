@@ -287,6 +287,45 @@ fn skill_resource(
     SkillStore::scan(&roots(&app, workspace.as_deref())).resource(&name, &rel)
 }
 
+/// 用户自己的 Skill 放在哪儿。界面上要把这个路径摆出来 —— 让人能直接打开它
+#[tauri::command]
+fn skills_dir(workspace: Option<String>) -> Result<String> {
+    Ok(ws(workspace.as_deref())?.skills().display().to_string())
+}
+
+/// 导入一个目录当 Skill：校验 + 复制到 `<workspace>/skills/<名字>`。
+///
+/// 校验与复制都在 core 里（有测试），这层只解析工作空间再转发。
+#[tauri::command]
+fn skill_import(path: String, workspace: Option<String>) -> Result<SkillMeta> {
+    let w = ws(workspace.as_deref())?;
+    w.ensure()?;
+    studio_core::skills::import_dir(&w.skills(), std::path::Path::new(path.trim()))
+}
+
+/// 在系统文件管理器里打开 skills 目录。
+///
+/// 用系统自带的命令而不是 tauri 的 opener 插件：少一个依赖，这层也没别的事要做。
+/// 打不开就如实返回错误（远程会话、没有桌面环境都可能打不开）。
+#[tauri::command]
+fn skills_reveal(workspace: Option<String>) -> Result<String> {
+    let w = ws(workspace.as_deref())?;
+    w.ensure()?;
+    let dir = w.skills();
+    let cmd = if cfg!(target_os = "macos") {
+        "open"
+    } else if cfg!(target_os = "windows") {
+        "explorer"
+    } else {
+        "xdg-open"
+    };
+    std::process::Command::new(cmd)
+        .arg(&dir)
+        .spawn()
+        .map_err(|e| studio_core::Error::Skill(format!("打不开目录（{cmd}）：{e}")))?;
+    Ok(dir.display().to_string())
+}
+
 /* ---------------- Agent ---------------- */
 
 /// 只解析不跑 —— 让设置界面能在「还没花钱」的时候就把配置问题暴露出来。
@@ -380,6 +419,9 @@ pub fn run() {
             skills_list,
             skill_body,
             skill_resource,
+            skills_dir,
+            skill_import,
+            skills_reveal,
             workspace_info,
             workspace_prepare,
             config_load,
