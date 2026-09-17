@@ -1,61 +1,49 @@
+import catalog from '@res/models/providers.json';
 import type { Modality, ModelRef, ModelSpec, ProviderId, ProviderSpec } from './model';
 
 /**
  * **支持哪些厂商**的清单 —— 不是模型清单。
  *
- * 这里只登记「这个应用认得哪几家、默认端点是什么、去哪儿拿 key」。
+ * 内容不在这个文件里，在 `resources/models/providers.json`：Rust 侧
+ * `conf/providers.rs` 编译期读的是同一份。以前两边各抄一份，注释写着
+ * 「改一边要改另一边」—— 那种约定迟早失守，而端点对不上时报的错指不到原因。
+ *
  * **一个模型都不预设**：模型 id 在国内变得太快，预设一份只会过期，
  * 而过期的默认值比没有默认值更糟 —— 用户会以为它能用，直到真跑起来才报错。
- *
- * 所以模型全部由用户在「新增供应商」之后自己加。`findModel` 只查用户加的那些。
+ * 所以模型全部由用户在「新增供应商」之后自己加，`findModel` 只查用户加的那些。
  *
  * 文本接口这几家都是 OpenAI 兼容，共用一个适配器；
  * 图片/视频是各家自有的异步任务接口，见 Rust 侧 generate::adapters。
  */
-export const PROVIDERS: readonly ProviderSpec[] = [
-  {
-    id: 'volcengine', name: '火山方舟', en: 'Volcengine Ark',
-    baseUrl: 'https://ark.cn-beijing.volces.com/api/v3',
-    console: 'https://console.volcengine.com/ark',
-    docs: 'https://www.volcengine.com/docs/82379',
-  },
-  {
-    id: 'deepseek', name: 'DeepSeek', en: 'DeepSeek',
-    baseUrl: 'https://api.deepseek.com',
-    console: 'https://platform.deepseek.com/api_keys',
-    docs: 'https://api-docs.deepseek.com',
-  },
-  {
-    id: 'zhipu', name: '智谱 GLM', en: 'Zhipu BigModel',
-    baseUrl: 'https://open.bigmodel.cn/api/paas/v4',
-    console: 'https://open.bigmodel.cn/usercenter/apikeys',
-    docs: 'https://open.bigmodel.cn/dev/api',
-  },
-  {
-    id: 'bailian', name: '阿里百炼', en: 'Alibaba Model Studio',
-    baseUrl: 'https://dashscope.aliyuncs.com/compatible-mode/v1',
-    console: 'https://bailian.console.aliyun.com',
-    docs: 'https://help.aliyun.com/zh/model-studio',
-  },
-  {
-    id: 'hunyuan', name: '腾讯混元', en: 'Tencent Hunyuan',
-    baseUrl: 'https://api.hunyuan.cloud.tencent.com/v1',
-    console: 'https://console.cloud.tencent.com/hunyuan',
-    docs: 'https://cloud.tencent.com/document/product/1729',
-  },
-  {
-    id: 'moonshot', name: '月之暗面', en: 'Moonshot Kimi',
-    baseUrl: 'https://api.moonshot.cn/v1',
-    console: 'https://platform.moonshot.cn/console/api-keys',
-    docs: 'https://platform.moonshot.cn/docs',
-  },
-  {
-    id: 'custom', name: '自定义端点', en: 'OpenAI-compatible',
-    // 端点与模型全靠用户填 —— 自建网关、Ollama、公司内网代理都走这条
-    baseUrl: '',
-    userDefined: true,
-  },
+
+/** 代码里认得的厂商 id。清单里出现别的 id 说明两边脱节了，要当场炸 */
+const KNOWN: readonly ProviderId[] = [
+  'volcengine', 'deepseek', 'zhipu', 'bailian', 'hunyuan', 'moonshot', 'custom',
 ];
+
+/**
+ * 把 JSON 收成带 `ProviderId` 的类型。
+ *
+ * 不是随手 `as`：清单是外部文件，改它不会触发类型检查。加了一家却没在
+ * `ProviderId` 里登记的话，界面能列出来、发请求时才发现没有适配器 ——
+ * 那时候的报错指不到这儿。所以在加载时就对，对不上直接抛。
+ */
+const parse = (raw: typeof catalog.providers): ProviderSpec[] => raw.map((p) => {
+  if (!(KNOWN as readonly string[]).includes(p.id)) {
+    throw new Error(`providers.json 里的 ${p.id} 在代码里没登记：要先加进 ProviderId，再配适配器`);
+  }
+  return {
+    id: p.id as ProviderId,
+    name: p.name,
+    en: p.en,
+    baseUrl: p.baseUrl,
+    ...('console' in p && p.console ? { console: p.console } : {}),
+    ...('docs' in p && p.docs ? { docs: p.docs } : {}),
+    ...('userDefined' in p && p.userDefined ? { userDefined: true as const } : {}),
+  };
+});
+
+export const PROVIDERS: readonly ProviderSpec[] = parse(catalog.providers);
 
 const BY_ID = new Map(PROVIDERS.map((p) => [p.id, p]));
 

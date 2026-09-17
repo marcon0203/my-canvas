@@ -261,13 +261,41 @@ fn workspace_prepare(path: String) -> Result<WorkspaceInfo> {
 struct SkillList {
     skills: Vec<SkillMeta>,
     warnings: Vec<SkillWarning>,
+    /// 扫了哪几个目录，顺序就是覆盖顺序。界面要把路径摆出来 ——
+    /// 「我的 Skill 怎么没生效」十次里有九次是放错了目录
+    roots: Vec<RootInfo>,
+}
+
+#[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+struct RootInfo {
+    name: String,
+    path: String,
+    exists: bool,
+    /// 同名时这个目录里的那份生效
+    wins: bool,
 }
 
 /// 列出装了哪些 skill。**不含正文** —— 正文是第 2 级，界面要看再单独要。
 #[tauri::command]
 fn skills_list(app: tauri::AppHandle, workspace: Option<String>) -> SkillList {
-    let st = SkillStore::scan(&roots(&app, workspace.as_deref()));
-    SkillList { skills: st.all().to_vec(), warnings: st.warnings().to_vec() }
+    let rs = roots(&app, workspace.as_deref());
+    let st = SkillStore::scan(&rs);
+    let last = rs.len().saturating_sub(1);
+    SkillList {
+        skills: st.all().to_vec(),
+        warnings: st.warnings().to_vec(),
+        roots: rs
+            .iter()
+            .enumerate()
+            .map(|(i, r)| RootInfo {
+                name: r.name.clone(),
+                path: r.path.display().to_string(),
+                exists: r.path.is_dir(),
+                wins: i == last,
+            })
+            .collect(),
+    }
 }
 
 /// 读某个 skill 的正文（第 2 级）。界面上「看看它到底写了什么」用这个。
@@ -301,6 +329,31 @@ fn skill_import(path: String, workspace: Option<String>) -> Result<SkillMeta> {
     let w = ws(workspace.as_deref())?;
     w.ensure()?;
     studio_core::skills::import_dir(&w.skills(), std::path::Path::new(path.trim()))
+}
+
+/// 把一个内置 Skill 复制一份到工作空间，让用户能改它。
+///
+/// **内置的不在初始化时自动复制进工作空间**，扫描时是两个根目录（先内置、
+/// 再工作空间，同名用工作空间那份）。自动复制会带来一个查不出来的问题：
+/// 程序升级后的新版内置 Skill 被那份旧副本盖掉，而界面上看不出是副本在生效。
+///
+/// 所以复制是一个动作，由用户点出来 —— 这时候盖住内置是他要的结果。
+#[tauri::command]
+fn skill_fork(app: tauri::AppHandle, name: String, workspace: Option<String>) -> Result<SkillMeta> {
+    let st = SkillStore::scan(&roots(&app, workspace.as_deref()));
+    let meta = st
+        .all()
+        .iter()
+        .find(|m| m.name == name)
+        .ok_or_else(|| studio_core::Error::Skill(format!("没有叫「{name}」的 Skill")))?;
+    if meta.source != "内置" {
+        return Err(studio_core::Error::Skill(format!(
+            "「{name}」已经在工作空间里了，直接改它的文件就生效，不用再复制"
+        )));
+    }
+    let w = ws(workspace.as_deref())?;
+    w.ensure()?;
+    studio_core::skills::import_dir(&w.skills(), &meta.dir)
 }
 
 /// 在系统文件管理器里打开 skills 目录。
@@ -422,6 +475,7 @@ pub fn run() {
             skills_dir,
             skill_import,
             skills_reveal,
+            skill_fork,
             workspace_info,
             workspace_prepare,
             config_load,

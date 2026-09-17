@@ -26,7 +26,8 @@
     "targets": "all",
     "icon": ["icons/icon.png"],
     "resources": {
-      "../skills": "skills"
+      "../../resources/skills": "skills",
+      "../../resources/models": "models"
     }
   }
 }

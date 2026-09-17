@@ -8,6 +8,9 @@ export default defineConfig({
   resolve: {
     alias: {
       '@': fileURLToPath(new URL('./src', import.meta.url)),
+      // 内置数据在 src 外头：它随程序发布，Rust 侧也读同一批文件，
+      // 放进 src 会让「这是前端资源」的印象盖掉这件事
+      '@res': fileURLToPath(new URL('./resources', import.meta.url)),
     },
   },
   test: {

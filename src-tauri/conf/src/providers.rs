@@ -1,28 +1,64 @@
 //! 厂商端点解析。
 //!
-//! 内置默认端点与前端 `domain/providers/catalog.ts` 保持一致，
-//! 但**用户在设置里改过的优先** —— 目录只是种子，端点会变。
+//! **支持哪几家**这份清单不写在代码里，而是 `resources/models/providers.json`：
+//! 前端打包时读它，这里编译期 `include_str!` 读它。以前两边各抄一份，注释写着
+//! 「改一边要改另一边」—— 那种约定迟早失守，而端点对不上时报的错指不到原因。
+//!
+//! 编译期嵌入而不是运行时读文件：这份清单是程序的一部分，跟着版本走，
+//! 运行时找不到文件就没有端点可用，那不是一个能在界面上处理的错误。
+//!
+//! **用户在设置里改过的端点优先** —— 清单只是种子，端点会变（企业版、自建网关）。
 
 use crate::config::ProviderSetting;
 use studio_error::{Error, Result};
+use std::sync::LazyLock;
 
-/// 内置默认端点。与前端目录同源；改一边要改另一边（有测试盯着字段齐全）。
-pub const DEFAULT_BASE_URL: &[(&str, &str)] = &[
-    ("volcengine", "https://ark.cn-beijing.volces.com/api/v3"),
-    ("deepseek", "https://api.deepseek.com"),
-    ("zhipu", "https://open.bigmodel.cn/api/paas/v4"),
-    ("bailian", "https://dashscope.aliyuncs.com/compatible-mode/v1"),
-    ("hunyuan", "https://api.hunyuan.cloud.tencent.com/v1"),
-    ("moonshot", "https://api.moonshot.cn/v1"),
-    // 自定义端点没有默认值，必须用户填
-    ("custom", ""),
-];
+/// 与前端同源的那份清单原文
+const CATALOG_JSON: &str = include_str!("../../../resources/models/providers.json");
+
+/// 一家供应商。字段与前端 `domain/providers/model.ts` 的 `ProviderSpec` 对齐；
+/// 这边只用到 id 和 base_url，其余留着是为了「多一个字段前端有、这边没有」时
+/// 解析不会静默丢掉 —— serde 默认忽略未知字段，那种丢失查起来很费劲。
+#[derive(Debug, Clone, serde::Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct Provider {
+    pub id: String,
+    pub name: String,
+    pub en: String,
+    /// 默认端点。自定义端点这里是空串，必须用户填
+    pub base_url: String,
+    #[serde(default)]
+    pub console: Option<String>,
+    #[serde(default)]
+    pub docs: Option<String>,
+    /// 端点和模型全靠用户填的那种（自建网关、Ollama、公司内网代理）
+    #[serde(default)]
+    pub user_defined: bool,
+}
+
+#[derive(serde::Deserialize)]
+struct Catalog {
+    /// 文件开头给人看的一段话，解析时用不上，但 `deny_unknown_fields` 要认它
+    #[allow(dead_code)]
+    #[serde(default)]
+    note: String,
+    providers: Vec<Provider>,
+}
+
+/// 系统支持哪几家。解析失败直接 panic：这是编译进来的自家文件，
+/// 格式不对是发布前就该炸的事，不是运行时要处理的错误（有测试盯着）。
+pub static PROVIDERS: LazyLock<Vec<Provider>> = LazyLock::new(|| {
+    serde_json::from_str::<Catalog>(CATALOG_JSON)
+        .expect("resources/models/providers.json 格式不对")
+        .providers
+});
+
+pub fn provider_of(id: &str) -> Option<&'static Provider> {
+    PROVIDERS.iter().find(|p| p.id == id)
+}
 
 pub fn default_base_url(provider: &str) -> Option<&'static str> {
-    DEFAULT_BASE_URL
-        .iter()
-        .find(|(id, _)| *id == provider)
-        .map(|(_, url)| *url)
+    provider_of(provider).map(|p| p.base_url.as_str())
 }
 
 /// 实际要用的端点：用户改过的优先，否则内置默认。空端点是错误 —— 别拿空串去发请求。
@@ -53,19 +89,42 @@ mod tests {
     }
 
     #[test]
-    fn 六家国内厂商加自定义端点都在目录里() {
+    fn 六家国内厂商加自定义端点都在清单里() {
         for id in ["volcengine", "deepseek", "zhipu", "bailian", "hunyuan", "moonshot", "custom"] {
             assert!(default_base_url(id).is_some(), "缺 {id}");
+        }
+        assert_eq!(PROVIDERS.len(), 7, "加减了一家就来改这个数，顺手看一眼前端还认不认");
+    }
+
+    #[test]
+    fn 清单能解析_且每家字段齐全() {
+        for p in PROVIDERS.iter() {
+            assert!(!p.id.is_empty());
+            assert!(!p.name.is_empty(), "{} 没有中文名，界面上会是空的", p.id);
+            assert!(!p.en.is_empty(), "{} 没有英文名", p.id);
+        }
+    }
+
+    #[test]
+    fn 只有自定义端点是用户自己填的() {
+        for p in PROVIDERS.iter() {
+            assert_eq!(p.user_defined, p.id == "custom", "{} 的 userDefined 不对", p.id);
+            // 要用户填端点的那家不该带控制台链接 —— 那链接指不到任何地方
+            if p.user_defined {
+                assert!(p.console.is_none(), "{} 不该有控制台链接", p.id);
+            } else {
+                assert!(p.console.is_some(), "{} 缺控制台链接，用户不知道去哪儿拿 key", p.id);
+            }
         }
     }
 
     #[test]
     fn 除自定义外都有_https_默认端点() {
-        for (id, url) in DEFAULT_BASE_URL {
-            if *id == "custom" {
-                assert!(url.is_empty());
+        for p in PROVIDERS.iter() {
+            if p.user_defined {
+                assert!(p.base_url.is_empty());
             } else {
-                assert!(url.starts_with("https://"), "{id} 的端点不是 https");
+                assert!(p.base_url.starts_with("https://"), "{} 的端点不是 https", p.id);
             }
         }
     }

@@ -138,6 +138,16 @@ export async function shotsPrompt(
 export interface SkillList {
   skills: SkillMeta[];
   warnings: SkillWarning[];
+  /** 扫了哪几个目录，顺序就是覆盖顺序（后面的盖前面的同名） */
+  roots: SkillRoot[];
+}
+
+export interface SkillRoot {
+  name: string;
+  path: string;
+  exists: boolean;
+  /** 同名时这个目录里的那份生效 */
+  wins: boolean;
 }
 
 /* ---------------- 工作空间 ---------------- */
@@ -193,7 +203,14 @@ export async function workspacePrepare(path: string): Promise<WorkspaceInfo> {
  * 只能列出构建期嵌进来的内置那几个 —— 内容是真的，但看不到用户的。
  */
 export async function skillsList(workspace = ''): Promise<SkillList> {
-  if (!isDesktop()) return { skills: BUILTIN_SKILLS.map((s) => s.meta), warnings: [] };
+  if (!isDesktop()) {
+    return {
+      skills: BUILTIN_SKILLS.map((s) => s.meta),
+      warnings: [],
+      // 浏览器里只有构建期嵌进来的那份，没有真实目录可报
+      roots: [{ name: '内置', path: 'resources/skills', exists: true, wins: true }],
+    };
+  }
   return invoke<SkillList>('skills_list', { workspace });
 }
 
@@ -217,6 +234,17 @@ export async function skillsDir(workspace = ''): Promise<string> {
 export async function skillImport(path: string, workspace = ''): Promise<SkillMeta> {
   if (!isDesktop()) throw new Error('浏览器里没有文件系统，导入 Skill 要在桌面端');
   return invoke<SkillMeta>('skill_import', { path, workspace });
+}
+
+/**
+ * 把一个内置 Skill 复制一份到工作空间，之后改那份副本就生效。
+ *
+ * 内置的不会自动复制进工作空间（升级后的新版会被旧副本悄悄盖掉），
+ * 所以这是一个要用户点的动作。
+ */
+export async function skillFork(name: string, workspace = ''): Promise<SkillMeta> {
+  if (!isDesktop()) throw new Error('浏览器里没有文件系统，改内置 Skill 要在桌面端');
+  return invoke<SkillMeta>('skill_fork', { name, workspace });
 }
 
 /** 在文件管理器里打开 skills 目录 */

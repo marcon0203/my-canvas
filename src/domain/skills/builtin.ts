@@ -1,13 +1,13 @@
 import { parseSkill, type SkillMeta } from './loader';
 
 /**
- * 内置 skill：构建期把 `src-tauri/skills/` 下的 SKILL.md 原文嵌进来。
+ * 内置 skill：构建期把 `resources/skills/` 下的 SKILL.md 原文嵌进来。
  *
  * 桌面端不走这里 —— 那边由 Rust 扫真实目录，还能看到用户自己放的。
  * 这份只是为了浏览器里也能看见真实内容，而不是一份手抄的假清单：
  * 改了磁盘上的 SKILL.md，这里跟着变。
  */
-const FILES = import.meta.glob('/src-tauri/skills/*/SKILL.md', {
+const FILES = import.meta.glob('/resources/skills/*/SKILL.md', {
   query: '?raw', import: 'default', eager: true,
 }) as Record<string, string>;
 
@@ -17,9 +17,9 @@ const FILES = import.meta.glob('/src-tauri/skills/*/SKILL.md', {
 // `?url` 只产出一条资源路径，内容一个字节都不进包。
 // 注意：选项必须是**字面量**。抽成一个 `const G = {...}` 传进来，打包器的静态
 // 分析看不到 query，会退回成普通模块 glob —— 同一个报错换个地方出现。
-const REFS = import.meta.glob('/src-tauri/skills/*/references/*', { query: '?url', import: 'default', eager: true });
-const SCRIPTS = import.meta.glob('/src-tauri/skills/*/scripts/*', { query: '?url', import: 'default', eager: true });
-const ASSETS = import.meta.glob('/src-tauri/skills/*/assets/*', { query: '?url', import: 'default', eager: true });
+const REFS = import.meta.glob('/resources/skills/*/references/*', { query: '?url', import: 'default', eager: true });
+const SCRIPTS = import.meta.glob('/resources/skills/*/scripts/*', { query: '?url', import: 'default', eager: true });
+const ASSETS = import.meta.glob('/resources/skills/*/assets/*', { query: '?url', import: 'default', eager: true });
 
 const dirOf = (path: string) => path.replace(/\/SKILL\.md$/, '');
 const has = (map: Record<string, unknown>, dir: string) =>

@@ -1024,6 +1024,33 @@ body { background: var(--color-bg-canvas); overflow: hidden; }
 /* ---- 设置页：服务商卡片 / Agent 配置卡片 ---- */
 .setgrid { display: grid; gap: var(--space-4); }
 
+/* 设置页里的页签条。页签本身在 ui/Tabs，这里只管那条底线和右侧按钮 ——
+   底线要贯通整行，不然页签下面那段 2px 高亮看着像是断的 */
+.settabs {
+  display: flex; align-items: flex-end; gap: var(--space-2);
+  border-bottom: 1px solid var(--color-border-default);
+  padding-bottom: 0; margin-bottom: calc(var(--space-2) * -1);
+}
+.settabs .spacer { flex: 1 1 auto; }
+
+/* 页签本体。选中态靠一条 2px 底边压在容器那条 1px 线上 —— 所以这里的
+   border-bottom 必须写出来：base.css 的 `button { border: 0 }` 没有分层，
+   赢过 Tailwind 的工具类，工具类那版写了等于没写 */
+.tabs { display: flex; align-items: flex-end; gap: var(--space-1); }
+.tabs__t {
+  height: 34px; padding: 0 var(--space-3); margin-bottom: -1px;
+  font-size: 13px; font-weight: 500; color: var(--color-text-secondary);
+  border-bottom: 2px solid transparent;
+  border-radius: var(--radius-control) var(--radius-control) 0 0;
+  transition: color var(--duration-fast) var(--ease-standard),
+              border-color var(--duration-fast) var(--ease-standard);
+}
+.tabs__t:hover { color: var(--color-text-primary); }
+.tabs__t[aria-selected='true'] {
+  color: var(--color-text-primary); border-bottom-color: var(--color-accent);
+}
+.settabs > .tbtn, .settabs > .ds-btn { margin-bottom: var(--space-2); }
+
 /* 智能体卡片墙。整张卡可点进详情，右上角的启用开关不在可点区里 */
 .agrid {
   display: grid; gap: var(--space-4); margin-top: var(--space-4);

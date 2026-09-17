@@ -1,0 +1,60 @@
+{
+  "note": "系统支持哪几家模型供应商。前端打包时读它，Rust 编译时 include_str! 读它 —— 一份文件，改一处两边都变。一个模型都不预设：模型 id 变得太快，预设一份只会过期，而过期的默认值比没有默认值更糟。模型由用户接入供应商后自己加。",
+  "providers": [
+    {
+      "id": "volcengine",
+      "name": "火山方舟",
+      "en": "Volcengine Ark",
+      "baseUrl": "https://ark.cn-beijing.volces.com/api/v3",
+      "console": "https://console.volcengine.com/ark",
+      "docs": "https://www.volcengine.com/docs/82379"
+    },
+    {
+      "id": "deepseek",
+      "name": "DeepSeek",
+      "en": "DeepSeek",
+      "baseUrl": "https://api.deepseek.com",
+      "console": "https://platform.deepseek.com/api_keys",
+      "docs": "https://api-docs.deepseek.com"
+    },
+    {
+      "id": "zhipu",
+      "name": "智谱 GLM",
+      "en": "Zhipu BigModel",
+      "baseUrl": "https://open.bigmodel.cn/api/paas/v4",
+      "console": "https://open.bigmodel.cn/usercenter/apikeys",
+      "docs": "https://open.bigmodel.cn/dev/api"
+    },
+    {
+      "id": "bailian",
+      "name": "阿里百炼",
+      "en": "Alibaba Model Studio",
+      "baseUrl": "https://dashscope.aliyuncs.com/compatible-mode/v1",
+      "console": "https://bailian.console.aliyun.com",
+      "docs": "https://help.aliyun.com/zh/model-studio"
+    },
+    {
+      "id": "hunyuan",
+      "name": "腾讯混元",
+      "en": "Tencent Hunyuan",
+      "baseUrl": "https://api.hunyuan.cloud.tencent.com/v1",
+      "console": "https://console.cloud.tencent.com/hunyuan",
+      "docs": "https://cloud.tencent.com/document/product/1729"
+    },
+    {
+      "id": "moonshot",
+      "name": "月之暗面",
+      "en": "Moonshot Kimi",
+      "baseUrl": "https://api.moonshot.cn/v1",
+      "console": "https://platform.moonshot.cn/console/api-keys",
+      "docs": "https://platform.moonshot.cn/docs"
+    },
+    {
+      "id": "custom",
+      "name": "自定义端点",
+      "en": "OpenAI-compatible",
+      "baseUrl": "",
+      "userDefined": true
+    }
+  ]
+}

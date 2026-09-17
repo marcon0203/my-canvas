@@ -1,4 +1,6 @@
 import { describe, expect, it } from 'vitest';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { PROVIDERS, defaultModel, findModel, modelsOfModality, providerOf } from './catalog';
 import { makeModel, modelKey, parseModelKey, type ModelSpec } from './model';
 
@@ -14,6 +16,19 @@ describe('providers/catalog', () => {
     const ids = PROVIDERS.map((p) => p.id);
     expect(ids).toEqual(
       expect.arrayContaining(['volcengine', 'deepseek', 'zhipu', 'bailian', 'hunyuan', 'moonshot', 'custom']));
+  });
+
+  it('清单就是 resources/models/providers.json —— 不是代码里另抄的一份', () => {
+    // Rust 侧 conf/providers.rs 编译期读的是同一个文件。以前两边各抄一份，
+    // 注释写着「改一边要改另一边」，端点对不上时报的错指不到原因。
+    const raw = JSON.parse(
+      readFileSync(join(process.cwd(), 'resources/models/providers.json'), 'utf8'),
+    ) as { providers: { id: string; name: string; baseUrl: string }[] };
+    expect(PROVIDERS.map((p) => p.id)).toEqual(raw.providers.map((p) => p.id));
+    for (const p of raw.providers) {
+      expect(providerOf(p.id as never)?.baseUrl, p.id).toBe(p.baseUrl);
+      expect(providerOf(p.id as never)?.name, p.id).toBe(p.name);
+    }
   });
 
   it('除自定义外都带默认端点，且是 https', () => {

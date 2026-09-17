@@ -28,7 +28,7 @@ describe('skills/loader · 与 Rust 侧同规则', () => {
   });
 
   it('缺 name 时用目录名兜底', () => {
-    const p = parseSkill('/src-tauri/skills/my-skill', md('description: d', '正文'));
+    const p = parseSkill('/resources/skills/my-skill', md('description: d', '正文'));
     expect('error' in p ? '' : p.meta.name).toBe('my-skill');
   });
 
@@ -38,10 +38,10 @@ describe('skills/loader · 与 Rust 侧同规则', () => {
 });
 
 describe('skills/builtin · 真读了磁盘上的文件', () => {
-  it('内置 skill 是从 src-tauri/skills 读出来的，不是手抄的清单', () => {
+  it('内置 skill 是从 resources/skills 读出来的，不是手抄的清单', () => {
     expect(BUILTIN_SKILLS.length).toBeGreaterThan(0);
     for (const s of BUILTIN_SKILLS) {
-      expect(s.meta.dir).toMatch(/^\/src-tauri\/skills\//);
+      expect(s.meta.dir).toMatch(/^\/resources\/skills\//);
       expect(s.meta.description.length).toBeGreaterThan(10);
       expect(s.body.length).toBeGreaterThan(50);
     }

@@ -250,12 +250,12 @@ pub fn import_dir(skills_dir: &Path, src: &Path) -> Result<SkillMeta> {
     let dest = skills_dir.join(&name);
 
     // 源在目标里面（比如直接选了 skills/xxx 自己）：复制会无限套娃
-    if let (Ok(s), Ok(d)) = (src.canonicalize(), skills_dir.canonicalize()) {
-        if s.starts_with(&d) {
-            return Err(Error::Skill(
-                "这个目录已经在 skills 里了，不用导入。改完文件直接刷新就生效".into(),
-            ));
-        }
+    if let (Ok(s), Ok(d)) = (src.canonicalize(), skills_dir.canonicalize())
+        && s.starts_with(&d)
+    {
+        return Err(Error::Skill(
+            "这个目录已经在 skills 里了，不用导入。改完文件直接刷新就生效".into(),
+        ));
     }
     if dest.exists() {
         return Err(Error::Skill(format!(

@@ -293,7 +293,7 @@ Rust 侧先把同一套规则建好并做了 parity 测试 —— 等工具真�
 一个 Skill 是磁盘上的一个目录，不是代码里的枚举：
 
 ```
-skills/write-shot-prompts/
+resources/skills/write-shot-prompts/
 ├── SKILL.md              frontmatter(name/description) + Markdown 指令
 └── references/
     └── vocabulary.md     正文指到才读
@@ -310,8 +310,17 @@ skills/write-shot-prompts/
 所以 `SkillStore::scan` **只解析 frontmatter**，正文留在磁盘上由 `body()` 按需取。
 把它写成「一次性全读进来」就等于没做这件事。
 
-扫描两处根目录，后面的盖前面的同名 skill：内置（打包进 resources）→
-工作空间（`<workspace>/skills`）。用户放一个同名目录就能改掉内置行为。
+内置的那批在仓库根的 `resources/skills/`，跟着 `tauri.conf.json` 的 `resources`
+打包进程序；旁边 `resources/models/providers.json` 是「支持哪几家供应商」，
+`conf/providers.rs` 编译期 `include_str!` 读它，前端打包时读同一个文件。
+
+扫描两处根目录，后面的盖前面的同名 skill：内置 → 工作空间（`<workspace>/skills`）。
+用户放一个同名目录就能改掉内置行为。
+
+**内置的不会在初始化时复制进工作空间。** 复制过去之后，升级带来的新版内置
+Skill 会被那份旧副本盖掉，而界面上看不出是副本在生效；`Workspace::ensure`
+也一直是「只建不搬」。要改内置的做法，用 `skill_fork` 命令复制一份出来 ——
+那时候盖住内置是用户自己要的结果。
 
 `resource()` 按 canonicalize 之后的真实路径核前缀 —— skill 是用户往目录里放的东西，
 一个 `../../../.ssh/id_rsa` 就能把无关文件读进上下文再发给模型。

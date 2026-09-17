@@ -135,7 +135,7 @@ export async function* runAgent(
 /**
  * 内置能力 → 真 skill 的对应关系。
  *
- * 只有这两件已经有 SKILL.md（在 `src-tauri/skills/`），跑的时候会把那份正文
+ * 只有这两件已经有 SKILL.md（在 `resources/skills/`），跑的时候会把那份正文
  * 展开进 preamble。其余十件还是写死在 plans.ts 里的本地逻辑，没有 skill 可展开。
  */
 export const SKILL_FOR_INTENT: Partial<Record<IntentKind, string>> = {
