@@ -29,6 +29,23 @@ npx tauri dev     # 起 vite + 桌面窗口
 npx tauri build   # 出三平台产物
 ```
 
+## app crate 编不了时怎么办
+
+app crate 依赖 GUI 系统库（webkit2gtk、gdk），在 CI 容器和没装桌面依赖的机器上
+`cargo check` 跑不起来 —— 于是那一层的代码只能靠人眼看。这已经漏过一次
+「文档注释写在函数参数上」，rustc 一眼能抓，人眼容易滑过去。
+
+`check-app.sh` 用 rustc 单文件跑，只挑名字解析**之前**就报的错（语法、属性、
+保留字、括号不配）。缺依赖导致的 `unresolved import` 是预期噪声，忽略。
+已验证它能抓到那三类；也刻意**不**看 `cannot find attribute` —— 单文件下
+serde 的 derive 本来就找不到，报假阳性一两次就没人看了。
+
+**别拿 rustfmt 当这个用**：它能解析带参数文档注释的代码（exit 0），
+拒绝发生在 rustc 后面一个阶段。
+
+`npm run verify` 会连它一起跑。真正的类型检查仍然要在装了 GUI 依赖的机器上
+`cargo check`。
+
 ## 模块
 
 | 模块 | 职责 |

@@ -9,7 +9,7 @@
     "preview": "vite preview",
     "test": "vitest run",
     "test:watch": "vitest",
-    "verify": "node verify.mjs"
+    "verify": "node verify.mjs && bash src-tauri/check-app.sh"
   },
   "dependencies": {
     "@react-three/drei": "^10.7.8",

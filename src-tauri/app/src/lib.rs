@@ -96,13 +96,15 @@ fn tools_list() -> Vec<ToolSpec> {
 
 /// 调一次工具。**闸门在 core 的 dispatch 里**，这层只转发 ——
 /// 把判断放在调用方迟早会漏掉一处。
+///
+/// `cfg` / `globals` / `providers` 只有生成类工具要用（靠它们找模型与端点），
+/// 其余工具不用传。
 #[tauri::command]
 async fn tool_call(
     project_id: String,
     tool: String,
     args: serde_json::Value,
     auto_max: Option<Risk>,
-    /// 生成类工具要靠它找模型；其余工具不用传
     cfg: Option<AgentConfig>,
     globals: Option<HashMap<String, ModelRef>>,
     providers: Option<HashMap<String, ProviderSetting>>,
