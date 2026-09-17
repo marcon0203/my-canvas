@@ -16,31 +16,10 @@
 //! 补丁形状与前端 `domain/agent/types.ts` 的 `ProposalPatch` 一一对应，
 //! 有 parity 测试盯着 —— 一份前端看不懂的补丁等于没产出。
 
-use crate::error::{Error, Result};
-use crate::md::Act;
-use crate::project::{self, Bundle};
+use studio_error::{Error, Result};
+use studio_doc::md::Act;
+use studio_doc::project::{self, Bundle};
 use serde_json::{Value, json};
-
-/// 画风名 → 英文片段。与前端 `domain/prompt/vocabulary.ts` 的 STYLEMAP 同一份，
-/// 有 parity 测试。查不到的画风名原样带上 —— 用户自定义的风格名也该能用。
-pub const STYLEMAP: &[(&str, &str)] = &[
-    ("温暖手绘", "warm hand-painted"),
-    ("3D 动画", "3D animated render"),
-    ("日式赛璐璐", "anime cel shading"),
-    ("水彩绘本", "watercolor storybook style"),
-    ("厚涂写实", "thick impasto painting"),
-    ("胶片质感", "film photography, grainy"),
-    ("黏土定格", "claymation stop-motion"),
-    ("像素风", "pixel art"),
-];
-
-pub fn style_frag(style: &str) -> String {
-    STYLEMAP
-        .iter()
-        .find(|(k, _)| *k == style)
-        .map(|(_, v)| (*v).to_string())
-        .unwrap_or_else(|| style.to_string())
-}
 
 /// 资产分组 → aid 前缀。与前端 `AID_PREFIX` 同一份
 pub fn aid_prefix(group: &str) -> Option<&'static str> {
@@ -351,7 +330,7 @@ fn edit_timeline(root: &std::path::Path, id: &str, args: &Value) -> Result<Value
         }
     }
 
-    let t = crate::timeline::plan(&shots, beat);
+    let t = studio_doc::timeline::plan(&shots, beat);
     if t.clips.is_empty() {
         // 说清为什么是空的：是一条都没出视频，还是出了但判定要重摇
         let has_vid = shots.iter().any(|s| s.get("vid").and_then(Value::as_str) == Some("ok"));
@@ -364,7 +343,7 @@ fn edit_timeline(root: &std::path::Path, id: &str, args: &Value) -> Result<Value
     Ok(json!({
         "t": "timeline",
         "timeline": t,
-        "totalMs": crate::timeline::total_ms(&t),
+        "totalMs": studio_doc::timeline::total_ms(&t),
     }))
 }
 
@@ -376,7 +355,7 @@ fn edit_subtitle(root: &std::path::Path, id: &str, args: &Value) -> Result<Value
             "还没有时间线 —— 字幕要挂在时间轴上，先排时间线（edit.timeline）".into(),
         ));
     }
-    let lines = crate::timeline::speakable(&b.blocks);
+    let lines = studio_doc::timeline::speakable(&b.blocks);
     if lines.is_empty() {
         return Err(Error::Store(
             "剧本里没有能念的台词或旁白 —— 字幕不从大纲和角色小传里编".into(),
@@ -386,7 +365,7 @@ fn edit_subtitle(root: &std::path::Path, id: &str, args: &Value) -> Result<Value
         "" => "zh".to_string(),
         l => l.to_string(),
     };
-    let subs = crate::timeline::cues(&b.timeline, &lines, &lang);
+    let subs = studio_doc::timeline::cues(&b.timeline, &lines, &lang);
     Ok(json!({ "t": "subtitles", "subtitles": subs, "cues": subs.cues.len() }))
 }
 
@@ -400,7 +379,7 @@ fn style_apply(root: &std::path::Path, id: &str, args: &Value) -> Result<Value> 
         return Err(Error::Store("没说换成哪个画风".into()));
     }
     let b = bundle(root, id);
-    let known = STYLEMAP.iter().any(|(k, _)| *k == style) || b.meta.styles.contains(&style);
+    let known = studio_agent::prompt::STYLEMAP.iter().any(|(k, _)| *k == style) || b.meta.styles.contains(&style);
     if !known {
         // 编一个画风名出来，出图时会当成普通提示词词组混进去，画面莫名其妙
         return Err(Error::Store(format!(
@@ -409,7 +388,7 @@ fn style_apply(root: &std::path::Path, id: &str, args: &Value) -> Result<Value> 
                 .styles
                 .iter()
                 .map(String::as_str)
-                .chain(STYLEMAP.iter().map(|(k, _)| *k))
+                .chain(studio_agent::prompt::STYLEMAP.iter().map(|(k, _)| *k))
                 .collect::<Vec<_>>()
                 .join("、")
         )));
@@ -417,7 +396,7 @@ fn style_apply(root: &std::path::Path, id: &str, args: &Value) -> Result<Value> 
     if style == b.meta.style {
         return Err(Error::Store(format!("现在就是「{style}」，没有要改的")));
     }
-    Ok(json!({ "t": "style", "style": style, "stylePrompt": style_frag(&style) }))
+    Ok(json!({ "t": "style", "style": style, "stylePrompt": studio_agent::prompt::style_frag(&style) }))
 }
 
 /* ---------------- 样本：给前端 store 测试喂真补丁 ---------------- */
@@ -443,19 +422,19 @@ pub fn samples() -> Value {
 
     // 与前端 mock 的 p1 对齐：一幕一场、一个正文块、一个角色、一镜
     let b = Bundle {
-        meta: crate::project::Meta {
+        meta: studio_doc::project::Meta {
             id: "p1".into(),
             style: "水彩绘本".into(),
             styles: vec!["水彩绘本".into(), "胶片质感".into()],
             ..Default::default()
         },
-        acts: vec![crate::md::Act {
+        acts: vec![studio_doc::md::Act {
             id: "a1".into(),
             t: "第一幕".into(),
             span: "0:00–1:00".into(),
-            beats: vec![crate::md::Beat { id: "b1".into(), k: "场景1".into(), t: "窗边".into() }],
+            beats: vec![studio_doc::md::Beat { id: "b1".into(), k: "场景1".into(), t: "窗边".into() }],
         }],
-        blocks: vec![crate::md::DocBlock {
+        blocks: vec![studio_doc::md::DocBlock {
             id: "d1".into(),
             kind: "text".into(),
             label: "正文".into(),
@@ -473,7 +452,7 @@ pub fn samples() -> Value {
     let mut b = b;
     b.blocks[0].body = "艾米：年糕，你今天怎么不吃东西？\n窗外下起了雨。".into();
     // 字幕要先有时间线 —— 样本里先把它排好，模拟「时间线已采纳」
-    b.timeline = crate::timeline::plan(&b.shots.as_array().cloned().unwrap_or_default(), None);
+    b.timeline = studio_doc::timeline::plan(&b.shots.as_array().cloned().unwrap_or_default(), None);
     project::save(&tmp, &b).expect("写临时项目");
 
     let calls: &[(&str, Value)] = &[
@@ -501,19 +480,14 @@ pub fn samples() -> Value {
     Value::Object(out)
 }
 
-/// 样本的落盘形式。缩进与末尾换行固定下来，否则每次生成都是一个假 diff
-pub fn samples_json(v: &Value) -> String {
-    format!("{}\n", serde_json::to_string_pretty(v).expect("样本序列化"))
-}
-
 /// fixture 文件相对 core crate 的位置
 pub const SAMPLES_PATH: &str = "../../src/store/__fixtures__/rust-patches.json";
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::md::{Act, Beat, DocBlock};
-    use crate::project::Meta;
+    use studio_doc::md::{Act, Beat, DocBlock};
+    use studio_doc::project::Meta;
     use tempfile::TempDir;
 
     fn setup() -> TempDir {
@@ -668,7 +642,7 @@ mod tests {
     fn with_clips() -> TempDir {
         let tmp = TempDir::new().unwrap();
         project::save(tmp.path(), &Bundle {
-            meta: crate::project::Meta { id: "p1".into(), ..Default::default() },
+            meta: studio_doc::project::Meta { id: "p1".into(), ..Default::default() },
             blocks: vec![DocBlock {
                 id: "d1".into(), kind: "text".into(), label: "正文".into(),
                 body: "艾米：年糕，你今天怎么不吃东西？\n窗外下起了雨。".into(),
@@ -709,7 +683,7 @@ mod tests {
         // 一条都没出视频
         let tmp = TempDir::new().unwrap();
         project::save(tmp.path(), &Bundle {
-            meta: crate::project::Meta { id: "p1".into(), ..Default::default() },
+            meta: studio_doc::project::Meta { id: "p1".into(), ..Default::default() },
             shots: json!([{ "id": "s1-1", "vid": "none" }]),
             ..Default::default()
         }).unwrap();
@@ -719,7 +693,7 @@ mod tests {
         // 出了但都判定要重摇 —— 这两种情况下一步要做的事完全不同
         let tmp2 = TempDir::new().unwrap();
         project::save(tmp2.path(), &Bundle {
-            meta: crate::project::Meta { id: "p1".into(), ..Default::default() },
+            meta: studio_doc::project::Meta { id: "p1".into(), ..Default::default() },
             shots: json!([{ "id": "s1-1", "vid": "ok", "verdict": "redo" }]),
             ..Default::default()
         }).unwrap();
@@ -740,7 +714,7 @@ mod tests {
         let tmp = with_clips();
         // 模拟「时间线已采纳」：把它写进项目再生成字幕
         let mut b = project::load(tmp.path(), "p1").unwrap();
-        b.timeline = crate::timeline::plan(&b.shots.as_array().cloned().unwrap_or_default(), None);
+        b.timeline = studio_doc::timeline::plan(&b.shots.as_array().cloned().unwrap_or_default(), None);
         project::save(tmp.path(), &b).unwrap();
 
         let v = p(&tmp, "edit.subtitle", json!({ "lang": "zh" })).unwrap();
@@ -756,14 +730,14 @@ mod tests {
     fn 生成字幕_没台词时不从大纲里编一条() {
         let tmp = TempDir::new().unwrap();
         let mut b = Bundle {
-            meta: crate::project::Meta { id: "p1".into(), ..Default::default() },
+            meta: studio_doc::project::Meta { id: "p1".into(), ..Default::default() },
             blocks: vec![DocBlock {
                 id: "d1".into(), kind: "outline".into(), label: "梗概".into(), body: "一个女孩和一只猫。".into(),
             }],
             shots: json!([{ "id": "s1-1", "dur": 2, "vid": "ok", "verdict": "ok" }]),
             ..Default::default()
         };
-        b.timeline = crate::timeline::plan(&b.shots.as_array().cloned().unwrap_or_default(), None);
+        b.timeline = studio_doc::timeline::plan(&b.shots.as_array().cloned().unwrap_or_default(), None);
         project::save(tmp.path(), &b).unwrap();
         let e = p(&tmp, "edit.subtitle", json!({})).unwrap_err();
         assert!(e.to_string().contains("没有能念的"), "{e}");
@@ -810,7 +784,7 @@ mod tests {
     #[test]
     fn 样本文件与当前实现一致_否则前端验的是过期形状() {
         let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join(SAMPLES_PATH);
-        let want = samples_json(&samples());
+        let want = studio_doc::store::pretty_json(&samples());
         let got = std::fs::read_to_string(&path).unwrap_or_default();
         assert_eq!(
             got, want,

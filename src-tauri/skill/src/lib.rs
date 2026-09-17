@@ -1,4 +1,8 @@
-//! Skill 加载：磁盘上的文件夹 → 三级渐进披露。
+//! Skill 加载：磁盘上的一个目录 = 一个 Skill。
+//!
+//! 三级渐进披露（名字与说明常驻 → 正文用到才读 → 附件正文指到哪个读哪个）
+//! 全在这一个模块里。单独成包是因为它的输入是**用户往目录里放的文件** ——
+//! 路径穿越那道防线值得有个自己的边界。
 //!
 //! 一个 Skill 是一个目录：
 //!
@@ -21,7 +25,7 @@
 //! 所以 `SkillStore` 扫描时**只解析 frontmatter**，正文与附件都留在磁盘上，
 //! 由 `body()` / `resource()` 按需取。
 
-use crate::error::{Error, Result};
+use studio_error::{Error, Result};
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -72,24 +76,9 @@ pub struct SkillStore {
     warnings: Vec<SkillWarning>,
 }
 
-/// 把 SKILL.md 切成 frontmatter 与正文。
-///
-/// 只认开头的 `---` 围栏。没有围栏就是整篇都是正文 —— 那样没有 description，
-/// 调用方会把它当成坏 skill 跳过，而不是拿正文去猜。
-pub(crate) fn split_front(text: &str) -> Option<(&str, &str)> {
-    split(text)
-}
-
-fn split(text: &str) -> Option<(&str, &str)> {
-    let rest = text.strip_prefix("---")?.trim_start_matches(['\r']).strip_prefix('\n')?;
-    let end = rest.find("\n---")?;
-    let body = rest[end + 4..].trim_start_matches(['\r', '\n']);
-    Some((&rest[..end], body))
-}
-
 /// 只读 frontmatter，正文原样留在磁盘上 —— 这就是第 1 级。
 fn parse_meta(dir: &Path, source: &str, text: &str) -> std::result::Result<SkillMeta, String> {
-    let (front, _) = split(text).ok_or("SKILL.md 开头没有 --- 围起来的 frontmatter")?;
+    let (front, _) = studio_doc::md::split_front(text).ok_or("SKILL.md 开头没有 --- 围起来的 frontmatter")?;
     let fm: FrontMatter = serde_yaml_ng::from_str(front)
         .map_err(|e| format!("frontmatter 不是合法 YAML：{e}"))?;
 
@@ -187,7 +176,7 @@ impl SkillStore {
         let meta = self.get(name).ok_or_else(|| Error::UnknownSkill(name.into()))?;
         let text = fs::read_to_string(meta.dir.join("SKILL.md"))
             .map_err(|e| Error::Skill(format!("读 {name} 的 SKILL.md 失败：{e}")))?;
-        let (_, body) = split(&text)
+        let (_, body) = studio_doc::md::split_front(&text)
             .ok_or_else(|| Error::Skill(format!("{name} 的 SKILL.md 没有 frontmatter")))?;
         Ok(body.trim().to_string())
     }

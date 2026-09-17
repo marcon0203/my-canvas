@@ -14,7 +14,7 @@
 //! 风险档是 `Egress`，永远要人点头（见 `policy::auto_allowed`）——
 //! 网址可能是模型从别处读来的，而请求一发出去就带上了这台机器的 IP。
 
-use crate::error::{Error, Result};
+use studio_error::{Error, Result};
 use serde_json::{Value, json};
 use std::time::Duration;
 

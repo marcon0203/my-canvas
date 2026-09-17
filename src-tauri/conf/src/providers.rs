@@ -4,7 +4,7 @@
 //! 但**用户在设置里改过的优先** —— 目录只是种子，端点会变。
 
 use crate::config::ProviderSetting;
-use crate::error::{Error, Result};
+use studio_error::{Error, Result};
 
 /// 内置默认端点。与前端目录同源；改一边要改另一边（有测试盯着字段齐全）。
 pub const DEFAULT_BASE_URL: &[(&str, &str)] = &[

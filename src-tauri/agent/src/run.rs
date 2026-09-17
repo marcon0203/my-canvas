@@ -4,11 +4,11 @@
 //! 把编排放那儿等于这段代码永远没被类型检查过。这里能编、能测、能换 sink。
 
 use crate::agent::{self, AgentSpec};
-use crate::config::{AgentConfig, ModelRef, ProviderSetting};
-use crate::error::Error;
+use studio_conf::config::{AgentConfig, ModelRef, ProviderSetting};
+use studio_error::Error;
 use crate::outline::{self, OutlineDraft, OutlineInput};
 use crate::shotprompt::{self, PromptDraft, PromptInput};
-use crate::skills::{SkillStore, compose_preamble};
+use studio_skill::{SkillStore, compose_preamble};
 use std::collections::HashMap;
 
 /// 与前端 `AgentEvent` 同形。契约一致，前端换 transport 不用改事件处理。
@@ -45,17 +45,12 @@ impl<F: Fn(RunEvent)> Sink for F {
 }
 
 /// 取密钥的方式。测试里换成假的，免得碰真钥匙串。
+///
+/// **只有 trait 在这儿，真实现（读系统钥匙串）不在。** 那一份在门面 crate
+/// 里紧挨着 vault —— 这样 `vault::load` 不必为了被这里调用而变成公开的，
+/// 「没有任何 IPC 命令能读出明文」这句话才还是编译器保证的。
 pub trait Keys {
-    fn get(&self, provider: &str) -> crate::Result<String>;
-}
-
-/// 真实现：系统钥匙串
-pub struct SystemKeys;
-
-impl Keys for SystemKeys {
-    fn get(&self, provider: &str) -> crate::Result<String> {
-        crate::vault::load(provider)
-    }
+    fn get(&self, provider: &str) -> studio_error::Result<String>;
 }
 
 /// 一次运行的公共入参。`I` 是这条链路自己的输入形状 ——
@@ -178,7 +173,7 @@ mod tests {
     struct FakeKeys(Option<&'static str>);
 
     impl Keys for FakeKeys {
-        fn get(&self, provider: &str) -> crate::Result<String> {
+        fn get(&self, provider: &str) -> studio_error::Result<String> {
             self.0
                 .map(str::to_string)
                 .ok_or_else(|| Error::NoKey(provider.into()))
@@ -289,7 +284,7 @@ mod tests {
             )
             .unwrap();
         }
-        let store = SkillStore::scan(&[crate::skills::Root {
+        let store = SkillStore::scan(&[studio_skill::Root {
             name: "内置".into(),
             path: tmp.path().to_path_buf(),
         }]);
@@ -328,7 +323,7 @@ mod tests {
             )
             .unwrap();
         }
-        let store = SkillStore::scan(&[crate::skills::Root {
+        let store = SkillStore::scan(&[studio_skill::Root {
             name: "内置".into(), path: tmp.path().to_path_buf(),
         }]);
         let c = cfg(serde_json::json!({ "agentId": "writer", "skills": ["mine"] }));

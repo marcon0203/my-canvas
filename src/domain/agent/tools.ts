@@ -66,7 +66,7 @@ export interface ToolSpec {
 }
 
 /**
- * 全部工具。**与 Rust 侧 `core/src/tools.rs` 的注册表一一对应**，有 parity 测试。
+ * 全部工具。**与 Rust 侧 `tools/src/tools.rs` 的注册表一一对应**，有 parity 测试。
  *
  * `status` 如实标实现到哪一步 —— 一张看起来都能用的清单比一张诚实的短清单更糟。
  * 没实现的在 `blockedBy` 里写清缺什么。

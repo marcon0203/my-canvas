@@ -1,3 +1,8 @@
+# 门面：把功能包按原来的模块名再导出一遍，加上密钥保管。
+#
+# 为什么要有这一层：app/ 里那些 `studio_core::project::…` 的路径不用跟着动，
+# 而且**密钥的真实现留在这儿** —— vault::load 不公开，
+# run::Keys 的系统钥匙串实现也在这儿，见 lib.rs。
 [package]
 name = "studio-core"
 version.workspace = true
@@ -7,22 +12,13 @@ license.workspace = true
 [dependencies]
 serde.workspace = true
 serde_json.workspace = true
-thiserror.workspace = true
-tokio.workspace = true
-futures.workspace = true
-async-trait.workspace = true
-tracing.workspace = true
+studio-error = { path = "../error" }
+studio-doc = { path = "../doc" }
+studio-conf = { path = "../conf" }
+studio-net = { path = "../net" }
+studio-skill = { path = "../skill" }
+studio-agent = { path = "../agent" }
+studio-tools = { path = "../tools" }
 
 # 密钥只进系统钥匙串，明文不落盘、不过 IPC
 keyring = "4"
-# rustls：不依赖系统 OpenSSL，三平台产物一致
-reqwest = { version = "0.12", default-features = false, features = ["json", "stream", "rustls-tls"] }
-eventsource-stream = "0.2"
-rig = "0.42"
-schemars = "1.2.2"
-# frontmatter 解析。rig 已经间接依赖它，不是新增的构建成本
-serde_yaml_ng = "0.10"
-
-[dev-dependencies]
-tokio = { version = "1", features = ["rt-multi-thread", "macros", "test-util"] }
-tempfile = "3"

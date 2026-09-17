@@ -18,11 +18,11 @@
 //! `dispatch` 里先过 `policy`，超出自主上限的直接返回「要人点头」，
 //! 不执行。把判断放在每个调用方那儿迟早会漏掉一处。
 
-use crate::config::ModelRef;
-use crate::error::{Error, Result};
-use crate::generate::{self, Job, TaskApi};
-use crate::policy::{Risk, auto_allowed};
-use crate::project;
+use studio_conf::config::ModelRef;
+use studio_error::{Error, Result};
+use studio_net::generate::{self, Job, TaskApi};
+use studio_conf::policy::{Risk, auto_allowed};
+use studio_doc::project;
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use std::path::Path;
@@ -394,14 +394,14 @@ pub struct GenCtx<'a> {
 pub struct Ctx<'a> {
     /// 异步任务接口（出图出视频）。字段名不叫 gen —— 那是 edition 2024 的保留字
     pub task: Option<GenCtx<'a>>,
-    pub chat: Option<crate::prompt::ChatCtx<'a>>,
+    pub chat: Option<studio_agent::prompt::ChatCtx<'a>>,
 }
 
 impl<'a> Ctx<'a> {
     pub fn task(g: GenCtx<'a>) -> Self {
         Self { task: Some(g), chat: None }
     }
-    pub fn chat(c: crate::prompt::ChatCtx<'a>) -> Self {
+    pub fn chat(c: studio_agent::prompt::ChatCtx<'a>) -> Self {
         Self { task: None, chat: Some(c) }
     }
 }
@@ -459,7 +459,7 @@ pub async fn dispatch(
                 missing: "译提示词要一个文本模型和它的密钥 —— 去「模型设置」接入一家、加上模型".into(),
             });
         };
-        return Ok(Outcome::Ok { value: crate::prompt::translate(&c, &args).await? });
+        return Ok(Outcome::Ok { value: studio_agent::prompt::translate(&c, &args).await? });
     }
 
     if t.status != Status::Ready {
@@ -474,7 +474,7 @@ pub async fn dispatch(
         let url = args.get("url").and_then(Value::as_str).unwrap_or("");
         let secs = args.get("timeoutSec").and_then(Value::as_u64).unwrap_or(20).clamp(1, 60);
         return Ok(Outcome::Ok {
-            value: crate::web::fetch(url, std::time::Duration::from_secs(secs)).await?,
+            value: studio_net::web::fetch(url, std::time::Duration::from_secs(secs)).await?,
         });
     }
 
@@ -488,7 +488,7 @@ pub async fn dispatch(
         "project.search" => search_project(root, project_id, &args)?,
         "metrics.read" => read_metrics(root, project_id)?,
         "cost.estimate" => estimate_cost(&args)?,
-        "prompt.compile" => crate::prompt::compile(root, project_id, &args)?,
+        "prompt.compile" => studio_agent::prompt::compile(root, project_id, &args)?,
         "file.export" => export_file(root, project_id, &args)?,
         // status == Ready 的工具必须在这儿有分支，否则是注册表和实现对不上
         other => return Err(Error::UnknownTool(format!("{other} 标成已实现却没有实现"))),
@@ -753,9 +753,9 @@ fn read_metrics(root: &Path, id: &str) -> Result<Value> {
 mod tests {
     use super::*;
     #[allow(unused_imports)]
-    use crate::policy::risk_of_tool;
-    use crate::md::{Act, Beat};
-    use crate::project::{Bundle, Meta};
+    use studio_conf::policy::risk_of_tool;
+    use studio_doc::md::{Act, Beat};
+    use studio_doc::project::{Bundle, Meta};
     use tempfile::TempDir;
 
     fn setup() -> TempDir {

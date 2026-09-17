@@ -16,11 +16,34 @@
 //! 景别机位这些镜头语言**不在分镜提示词里**：生成资产形状照时已经定好了，
 //! 出图时随参考图走。重复说一遍只会和参考图打架。
 
-use crate::error::{Error, Result};
-use crate::patch::style_frag;
-use crate::project::{self, Bundle};
+use studio_error::{Error, Result};
+use studio_doc::project::{self, Bundle};
 use serde_json::{Value, json};
 use std::path::Path;
+
+/// 画风名 → 英文片段。与前端 `domain/prompt/vocabulary.ts` 的 STYLEMAP 同一份，
+/// 有 parity 测试。查不到的画风名原样带上 —— 用户自定义的风格名也该能用。
+///
+/// 放在 prompt 而不是 patch：**它是提示词词表**，`style.apply` 只是恰好要用它。
+/// 原来放在 patch 里，于是 prompt 反过来依赖 patch —— 又是一条方向错了的边。
+pub const STYLEMAP: &[(&str, &str)] = &[
+    ("温暖手绘", "warm hand-painted"),
+    ("3D 动画", "3D animated render"),
+    ("日式赛璐璐", "anime cel shading"),
+    ("水彩绘本", "watercolor storybook style"),
+    ("厚涂写实", "thick impasto painting"),
+    ("胶片质感", "film photography, grainy"),
+    ("黏土定格", "claymation stop-motion"),
+    ("像素风", "pixel art"),
+];
+
+pub fn style_frag(style: &str) -> String {
+    STYLEMAP
+        .iter()
+        .find(|(k, _)| *k == style)
+        .map(|(_, v)| (*v).to_string())
+        .unwrap_or_else(|| style.to_string())
+}
 
 /// 一段提示词的来源。界面上按来源上色，所以分段而不是直接给一整条
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
@@ -160,7 +183,7 @@ Rules:
 
 /// 调文本模型要的东西。**密钥只在这儿传一次**，不进返回值、不进日志。
 pub struct ChatCtx<'a> {
-    pub model: &'a crate::config::ModelRef,
+    pub model: &'a studio_conf::config::ModelRef,
     pub base_url: &'a str,
     pub api_key: &'a str,
     pub timeout: std::time::Duration,
@@ -181,7 +204,7 @@ pub async fn translate(ctx: &ChatCtx<'_>, args: &Value) -> Result<Value> {
         // 译提示词不需要发散：同一句中文两次译出不同结果，命中率就没法归因了
         temperature: Some(0.0),
         tools: vec![],
-        autonomy: crate::config::Autonomy::Propose,
+        autonomy: studio_conf::config::Autonomy::Propose,
         max_turns: 1,
     };
     let agent = crate::agent::build(&spec, ctx.api_key);
@@ -256,7 +279,7 @@ pub const SAMPLES_PATH: &str = "../../src/domain/prompt/__fixtures__/rust-prompt
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::project::{Bundle, Meta};
+    use studio_doc::project::{Bundle, Meta};
     use tempfile::TempDir;
 
     fn setup() -> TempDir {
@@ -332,7 +355,7 @@ mod tests {
     #[test]
     fn 样本文件与当前实现一致_否则前端验的是过期规则() {
         let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join(SAMPLES_PATH);
-        let want = crate::patch::samples_json(&samples());
+        let want = studio_doc::store::pretty_json(&samples());
         let got = std::fs::read_to_string(&path).unwrap_or_default();
         assert_eq!(got, want, "合成规则变了但 {} 没更新 —— 跑 `npm run fixtures`", path.display());
     }
@@ -347,7 +370,7 @@ mod tests {
 
     #[tokio::test]
     async fn 空文字不去调模型() {
-        let m = crate::config::ModelRef { provider: "deepseek".into(), model: "x".into() };
+        let m = studio_conf::config::ModelRef { provider: "deepseek".into(), model: "x".into() };
         let ctx = ChatCtx {
             model: &m, base_url: "http://127.0.0.1:1", api_key: "k",
             timeout: std::time::Duration::from_millis(50),

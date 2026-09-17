@@ -21,7 +21,7 @@
 //! 文件读起来够快，而且**出问题时能用编辑器打开看**。
 //! 数据库换来的并发与事务，单机单人的场景里用不上。
 
-use crate::error::{Error, Result};
+use studio_error::{Error, Result};
 use serde::{Serialize, de::DeserializeOwned};
 use std::path::{Path, PathBuf};
 
@@ -113,6 +113,15 @@ pub fn config_dir(root: &Path) -> PathBuf {
 
 pub fn config_path(root: &Path, which: ConfigFile) -> PathBuf {
     config_dir(root).join(which.name())
+}
+
+/// 人能读的 JSON 形式：两空格缩进 + 末尾一个换行。
+///
+/// 缩进与换行固定下来，否则每次重新生成都是一个假 diff。
+/// 给 fixture 用（两侧对形状的测试吃的是文件），不是给运行时的数据用 ——
+/// 那些走 `write_json`。
+pub fn pretty_json(v: &serde_json::Value) -> String {
+    format!("{}\n", serde_json::to_string_pretty(v).expect("JSON 序列化"))
 }
 
 #[cfg(test)]

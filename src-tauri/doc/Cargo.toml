@@ -1,0 +1,14 @@
+# 文档与落盘：Markdown / JSON / 项目目录 / 工作空间。不知道模型，也不知道工具。
+[package]
+name = "studio-doc"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+serde.workspace = true
+serde_json.workspace = true
+studio-error = { path = "../error" }
+
+[dev-dependencies]
+tempfile = "3"

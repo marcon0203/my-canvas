@@ -111,9 +111,24 @@ pub fn emit_block(b: &DocBlock) -> String {
     )
 }
 
+/// 把一份 Markdown 切成 frontmatter 与正文。
+///
+/// 只认开头的 `---` 围栏。没有围栏就是整篇都是正文 —— 调用方据此判断
+/// 「这份文件有没有元信息」，而不是拿正文去猜。
+///
+/// 放在 md 而不是 skills：**frontmatter 是 Markdown 的写法**，SKILL.md 和
+/// 剧本块都用它。原来它在 skills 里，于是 md 反过来依赖 skills ——
+/// 一条方向错了的边，拆包时才会疼。
+pub fn split_front(text: &str) -> Option<(&str, &str)> {
+    let rest = text.strip_prefix("---")?.trim_start_matches(['\r']).strip_prefix('\n')?;
+    let end = rest.find("\n---")?;
+    let body = rest[end + 4..].trim_start_matches(['\r', '\n']);
+    Some((&rest[..end], body))
+}
+
 /// 解析一个剧本块。`id` 由调用方按文件名给 —— 与大纲同理，不写进文件。
 pub fn parse_block(id: &str, text: &str) -> DocBlock {
-    let (front, body) = match crate::skills::split_front(text) {
+    let (front, body) = match split_front(text) {
         Some(x) => x,
         None => return DocBlock { id: id.into(), kind: "text".into(), label: id.into(), body: text.trim().into() },
     };

@@ -42,7 +42,7 @@ export const RISK_WHY: Record<Risk, string> = {
 };
 
 /**
- * 工具 → 风险。**与 Rust 侧 `core/src/policy.rs` 同一张表**，有 parity 测试。
+ * 工具 → 风险。**与 Rust 侧 `conf/src/policy.rs` 同一张表**，有 parity 测试。
  *
  * 渲参考图是本地 WebGL，不花钱也不出网 —— 名字里带 render 容易让人误以为要花钱。
  */

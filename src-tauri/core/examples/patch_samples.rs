@@ -24,7 +24,7 @@ fn main() {
         (prompt::SAMPLES_PATH, prompt::samples()),
     ] {
         let path = dir.join(rel);
-        std::fs::write(&path, patch::samples_json(&v)).expect("写 fixture");
+        std::fs::write(&path, studio_core::store::pretty_json(&v)).expect("写 fixture");
         eprintln!("已写入 {}", path.display());
     }
 }

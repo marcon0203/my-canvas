@@ -14,7 +14,7 @@
 //! 它由前端持久化，每次调用时传进来，与 providers / globals 的处理方式一致；
 //! 这一层只负责解析与校验，不碰存储。
 
-use crate::error::{Error, Result};
+use studio_error::{Error, Result};
 use std::path::{Path, PathBuf};
 
 /// 默认目录名，挂在用户 home 下

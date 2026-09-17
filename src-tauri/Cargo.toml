@@ -1,9 +1,27 @@
-# Tauri 桌面端。拆两个 crate 是刻意的：
-#   core/  纯 Rust，不碰 tauri/webkit —— 能单独编译、单独测，将来也能被 CLI 复用
-#   app/   只做 IPC 绑定与窗口，薄到几乎没有逻辑
-# 好处很实在：CI 和无 GUI 环境（比如容器）里 core 照样跑测试。
+# Tauri 桌面端。按功能分包，**依赖是单向的**，从下到上：
+#
+#   error/   统一错误类型。所有包都用它
+#   doc/     文档与落盘：Markdown / JSON / 项目目录 / 工作空间
+#   conf/    配置与权限：Agent 配置、厂商端点、工具风险档
+#   net/     出网：异步任务协议、读网页
+#   skill/   Skill 加载（用户往目录里放的文件）
+#   agent/   跑模型：装配 Rig agent 与各条链路
+#   tools/   工具：注册表、闸门、调度、补丁
+#   core/    门面：把上面几包按原来的模块名再导出一遍，外加密钥保管
+#   app/     只做 IPC 绑定与窗口，薄到几乎没有逻辑；只依赖 core
+#
+# 为什么要单向：一条方向错了的依赖在单 crate 里是看不见的（`crate::` 谁都能引），
+# 拆开之后编译器会直接拒绝。拆的过程中就抓出两条：md 依赖 skills（frontmatter
+# 被放进了 skills）、prompt 依赖 patch（画风词表被放进了 patch）。
+#
+# 密钥那一点是刻意的：`vault::load` 只在 core/ 里，**没有 pub 出去**。
+# `run::Keys` 的真实现也在 core/ —— 拆包不能把「明文不过 IPC」从编译器保证
+# 降级成约定。
+#
+# 除此之外还有个实在的好处：改 tools/ 不会让 doc/ 重编，无 GUI 环境（容器、CI）
+# 里下面这七包照样跑测试。
 [workspace]
-members = ["core", "app"]
+members = ["error", "doc", "conf", "net", "skill", "agent", "tools", "core", "app"]
 resolver = "3"
 
 [workspace.package]
@@ -16,6 +34,3 @@ serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 thiserror = "2"
 tokio = { version = "1", features = ["rt-multi-thread", "macros", "sync", "time"] }
-futures = "0.3"
-async-trait = "0.1"
-tracing = "0.1"

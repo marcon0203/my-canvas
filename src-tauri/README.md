@@ -2,20 +2,41 @@
 
 ```
 src-tauri/
-├ core/   纯 Rust，不依赖 tauri —— 无 GUI 环境也能编译和测试
-└ app/    Tauri 壳：IPC 绑定 + 窗口，逻辑尽量为零
+├ error/   统一错误类型
+├ doc/     文档与落盘：Markdown / JSON / 项目目录 / 工作空间
+├ conf/    配置与权限：Agent 配置、厂商端点、工具风险档
+├ net/     出网：异步任务协议、读网页
+├ skill/   Skill 加载
+├ agent/   跑模型：装配 Rig agent 与各条链路
+├ tools/   工具：注册表、闸门、调度、补丁
+├ core/    门面：按原来的模块名再导出一遍 + 密钥保管
+└ app/     Tauri 壳：IPC 绑定 + 窗口，逻辑尽量为零；只依赖 core
 ```
 
-## 为什么拆两个 crate
+## 为什么按功能分包
 
-Linux 上构建 Tauri 需要 `webkit2gtk-4.1` / `gdk-3.0`。拆开之后：
+**依赖是单向的，从上往下看那张图就是层次。** 一条方向错了的依赖在单 crate
+里是看不见的（`crate::` 谁都能引），分开之后编译器会直接拒绝。分包过程中
+就抓出两条这样的边：
+
+- `md` 依赖 `skills` —— frontmatter 的切分被放进了 skills，而它是 Markdown 的写法
+- `prompt` 依赖 `patch` —— 画风词表被放进了 patch，而它是提示词词表
+
+两条都是「随手放在了第一个用到它的地方」，在单 crate 里永远不会报错。
+
+另外两个实在的好处：改 `tools/` 不会让 `doc/` 重编；Linux 上构建 Tauri 需要
+`webkit2gtk-4.1` / `gdk-3.0`，而下面这七包在没有 GUI 的环境里照样跑测试：
 
 ```bash
-cd src-tauri/core && cargo test     # 任何环境都能跑，21 个测试
-cd src-tauri && cargo check -p studio-app   # 需要 GUI 系统库
+cd src-tauri && cargo test --workspace --exclude studio-app   # 任何环境都能跑
+cd src-tauri && cargo check -p studio-app                     # 需要 GUI 系统库
 ```
 
-CI 与容器里核心逻辑照样有覆盖；将来要做 CLI 也能直接复用 `core`。
+**密钥那一点是刻意保住的。** `vault` 只住在 `core/`，模块整体私有；公开面上
+只有「配没配、尾号、写入、清除」，`load` 不在其中，明文的唯一出口是
+`vault_key`。`run::Keys` 的系统钥匙串实现也在 `core/` —— 把 vault 放进任何一个
+功能包，`load` 就得变成 `pub`，那句「没有任何 IPC 命令能读出明文」就从编译器
+保证降级成了约定。分包不该用这个换整齐。
 
 ## 本地跑起来
 
@@ -46,26 +67,30 @@ serde 的 derive 本来就找不到，报假阳性一两次就没人看了。
 `npm run verify` 会连它一起跑。真正的类型检查仍然要在装了 GUI 依赖的机器上
 `cargo check`。
 
-## 模块
+## 包与模块
 
-| 模块 | 职责 |
-|---|---|
-| `config` | 与前端 `domain/agent/config.ts` 同形的契约。前端 JSON 直接反序列化，字段名用 camelCase 省掉映射层 |
-| `error` | 统一错误 → `{ code, message }`。前端按 `code` 分支，`message` 只给人看 |
-| `vault` | 系统钥匙串。`load()` 是 `pub(crate)` —— **没有任何 IPC 命令能读出明文** |
-| `providers` | 端点解析：用户改过的优先，内置目录只是种子 |
-| `agent` | 配置 → `AgentSpec` → Rig agent。解析是纯函数，配置错误在花钱之前就报出来 |
-| `run` | 编排：`Run<I>` 带公共入参，每条链路只换输入与产物事件 |
-| `skills` | Skill 加载：扫目录只读 frontmatter，正文与附件按需取 |
-| `workspace` | 工作空间解析：`~/.hitv` 或用户指定的目录，用户数据的唯一落脚点 |
-| `store` | 落盘：原子写、缺文件给默认值、配置分三个文件 |
-| `md` | 大纲与剧本的 Markdown 编解码，往返无损 |
-| `generate` | 异步任务协议：出图/出视频/配音都走这套 |
-| `tools` | 工具注册表 + 调度 + 闸门 |
-| `policy` | 自主执行的权限边界，与前端 policy.ts 同一套规则 |
-| `project` | 项目目录布局：project.json + outline.md + script/*.md + assets/shots.json |
-| `outline` | 起草大纲。`number()` 补场次键 |
-| `shotprompt` | 补写提示词。`reconcile()` 核对镜号 |
+| 包 | 模块 | 职责 |
+|---|---|---|
+| `error` | `error` | 统一错误 → `{ code, message }`。前端按 `code` 分支，`message` 只给人看 |
+| `doc` | `md` | 大纲与剧本的 Markdown 编解码，往返无损 |
+| `doc` | `project` | 项目目录布局：project.json + outline.md + script/*.md + assets/shots.json |
+| `doc` | `store` | 落盘：原子写、缺文件给默认值、配置分三个文件 |
+| `doc` | `timeline` | 成片顺序与字幕 |
+| `doc` | `workspace` | 工作空间解析：`~/.hitv` 或用户指定的目录，用户数据的唯一落脚点 |
+| `conf` | `config` | 与前端 `domain/agent/config.ts` 同形的契约。前端 JSON 直接反序列化，字段名用 camelCase 省掉映射层 |
+| `conf` | `policy` | 自主执行的权限边界，与前端 policy.ts 同一套规则 |
+| `conf` | `providers` | 端点解析：用户改过的优先，内置目录只是种子 |
+| `net` | `generate` | 异步任务协议：出图/出视频/配音都走这套 |
+| `net` | `web` | 读网页：剥掉脚本样式、限长、如实标截断 |
+| `skill` | `skills` | Skill 加载：扫目录只读 frontmatter，正文与附件按需取 |
+| `agent` | `agent` | 配置 → `AgentSpec` → Rig agent。解析是纯函数，配置错误在花钱之前就报出来 |
+| `agent` | `outline` | 起草大纲。`number()` 补场次键 |
+| `agent` | `prompt` | 提示词三段式合成与中译英 |
+| `agent` | `run` | 编排：`Run<I>` 带公共入参，每条链路只换输入与产物事件 |
+| `agent` | `shotprompt` | 补写提示词。`reconcile()` 核对镜号 |
+| `tools` | `patch` | 写类工具的产物：一份补丁，不是一次写盘 |
+| `tools` | `tools` | 工具注册表 + 调度 + 闸门 |
+| `core` | `vault` | 系统钥匙串。模块整体私有，`load` 不在公开面上 —— **没有任何 IPC 命令能读出明文** |
 
 ## Rig 的实际形态（0.42）
 
@@ -298,5 +323,7 @@ skills/write-shot-prompts/
 
 - SQLite（项目、生成记录、成本流水）
 - 生成队列（tokio + 持久化，关窗继续跑）
-- 图片/视频厂商适配（Seedance / CogVideoX / 万相）
-- 工具实现：`tools.ts` 里那 12 件现在只有契约，Rust 侧还没有对应实现
+- 图片/视频/音乐厂商字段映射：协议测过了，那张表要拿真 key 对一次
+- `audio.tts`：TTS 多数厂商同步返回音频字节，不是异步任务协议 —— 要先做
+  「同步取字节 + 落进项目目录 + 时间线上的配音轨」那三件
+- `web.search`：缺的不是代码，是「接哪家搜索服务」这个决定（设置里还没有这一项）

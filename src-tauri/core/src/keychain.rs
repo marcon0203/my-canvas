@@ -1,9 +1,15 @@
 //! 密钥保管：只进系统钥匙串，明文既不落盘也不过 IPC。
 //!
 //! 前端能拿到的只有两样：这家配没配、尾号是什么。
-//! 请求由 Rust 发出，`load` 是 crate 内部可见 —— 没有任何 IPC 命令能读出明文。
+//! 请求由 Rust 发出。
+//!
+//! **这个模块整体是私有的。** 对外的那一小半在 lib.rs 的 `pub mod vault` 里
+//! 逐个点名（状态、写入、清除），`load` 不在其中 —— 明文的唯一出口是
+//! `vault_key`。分包时这一点是刻意保住的：把 vault 放进任何一个功能包，
+//! `load` 就得变成 pub，而那句「没有任何 IPC 命令能读出明文」就从编译器
+//! 保证降级成了约定。
 
-use crate::error::{Error, Result};
+use studio_error::{Error, Result};
 
 const SERVICE: &str = "ai-video-studio";
 

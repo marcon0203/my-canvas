@@ -5,7 +5,7 @@
 //! 产物形状与前端 `domain/story/model.ts` 的 `Act` 一致 —— 采纳时直接进项目树。
 
 use crate::agent::AgentSpec;
-use crate::error::{Error, Result};
+use studio_error::{Error, Result};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 

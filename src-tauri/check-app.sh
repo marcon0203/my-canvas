@@ -32,7 +32,19 @@ for f in $(find app/src -name '*.rs'); do
   fi
 done
 
+# 密钥明文只能从 core 的 vault_key 出去。
+#
+# 今天编译器已经挡住了（keychain 是私有模块），这条守的是**下一步**：
+# 有人为了让某处编过去，把 keychain 改成 pub，然后在 IPC 层直接读明文。
+# 那一改编译器就不再拦，而 review 很容易滑过去。
+leak=$(grep -rnE 'keychain|vault::load|vault::get' app/src || true)
+if [ -n "$leak" ]; then
+  echo "❌ IPC 层不能碰密钥明文 —— 唯一出口是 studio_core::vault_key"
+  echo "$leak" | sed 's/^/   /'
+  fail=1
+fi
+
 if [ $fail -eq 0 ]; then
-  echo "✅ app crate 语法与属性检查通过（真正的类型检查要在装了 GUI 依赖的机器上 cargo check）"
+  echo "✅ app crate 语法与属性检查通过 + 密钥明文没有旁路（真正的类型检查要在装了 GUI 依赖的机器上 cargo check）"
 fi
 exit $fail

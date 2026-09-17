@@ -5,7 +5,7 @@
 //! 提示词写错了人一眼能看出来，写到别的镜头上却是静默的错。
 
 use crate::agent::AgentSpec;
-use crate::error::{Error, Result};
+use studio_error::{Error, Result};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 

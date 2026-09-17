@@ -1,0 +1,17 @@
+# 出网：异步任务协议与读网页。这个应用会连哪儿，看这一个包就够。
+[package]
+name = "studio-net"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+serde.workspace = true
+serde_json.workspace = true
+tokio.workspace = true
+# rustls：不依赖系统 OpenSSL，三平台产物一致
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
+studio-error = { path = "../error" }
+
+[dev-dependencies]
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "test-util"] }

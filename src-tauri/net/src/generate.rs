@@ -13,7 +13,7 @@
 //! 这么分是因为：机制写错了很难发现（超时、重试风暴、取消泄漏），
 //! 字段写错了第一次调用就报错，一看就知道，改一行就好。
 
-use crate::error::{Error, Result};
+use studio_error::{Error, Result};
 use serde_json::Value;
 use std::time::Duration;
 

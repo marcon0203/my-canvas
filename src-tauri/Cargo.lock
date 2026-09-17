@@ -7830,6 +7830,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "studio-agent"
+version = "0.1.0"
+dependencies = [
+ "rig",
+ "schemars 1.2.2",
+ "serde",
+ "serde_json",
+ "studio-conf",
+ "studio-doc",
+ "studio-error",
+ "studio-skill",
+ "tempfile",
+ "tokio",
+]
+
+[[package]]
 name = "studio-app"
 version = "0.1.0"
 dependencies = [
@@ -7842,23 +7858,84 @@ dependencies = [
 ]
 
 [[package]]
+name = "studio-conf"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
+ "studio-error",
+]
+
+[[package]]
 name = "studio-core"
 version = "0.1.0"
 dependencies = [
- "async-trait",
- "eventsource-stream",
- "futures",
  "keyring",
- "reqwest 0.12.28",
- "rig",
- "schemars 1.2.2",
  "serde",
  "serde_json",
- "serde_yaml_ng",
+ "studio-agent",
+ "studio-conf",
+ "studio-doc",
+ "studio-error",
+ "studio-net",
+ "studio-skill",
+ "studio-tools",
+]
+
+[[package]]
+name = "studio-doc"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
+ "studio-error",
  "tempfile",
+]
+
+[[package]]
+name = "studio-error"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
  "thiserror 2.0.20",
+]
+
+[[package]]
+name = "studio-net"
+version = "0.1.0"
+dependencies = [
+ "reqwest 0.12.28",
+ "serde",
+ "serde_json",
+ "studio-error",
  "tokio",
- "tracing",
+]
+
+[[package]]
+name = "studio-skill"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_yaml_ng",
+ "studio-doc",
+ "studio-error",
+ "tempfile",
+]
+
+[[package]]
+name = "studio-tools"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
+ "studio-agent",
+ "studio-conf",
+ "studio-doc",
+ "studio-error",
+ "studio-net",
+ "tempfile",
+ "tokio",
 ]
 
 [[package]]

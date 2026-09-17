@@ -1,0 +1,20 @@
+# 工具：注册表、闸门、调度，以及写类工具的补丁。依赖图最上面那层。
+[package]
+name = "studio-tools"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+serde.workspace = true
+serde_json.workspace = true
+tokio.workspace = true
+studio-error = { path = "../error" }
+studio-conf = { path = "../conf" }
+studio-doc = { path = "../doc" }
+studio-net = { path = "../net" }
+studio-agent = { path = "../agent" }
+
+[dev-dependencies]
+tempfile = "3"
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "test-util"] }

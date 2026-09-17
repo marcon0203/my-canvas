@@ -14,7 +14,7 @@ import { riskOfTool, type Risk } from './policy';
  * 格式变了这个测试会直接失败，然后有人来改它 —— 比两份手抄清单静静漂移好。
  */
 
-const SRC = readFileSync(new URL('../../../src-tauri/core/src/tools.rs', import.meta.url), 'utf8');
+const SRC = readFileSync(new URL('../../../src-tauri/tools/src/tools.rs', import.meta.url), 'utf8');
 
 interface RustTool {
   id: string;

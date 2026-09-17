@@ -108,10 +108,10 @@ describe('agent/policy · 自主执行的边界', () => {
   });
 
   /**
-   * 与 Rust 侧 core/src/policy.rs 的对照表。
+   * 与 Rust 侧 conf/src/policy.rs 的对照表。
    * 两边判得不一样，等于其中一边的把关是假的 —— 改任何一边这条都会红。
    */
-  it('与 Rust 侧同一套判定（对照 core/src/policy.rs 的用例）', () => {
+  it('与 Rust 侧同一套判定（对照 conf/src/policy.rs 的用例）', () => {
     const expected: Record<ToolId, Risk> = {
       'project.read': 'read', 'project.search': 'read', 'metrics.read': 'read',
       'cost.estimate': 'read', 'stage.render': 'read', 'prompt.translate': 'read',

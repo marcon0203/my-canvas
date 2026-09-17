@@ -45,7 +45,7 @@ export const SKILLS: readonly SkillSpec[] = [
     summary: '从一句灵感搭出三幕结构；已有大纲时只补最薄的那一幕，不推翻重来。',
     needs: '无。空项目也能跑 —— 它就是第一步。',
     patch: 'acts', goto: 'outline',
-    impl: { by: 'model', module: 'core/src/outline.rs',
+    impl: { by: 'model', module: 'agent/src/outline.rs',
       note: '走 Rig 的 Extractor 让模型填 schema；场次编号由 Rust 补，不信模型编的 id。' },
   },
   {
@@ -102,7 +102,7 @@ export const SKILLS: readonly SkillSpec[] = [
     summary: '给缺提示词的镜头各写一条英文提示词：景别术语 + 引用资产描述 + 画风。',
     needs: '有镜头的提示词是空的。',
     patch: 'shotPrompts', goto: 'storyboard',
-    impl: { by: 'model', module: 'core/src/shotprompt.rs',
+    impl: { by: 'model', module: 'agent/src/shotprompt.rs',
       note: '资产引用在前端展开成描述再送过去；镜号由 Rust 核对，模型编的会被丢掉。' },
   },
   {

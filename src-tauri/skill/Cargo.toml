@@ -1,0 +1,16 @@
+# Skill 加载。输入是用户往目录里放的文件，所以路径那道防线自己一个边界。
+[package]
+name = "studio-skill"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+serde.workspace = true
+# frontmatter 解析。rig 已经间接依赖它，不是新增的构建成本
+serde_yaml_ng = "0.10"
+studio-error = { path = "../error" }
+studio-doc = { path = "../doc" }
+
+[dev-dependencies]
+tempfile = "3"

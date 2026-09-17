@@ -10,9 +10,9 @@
 //!
 //! `skills` 不进 Rig —— 它决定「接不接这个活」，是路由层的事，在 agent 建起来之前就判完了。
 
-use crate::config::{AgentConfig, Autonomy, ModelRef, ProviderSetting};
-use crate::error::{Error, Result};
-use crate::providers::resolve_base_url;
+use studio_conf::config::{AgentConfig, Autonomy, ModelRef, ProviderSetting};
+use studio_error::{Error, Result};
+use studio_conf::providers::resolve_base_url;
 use std::collections::HashMap;
 
 /// 建一个 agent 需要的全部输入，解析完再交给 Rig —— 解析失败要在建之前就报出来。
