@@ -88,18 +88,22 @@ export function SettingsPage({ section, detail, onOpen, onBack }: {
         />
       )}
       <div className="stage__body"><div className="pad" style={{ maxWidth: 1080 }}>
-        {section === 'workspace' && <WorkspaceSettings />}
-        {section === 'models' && (prov
-          ? <ProviderDetail id={prov.id} onBack={onBack} />
-          : <ProviderList onOpen={onOpen} />)}
-        {section === 'skills' && (sk
-          ? <SkillDetail id={sk.id} />
-          : file
-            ? <SkillFileDetail name={file.meta.name} />
-            : <SkillList onOpen={onOpen} />)}
-        {section === 'agents' && (p
-          ? <AgentDetail id={p.id} />
-          : <AgentList onOpen={onOpen} />)}
+        {/* 卡片之间的间距靠这个容器的 gap。`.pcard` 自己不带外边距 ——
+            之前这层容器漏了，四个分区的卡片全是贴在一起的 */}
+        <div className="setgrid">
+          {section === 'workspace' && <WorkspaceSettings />}
+          {section === 'models' && (prov
+            ? <ProviderDetail id={prov.id} onBack={onBack} />
+            : <ProviderList onOpen={onOpen} />)}
+          {section === 'skills' && (sk
+            ? <SkillDetail id={sk.id} />
+            : file
+              ? <SkillFileDetail name={file.meta.name} />
+              : <SkillList onOpen={onOpen} />)}
+          {section === 'agents' && (p
+            ? <AgentDetail id={p.id} />
+            : <AgentList onOpen={onOpen} />)}
+        </div>
         {!p && !prov && !sk && !file && (
           <p className="t-cap dim setnote">
             <Icon name="bolt" />

@@ -280,7 +280,9 @@ function Preamble({ id }: { id: AgentId }) {
   if (!open) {
     return (
       <div className="prem">
-        <p className="prem__peek">{preambleOf(cfg, p).split('\n')[0]}</p>
+        {/* 整段交给 CSS 夹三行（只取第一行的话，看到的是「管镜头与光。」这种标题句）。
+            段间空行在这儿折掉 —— 三行的额度不该被空行占走一行 */}
+        <p className="prem__peek">{preambleOf(cfg, p).trim().replace(/\n{2,}/g, '\n')}</p>
         <button className="tbtn" onClick={() => { setDraft(preambleOf(cfg, p)); setOpen(true); }}>
           <Icon name="wand" />{custom ? '已改写 · 查看' : '改写'}
         </button>

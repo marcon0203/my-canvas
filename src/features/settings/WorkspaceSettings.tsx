@@ -62,7 +62,7 @@ export function WorkspaceSettings() {
         </header>
 
         <p className="skdesc">
-          Skill 和项目数据都放在这个目录下。放进
+          Skill 和项目数据都放在这个目录下。放进{' '}
           <span className="mono">{info?.root ?? '~/.hitv'}/skills</span> 的 Skill 下次运行就能用上。
         </p>
 
