@@ -38,7 +38,7 @@ function planOutlineDraft(c: AgentContext): Plan {
       step('book', '落成场次'),
     ],
     reply: fresh
-      ? `按三幕结构搭了个骨架，${acts.length} 幕共 ${added.length} 场。每一场先写它承担什么功能，具体内容留到正文再填 —— 结构定了再写字，改起来便宜。`
+      ? `按三幕结构搭了个骨架，${acts.length} 幕共 ${added.length} 场。每一场先写它承担什么功能，具体内容留到正文再填。`
       : `你已经有 ${c.acts.length} 幕 ${allBeats(c.acts).length} 场了，我没有推翻重来，而是补在场次最少的那一幕：${added.map((b) => b.k).join('、')}。结构别越加越偏。`,
     proposal,
   };
@@ -46,12 +46,12 @@ function planOutlineDraft(c: AgentContext): Plan {
 
 function planOutlineExpand(c: AgentContext): Plan {
   const beat = allBeats(c.acts).find((b) => b.id === c.sel.beatId) ?? allBeats(c.acts)[0];
-  if (!beat) return blocked('outline.expand', '大纲还是空的 —— 先让我起草一版，再来延展走向。');
+  if (!beat) return blocked('outline.expand', '大纲还是空的。先起草一版，再来延展走向。');
   const alts = draftAlts(beat);
   return {
     kind: 'outline.expand',
     steps: [step('map', `分析「${beat.t}」的功能`), step('spark', '给出三条不同走向')],
-    reply: `围绕${beat.k}给了三条走向。它们改的是**谁在场、谁知情**，不是换形容词 —— 这一层变了，后面的分镜和资产才会真的不一样。`,
+    reply: `围绕${beat.k}给了三条走向。三条改的是谁在场、谁知情，不是换形容词。这一层变了，后面的分镜和资产才会不一样。`,
     proposal: {
       title: `${beat.k} · 3 条备选走向`,
       rows: alts.map((v, i) => ({ k: `走向 ${i + 1}`, v })),
@@ -64,12 +64,12 @@ function planOutlineExpand(c: AgentContext): Plan {
 function planScriptDraft(c: AgentContext): Plan {
   const beats = allBeats(c.acts);
   const beat = beats.find((b) => b.id === c.sel.beatId) ?? beats[0];
-  if (!beat) return blocked('script.draft', '还没有大纲 —— 先起草大纲，我才知道这一场要写什么。');
+  if (!beat) return blocked('script.draft', '还没有大纲。先起草大纲，我才知道这一场要写什么。');
   const block = draftScriptBlock(c, beat, actOfBeat(c.acts, beat.id));
   return {
     kind: 'script.draft',
     steps: [step('book', `读取${beat.k}的设定`), step('users', '接入已定稿的角色'), step('text', '写成正文块')],
-    reply: `写了${beat.k}的正文骨架：环境、动作、一句最必要的台词。结尾留了一行「观众应该多知道什么」的待补 —— 这一行答不上来，这场就还不该拍。`,
+    reply: `写了${beat.k}的正文骨架：环境、动作、一句最必要的台词。结尾留了一行「观众应该多知道什么」待补。这一行答不上来，这场就还不成立。`,
     proposal: {
       title: `新正文块 · ${beat.k}`,
       rows: [{ k: '标签', v: block.label }, { k: '预览', v: block.body.split('\n').filter(Boolean).slice(0, 4).join(' / ') }],
@@ -82,7 +82,7 @@ function planScriptDraft(c: AgentContext): Plan {
 function planScriptPolish(c: AgentContext): Plan {
   const block = c.blocks.find((b) => b.id === c.sel.blockId)
     ?? [...c.blocks].reverse().find((b) => b.type === 'text');
-  if (!block) return blocked('script.polish', '没有可润色的正文块 —— 先写一场出来。');
+  if (!block) return blocked('script.polish', '没有可润色的正文块。先写一场出来。');
   const body = polishBody(block.body);
   if (body === block.body) {
     return blocked('script.polish', `「${block.label}」已经是一句一行了，再拆就碎了。想改别的，直接告诉我要什么感觉。`);
@@ -112,10 +112,10 @@ function planAssetsExtract(c: AgentContext): Plan {
   return {
     kind: 'assets.extract',
     steps: [step('book', `扫描 ${c.blocks.length} 个文档块`), step('users', '比对资产库'), step('layers', `建 ${add.length} 个草稿资产`)],
-    reply: `从剧本里找出 ${add.length} 个还没进库的：${add.map((x) => x.asset.name).join('、')}。都建成**草稿**态 —— 定稿之后才能被分镜引用，这条规矩我不绕过。`,
+    reply: `从剧本里找出 ${add.length} 个还没进库的：${add.map((x) => x.asset.name).join('、')}。都建成草稿态。定稿之后分镜才能引用。`,
     proposal: {
       title: `新资产 · ${add.length} 个草稿`,
-      rows: add.map((x) => ({ k: `${x.group} · ${x.asset.aid}`, v: `${x.asset.name} —— ${x.asset.desc}` })),
+      rows: add.map((x) => ({ k: `${x.group} · ${x.asset.aid}`, v: `${x.asset.name}：${x.asset.desc}` })),
       patch: { t: 'assets', add },
       cost: 4, goto: 'assets',
     },
@@ -150,7 +150,7 @@ function planShotsGenerate(c: AgentContext): Plan {
       step('layers', '每场按「环境 → 动作 → 情绪」拆三镜'),
       step('image', '挂上这场的资产引用'),
     ],
-    reply: `给 ${beats.length} 场各拆了三镜：交代环境、看清动作、靠近情绪。提示词我故意**留空**了 —— 下一步用「补写提示词」按每镜自己的景别和引用去写，比现在瞎编一版再改要省。`,
+    reply: `给 ${beats.length} 场各拆了三镜：交代环境、看清动作、靠近情绪。提示词留空了。下一步用「补写提示词」按每镜的景别和引用去写，比现在瞎编一版再改省。`,
     proposal: {
       title: `新分镜 · ${shots.length} 镜`,
       rows: beats.map((b) => ({ k: b.k, v: `${b.t} · 3 镜` })),
@@ -167,7 +167,7 @@ function planShotsPrompt(c: AgentContext): Plan {
   return {
     kind: 'shots.prompt',
     steps: [step('text', `清点 ${miss.length} 镜缺提示词`), step('users', '展开引用资产的设定'), step('wand', '按各自景别合成')],
-    reply: `给 ${miss.length} 镜补了提示词。每条都由这镜自己的景别 + 它引用的资产描述 + 画风合成 —— 所以你在提示词框里能看见每一段是**哪来的**，改哪段心里有数。`,
+    reply: `给 ${miss.length} 镜补了提示词。每条由这镜的景别 + 引用的资产描述 + 画风合成。提示词框里能看出每一段来自哪儿。`,
     proposal: {
       title: `补写提示词 · ${edits.length} 镜`,
       rows: edits.slice(0, 8).map((e) => ({ k: e.id, v: e.own })),
@@ -187,7 +187,7 @@ function planStyleTransfer(c: AgentContext): Plan {
   return {
     kind: 'style.transfer',
     steps: [step('wand', `切到「${next}」`), step('layers', '重算全局画风提示词')],
-    reply: `把项目画风换成「${next}」。注意：有 ${off} 张形状照是**节点级画风**（单独指定过），它们不跟全局走 —— 这是设计如此，想一起改就在资产页把它们设回「全局」。`,
+    reply: `把项目画风换成「${next}」。有 ${off} 张形状照单独指定过画风，不跟全局走。要一起改就在资产页把它们设回「全局」。`,
     proposal: {
       title: `画风 · ${c.style} → ${next}`,
       rows: [{ k: '全局提示词', v: prompt }, { k: '不受影响', v: `${off} 张节点级画风的形状照` }],
@@ -199,12 +199,12 @@ function planStyleTransfer(c: AgentContext): Plan {
 
 function planVideoBatch(c: AgentContext): Plan {
   const pending = c.shots.filter((s) => s.vid === 'none');
-  if (!pending.length) return blocked('video.batch', '没有待转的镜头了 —— 都已经出过视频。');
+  if (!pending.length) return blocked('video.batch', '没有待转的镜头了，都出过视频。');
   const cost = pending.length * 4;
   return {
     kind: 'video.batch',
     steps: [step('video', `排队 ${pending.length} 镜`), step('bolt', `预估消耗 ${cost} 积分`)],
-    reply: `${pending.length} 镜待转，预估 ${cost} 积分（余额 ${c.credits}）。跑完仍然要你逐镜判定**可用/重摇** —— 不判定，命中率就算不出来，这片子花了多少冤枉钱也就说不清。`,
+    reply: `${pending.length} 镜待转，预估 ${cost} 积分（余额 ${c.credits}）。跑完要逐镜判定可用/重摇。不判定就算不出命中率。`,
     proposal: {
       title: `批量转视频 · ${pending.length} 镜`,
       rows: [{ k: '待转', v: `${pending.length} 镜` }, { k: '预估', v: `${cost} 积分` }, { k: '余额', v: `${c.credits} 积分` }],
@@ -216,12 +216,12 @@ function planVideoBatch(c: AgentContext): Plan {
 
 function planAutocut(c: AgentContext): Plan {
   const done = c.shots.filter((s) => s.vid === 'ok');
-  if (!done.length) return blocked('edit.autocut', '还没有可用的视频片段 —— 先批量转视频，再判定可用。');
+  if (!done.length) return blocked('edit.autocut', '还没有可用的视频片段。先批量转视频，再逐镜判定。');
   const dur = done.reduce((n, s) => n + s.dur, 0);
   return {
     kind: 'edit.autocut',
     steps: [step('scissors', `取 ${done.length} 段可用素材`), step('bolt', '按场次顺序与时长配平')],
-    reply: `按场次顺序排好了 ${done.length} 段，共 ${dur}s。判定为「重摇」的没进时间线 —— 成片只用可用素材，这也是命中率那个数字的意义所在。`,
+    reply: `按场次顺序排好了 ${done.length} 段，共 ${dur}s。判定为「重摇」的没进时间线。`,
     proposal: {
       title: `自动成片 · ${done.length} 段 / ${dur}s`,
       rows: done.slice(0, 8).map((s) => ({ k: s.id, v: `${s.desc} · ${s.dur}s` })),
@@ -251,8 +251,8 @@ function planCostReport(c: AgentContext): Plan {
     steps: [step('bolt', '汇总生成次数与判定'), step('layers', '按景别归因')],
     reply: [
       `已消耗 **${spent}** 积分，余额 ${c.credits}。`,
-      `累计生成 ${tries} 次，判定可用 ${usable} 镜 —— 命中率 **${hit}%**，折合每条可用镜头 ${perUsable} 积分。`,
-      worst ? `最难拍的是**${worst[0]}**：${worst[1].t} 次生成只过了 ${worst[1].o} 条。这类镜头值得先在布光台把机位定死再跑，而不是多摇几次。` : '还没有足够的判定数据做归因 —— 先去分镜页逐镜判定可用/重摇。',
+      `累计生成 ${tries} 次，判定可用 ${usable} 镜。命中率 ${hit}%，每条可用镜头折合 ${perUsable} 积分。`,
+      worst ? `最难拍的是**${worst[0]}**：${worst[1].t} 次生成只过了 ${worst[1].o} 条。这类镜头先在布光台把机位定死再跑，比多摇几次省。` : '判定数据不够，做不了归因。先去分镜页逐镜判定可用/重摇。',
     ].join('\n'),
   };
 }

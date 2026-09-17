@@ -108,17 +108,11 @@ export function OutlinePage() {
                 </div>
               ))}
               <p className="t-cap dim" style={{ margin: '10px 0 0', lineHeight: 1.7 }}>
-                采纳哪条由你决定 — 点右上角「延展剧情走向」还能再要三条。
+                点右上角还能再要三条。
               </p>
             </div></div>
           </>
         )}
-        <div className="blk"><div className="blk__body">
-          <p style={{ margin: 0 }}>
-            每个节点都能自动延展出多条剧情走向。选中后点右上角「延展剧情走向」，
-            Agent 会给三条不同的可能性，采纳哪条由你决定。反过来也成立：已有剧本可以逆向解析成这张节点图。
-          </p>
-        </div></div>
       </>
     );
   })();

@@ -73,15 +73,12 @@ export function SkillList({ onOpen }: { onOpen: (id: string) => void }) {
         <header className="pcard__h">
           <span className="pcard__n">已装载的 Skill · {loaded?.skills.length ?? 0}</span>
           <span className="t-cap dim">
-            {isDesktop() ? '扫描内置目录与用户目录' : '浏览器里只能看到内置的 —— 没有文件系统'}
+            {isDesktop() ? '扫描内置目录与用户目录' : '浏览器里没有文件系统，只能看到内置的'}
           </span>
         </header>
         <p className="skdesc dim">
-          一个 Skill 是磁盘上的一个目录：<span className="mono">SKILL.md</span> 里
-          frontmatter 写 name 与 description，正文是给模型的指令。
-          加载分三级 —— 名字与说明常驻，正文用到才读，
-          <span className="mono">references/</span> 里的附件正文指到哪个读哪个。
-          往用户目录里放一个文件夹就多一个 Skill，不用改代码。
+          一个 Skill 是一个目录，放进工作空间的 <span className="mono">skills/</span> 就生效，
+          同名的盖过内置。
         </p>
         {loaded?.skills.length
           ? (
@@ -224,7 +221,7 @@ export function SkillFileDetail({ name }: { name: string }) {
             {meta.hasAssets && <Chip tone="a">assets/</Chip>}
           </div>
           <p className="t-cap dim" style={{ marginTop: 12, marginBottom: 0 }}>
-            scripts 里的东西是拿来**执行**的，不进上下文 —— 这是三级里最省的一档。
+            scripts 里的东西是拿来**执行**的，不进上下文。
           </p>
         </section>
       )}
@@ -252,7 +249,7 @@ export function SkillDetail({ id }: { id: SkillId }) {
         <Fields>
           <Field label="归属" hint={owner
             ? `${personaById(owner).name}接这件活。换人时所需工具会自动补给新主人。`
-            : '现在没人接 —— 用户提到时 Agent 会明说做不了，而不是硬着头皮做。'}>
+            : '现在没人接。用户提到时 Agent 会明说做不了。'}>
             <OwnerSelect kind={id} />
           </Field>
           <Field label="前置条件" hint="不满足时 Agent 说不行，而不是假装做了">
@@ -262,7 +259,7 @@ export function SkillDetail({ id }: { id: SkillId }) {
             <span className="skplain">
               {s.goto
                 ? <>一份待采纳的产物（<span className="mono">{s.patch}</span>），采纳后落到「{GOTO_LABEL[s.goto]}」页，计一条撤销记录</>
-                : '只说话，没有可采纳的产物 —— 它读记账数据出报告，不改项目'}
+                : '只出报告，不改项目'}
             </span>
           </Field>
         </Fields>

@@ -43,7 +43,7 @@ export const SKILLS: readonly SkillSpec[] = [
   {
     id: 'outline.draft', ...INTENT_META['outline.draft'],
     summary: '从一句灵感搭出三幕结构；已有大纲时只补最薄的那一幕，不推翻重来。',
-    needs: '无。空项目也能跑 —— 它就是第一步。',
+    needs: '无。空项目也能跑，它就是第一步。',
     patch: 'acts', goto: 'outline',
     impl: { by: 'model', module: 'agent/src/outline.rs',
       note: '走 Rig 的 Extractor 让模型填 schema；场次编号由 Rust 补，不信模型编的 id。' },
@@ -125,7 +125,7 @@ export const SKILLS: readonly SkillSpec[] = [
     needs: '无。没有记录时会如实说没数据。',
     // 报告类：只说话，不产出可采纳的补丁
     patch: null, goto: null,
-    impl: { by: 'local', note: '纯本地统计，不调模型 —— 它读的是记账数据。' },
+    impl: { by: 'local', note: '纯本地统计，读的是记账数据，不调模型。' },
   },
 ];
 

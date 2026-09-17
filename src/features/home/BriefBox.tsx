@@ -99,7 +99,7 @@ export function BriefBox() {
             </span>
           ))}
           {!isDesktop() && (
-            <span className="t-cap dim">浏览器里只记文件名 —— 装成桌面端后才会真的存进项目目录</span>
+            <span className="t-cap dim">浏览器里只记文件名，装成桌面端才会存进项目目录</span>
           )}
         </div>
       )}

@@ -103,10 +103,10 @@ export function SettingsPage({ section, detail, onOpen, onBack }: {
         {!p && !prov && !sk && !file && (
           <p className="t-cap dim setnote">
             <Icon name="bolt" />
-            这是应用级设置，跨项目共用 —— 模型与 Agent 的配置不属于某一个项目。
-            {section === 'models' && (isDesktop()
-              ? ' 密钥写入系统钥匙串，由 Rust 侧读写 —— 前端拿不到明文，请求也不经过前端。'
-              : ' 当前是浏览器环境，没有系统钥匙串：密钥只记「配没配」，不会真正保存。装成桌面端后才会写入钥匙串。')}
+            这里的配置跨项目共用。
+            {/* 浏览器里密钥存不住，这一条用户必须知道；桌面端存在哪儿他不需要知道 */}
+            {section === 'models' && !isDesktop()
+              && ' 当前是浏览器环境，密钥只记「配没配」，不会真正保存。要装成桌面端。'}
           </p>
         )}
       </div></div>

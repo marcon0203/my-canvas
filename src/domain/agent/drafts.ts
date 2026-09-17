@@ -60,9 +60,9 @@ export function draftOutline(c: AgentContext): { acts: Act[]; added: Beat[] } {
 /** 一场 → 三条备选走向。围绕这场自己的标题做变体，不是通用套话 */
 export function draftAlts(beat: Beat): string[] {
   return [
-    `${beat.t} —— 但主角这次选择不去干预，结果自己找上门`,
-    `${beat.t} —— 换成旁人视角目击，主角事后才知道`,
-    `${beat.t} —— 事情如常发生，唯一的异样藏在一个没人注意的细节里`,
+    `${beat.t}，但主角这次不去干预，结果自己找上门`,
+    `${beat.t}，换成旁人视角目击，主角事后才知道`,
+    `${beat.t}，事情如常发生，异样藏在一个没人注意的细节里`,
   ];
 }
 

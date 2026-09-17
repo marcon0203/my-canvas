@@ -65,7 +65,7 @@ export async function* runAgent(
     const toId = ownerOfConfigured(resolved, ctx.agents);
     if (!toId) {
       // 这活儿被所有人取消了：说清楚，别假装转交给某个不接的人
-      const line = `「${resolved}」现在没有 Agent 接 —— 去设置里给某位加上这项技能和对应工具。`;
+      const line = `「${resolved}」现在没有 Agent 接。去设置里给某位加上这项技能和对应工具。`;
       yield { t: 'plan', plan: { kind: resolved, steps: [], reply: line, blocked: line } };
       for (let i = 0; i < line.length; i += CHARS_PER_TICK) {
         try { await sleep(TICK_MS, signal); } catch { yield { t: 'aborted' }; return; }

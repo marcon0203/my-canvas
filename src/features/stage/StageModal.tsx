@@ -113,10 +113,10 @@ export function StageModal({ open, onClose, rig, onPatch, title = '机位与光�
               <Button
                 onClick={() => {
                   const url = exportRef.current?.();
-                  if (!url) { toast('渲染失败 —— 浏览器没拿到 WebGL'); return; }
+                  if (!url) { toast('渲染失败：浏览器没拿到 WebGL'); return; }
                   onPatch({ poseRef: url });
                   const { width, height } = refImageSize(aspect);
-                  toast(`已渲染 ${width}×${height}（${ratio}）姿态参考图 —— 不花钱，随时重来`);
+                  toast(`已渲染 ${width}×${height} 姿态参考图`);
                 }}>
                 <Icon name="image" />渲染参考图
               </Button>

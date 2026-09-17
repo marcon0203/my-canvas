@@ -5,20 +5,26 @@ import { useUi } from '@/store/ui';
 /**
  * 账号角落：积分 + 头像。
  *
- * **一份定义，两个挂点**：有一级图标栏的页面挂在栏底，项目内（一级栏收起）挂在顶栏。
- * 两处不会同时出现 —— 积分是花钱的东西，哪个界面都不能让它消失。
+ * **积分是按项目记的**（project.json 里的 credits / budget），不是账号余额。
+ * 所以没打开项目时它不显示 —— 原来会显示一个 0，看着像余额用完了。
+ *
+ * 也没有充值按钮：背后没有计费，摆一个点不动的按钮比不摆更糟。
+ * 点数字跳到数据页，那儿有消耗明细。【待确认】要不要接真实计费。
  */
 export function Account({ compact = false }: { compact?: boolean }) {
   const credits = useProject((s) => s.credits);
-  const toast = useUi((s) => s.toast);
-  const recharge = () => toast('充值页面：积分用于图像与视频生成');
+  const budget = useProject((s) => s.budget);
+  const inProject = !!useProject((s) => s.hydratedFor);
+  const setStep = useUi((s) => s.setStep);
 
   return (
     <div className={compact ? 'acct acct--compact' : 'acct'}>
-      <button className="credit" onClick={recharge} title={`剩余积分 ${credits}，点击充值`}>
-        <Icon name="bolt" /><span>{credits}</span>
-      </button>
-      {!compact && <button className="tbtn" onClick={recharge}>充值</button>}
+      {inProject && (
+        <button className="credit" onClick={() => setStep('metrics')}
+          title={`本项目剩余 ${credits}，预算 ${budget}。点开看消耗明细`}>
+          <Icon name="bolt" /><span>{credits}</span>
+        </button>
+      )}
       <div className="ava" title="账号">M</div>
     </div>
   );

@@ -91,14 +91,14 @@ export const TOOLS: readonly ToolSpec[] = [
   { id: 'style.apply', group: 'prompt', name: '换画风', desc: '换画风并重算受影响的提示词；画风名要在项目清单里', needs: 'text', writes: true, status: 'ready' },
 
   /* 生成 */
-  { id: 'image.generate', group: 'generate', name: '出图', desc: '生成形状照与关键帧', needs: 'image', writes: true, status: 'unverified', blockedBy: '协议已实现并测过，厂商字段映射还没对过真实文档 —— 接第一家时拿真 key 调一次就知道要不要改' },
-  { id: 'image.edit', group: 'generate', name: '改图', desc: '局部重绘或扩图，比重出整张省；要说清改成什么样', needs: 'image', writes: true, status: 'unverified', blockedBy: '协议已实现并测过，厂商字段映射还没对过真实文档 —— 接第一家时拿真 key 调一次就知道要不要改' },
-  { id: 'image.upscale', group: 'generate', name: '放大', desc: '定稿后放大到成片分辨率；倍数只能 2 或 4', needs: 'image', writes: true, status: 'unverified', blockedBy: '协议已实现并测过，厂商字段映射还没对过真实文档 —— 接第一家时拿真 key 调一次就知道要不要改' },
+  { id: 'image.generate', group: 'generate', name: '出图', desc: '生成形状照与关键帧', needs: 'image', writes: true, status: 'unverified', blockedBy: '协议已实现并测过，厂商字段映射还没对过真实文档。接第一家时拿真 key 调一次就知道要不要改' },
+  { id: 'image.edit', group: 'generate', name: '改图', desc: '局部重绘或扩图，比重出整张省；要说清改成什么样', needs: 'image', writes: true, status: 'unverified', blockedBy: '协议已实现并测过，厂商字段映射还没对过真实文档。接第一家时拿真 key 调一次就知道要不要改' },
+  { id: 'image.upscale', group: 'generate', name: '放大', desc: '定稿后放大到成片分辨率；倍数只能 2 或 4', needs: 'image', writes: true, status: 'unverified', blockedBy: '协议已实现并测过，厂商字段映射还没对过真实文档。接第一家时拿真 key 调一次就知道要不要改' },
   { id: 'video.generate', group: 'generate', name: '出视频', desc: '关键帧 → 片段', needs: 'video', writes: true, status: 'unverified', blockedBy: '同出图，共用一套异步任务协议' },
-  { id: 'video.extend', group: 'generate', name: '续接片段', desc: '把已有片段往后续几秒；一次最多 10 秒，分几次接每次都能先看一眼', needs: 'video', writes: true, status: 'unverified', blockedBy: '协议已实现并测过，厂商字段映射还没对过真实文档 —— 接第一家时拿真 key 调一次就知道要不要改' },
-  { id: 'audio.tts', group: 'generate', name: '配音', desc: '台词 → 语音，音色按角色配', needs: 'audio', writes: true, status: 'declared', blockedBy: '配音不走异步任务协议 —— 多数厂商是同步返回音频字节。要先做「同步取字节 + 落进项目目录」那条机制，再接具体厂商' },
-  { id: 'audio.music', group: 'generate', name: '配乐', desc: '按情绪与时长生成背景音乐', needs: 'audio', writes: true, status: 'unverified', blockedBy: '协议已实现并测过，厂商字段映射还没对过真实文档 —— 接第一家时拿真 key 调一次就知道要不要改' },
-  { id: 'audio.sfx', group: 'generate', name: '音效', desc: '雨声、脚步、关门这类单个音效', needs: 'audio', writes: true, status: 'unverified', blockedBy: '协议已实现并测过，厂商字段映射还没对过真实文档 —— 接第一家时拿真 key 调一次就知道要不要改' },
+  { id: 'video.extend', group: 'generate', name: '续接片段', desc: '把已有片段往后续几秒；一次最多 10 秒，分几次接每次都能先看一眼', needs: 'video', writes: true, status: 'unverified', blockedBy: '协议已实现并测过，厂商字段映射还没对过真实文档。接第一家时拿真 key 调一次就知道要不要改' },
+  { id: 'audio.tts', group: 'generate', name: '配音', desc: '台词 → 语音，音色按角色配', needs: 'audio', writes: true, status: 'declared', blockedBy: '配音不走异步任务协议：多数厂商是同步返回音频字节。要先做「同步取字节 + 落进项目目录」那条机制，再接具体厂商' },
+  { id: 'audio.music', group: 'generate', name: '配乐', desc: '按情绪与时长生成背景音乐', needs: 'audio', writes: true, status: 'unverified', blockedBy: '协议已实现并测过，厂商字段映射还没对过真实文档。接第一家时拿真 key 调一次就知道要不要改' },
+  { id: 'audio.sfx', group: 'generate', name: '音效', desc: '雨声、脚步、关门这类单个音效', needs: 'audio', writes: true, status: 'unverified', blockedBy: '协议已实现并测过，厂商字段映射还没对过真实文档。接第一家时拿真 key 调一次就知道要不要改' },
 
   /* 镜头 */
   { id: 'stage.render', group: 'camera', name: '渲参考图', desc: '布光台白模离屏渲染，本地不花钱', status: 'ready' },
@@ -110,7 +110,7 @@ export const TOOLS: readonly ToolSpec[] = [
   { id: 'file.export', group: 'deliver', name: '导出文件', desc: '大纲/剧本导 .md、分镜表导 .csv；只产出内容，存哪儿由人在保存对话框里选', status: 'ready' },
 
   /* 查资料 */
-  { id: 'web.search', group: 'research', name: '搜网页', desc: '查产品卖点、考据这类外部资料', status: 'declared', blockedBy: '要先在设置里接入一家搜索服务（端点 + key）—— 现在没有这一项。查询词会离开本机，接哪家该由用户决定，不在代码里挑一家写死' },
+  { id: 'web.search', group: 'research', name: '搜网页', desc: '查产品卖点、考据这类外部资料', status: 'declared', blockedBy: '要先在设置里接入一家搜索服务（端点 + key），现在没有这一项。查询词会离开本机，接哪家该由用户决定，不在代码里挑一家写死' },
   { id: 'web.fetch', group: 'research', name: '读网页', desc: '读一个 http(s) 文本页面的正文；脚本样式剥掉，过长截断并说明', status: 'ready' },
 ];
 

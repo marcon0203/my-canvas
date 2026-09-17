@@ -142,9 +142,8 @@ export function AgentDetail({ id }: { id: AgentId }) {
           {cfg.autonomy === 'auto' && (
             <Field label="自主上限"
               hint={<>
-                自主执行时最多做到这一档，超过的照样停下来等你点头 ——
-                「自主」省的是点采纳的手，不是取消把关。
-                <b>导出文件这类会把东西送出本机的动作，调到最高也不会自动做。</b>
+                超过这一档的动作照样停下来等你点头。
+                <b>导出文件这类会把东西送出本机的，调到最高也不会自动做。</b>
               </>}>
               <Segmented ariaLabel="自主上限"
                 items={AUTO_MAX_CHOICES.map((r) => ({
@@ -202,7 +201,7 @@ export function AgentDetail({ id }: { id: AgentId }) {
           </Field>
           <Field wide label={`工具 · ${cfg.tools.length} / ${TOOLS.length}`}
             hint={<>
-              ¥ 要花积分，↗ 会把东西送出本机 —— 这两类在自主模式下会停下来等你点头。
+              ¥ 要花积分，↗ 会把东西送出本机。这两类在自主模式下会停下来等你点头。
               <b>虚线的还没实现</b>，<b>点线的实现了但还没拿真 key 验过</b>；
               鼠标停上去看具体缺什么。
             </>}>

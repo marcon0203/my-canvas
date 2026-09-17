@@ -88,7 +88,7 @@ export function submitGen(
 
 /** 提交前能判出来的错。判不出来的（余额、审核、超时）只有真实后端知道 */
 function paramError(p: GenParams): string | undefined {
-  if (!p.prompt.trim()) return '提示词是空的，没发出去 —— 先写这一镜的内容，或让摄影指导补写';
+  if (!p.prompt.trim()) return '提示词是空的，没发出去。先写这一镜的内容，或让摄影指导补写';
   if (p.batch < 1) return `一次要出几版？给的是 ${p.batch}`;
   return undefined;
 }

@@ -73,7 +73,7 @@ export function parseSkill(dir: string, text: string): Parsed | { error: string 
   if (!name) return { error: 'skill 没有名字，目录名也取不到' };
   const description = fm.description?.trim();
   if (!description) {
-    return { error: 'frontmatter 里没有 description —— 模型就是靠它决定要不要用这个 skill 的' };
+    return { error: 'frontmatter 里没有 description。模型靠它决定要不要用这个 skill' };
   }
   return { meta: { name, description, dir }, body: cut.body.trim() };
 }

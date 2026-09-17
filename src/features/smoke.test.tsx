@@ -141,7 +141,7 @@ describe('页面渲染烟雾测试', () => {
     expect(html).toContain('导出分镜表');
     // 还没排过时间线：如实说，而不是画一条看起来已经排好的轨
     expect(html).toContain('还没排时间线');
-    expect(html).toContain('还没有配音');
+    expect(html).toContain('配音工具还没接通');
     // 生成字幕要先有时间线，按钮此时是禁用的，并说清为什么
     expect(html).toContain('先排时间线：字幕要挂在时间轴上');
     expect(html).toMatch(/disabled[\s\S]{0,400}?生成字幕/);

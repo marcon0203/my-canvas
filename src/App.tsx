@@ -144,7 +144,7 @@ export function ResourcesRoute() {
     <Shell section="resources">
       <div className="stage"><div className="stage__body"><div className="pad">
         <EmptyState icon="image"
-          text="资源管理还没实现。这里将来放跨项目共用的素材：参考图、音乐、字体、LUT，以及它们被哪些项目引用。现在先占个入口。" />
+          text="资源管理还没实现，先占个入口。" />
       </div></div></div>
     </Shell>
   );

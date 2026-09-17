@@ -133,6 +133,6 @@ export function autoAllowed(risk: Risk, autoMax: Risk = DEFAULT_AUTO_MAX): boole
 /** 挡下来时给人话：为什么停在这儿 */
 export function holdReason(risk: Risk): string {
   return risk === 'egress'
-    ? '这一步会把东西送出这台机器 —— 自主模式也不会自己做，等你点头。'
-    : `这一步${RISK_WHY[risk]}，超过了你给的自主上限 —— 等你点头。`;
+    ? '这一步会把东西送出这台机器。自主模式也不会自己做，等你点头。'
+    : `这一步${RISK_WHY[risk]}，超过了你给的自主上限。`;
 }

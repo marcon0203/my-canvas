@@ -46,7 +46,7 @@ export function NewProjectModal({ open, onClose }: { open: boolean; onClose: () 
       invalidate();
       close();
       navigate(`/project/${id}/outline`);
-      toast(`「${proj}」建好了 —— 跟编剧说一句灵感，让它起草大纲`);
+      toast(`「${proj}」建好了。跟编剧说一句灵感就能起草大纲。`);
     } catch (e) {
       toast(String((e as { message?: string })?.message ?? e));
     } finally {

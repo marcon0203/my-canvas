@@ -223,7 +223,7 @@ export const useAgent = create<AgentState>((set, get) => ({
     // 丢弃 = 这条路不走了。剩下的步骤基于这份产物，接着跑没有意义
     if (get().queue.length) {
       set({ queue: [] });
-      useUi.getState().toast('已停下 —— 后面的步骤要等这一步的产物，改完再让我接着跑');
+      useUi.getState().toast('已停下。后面几步要用这一步的产物，改完再让我接着跑。');
     }
   },
 
@@ -261,7 +261,7 @@ function applyProposal(p: Proposal): void {
   if (p.patch.t === 'run') {
     if (p.patch.action === 'video.batch') {
       project.batchVidStart();
-      ui.toast('批量转视频已排队 —— 跑完记得逐镜判定');
+      ui.toast('批量转视频已排队，跑完逐镜判定');
       setTimeout(() => useProject.getState().batchVidDone(), 1500);
     } else {
       ui.toast('已按场次顺序排好可用片段');

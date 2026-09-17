@@ -39,7 +39,7 @@ export function WorkspaceSettings() {
         setInfo(next);
       }
       setWorkspace(path);
-      toast(path.trim() ? '工作空间已切换 —— 旧目录里的东西没有被动过' : '已改回默认 ~/.hitv');
+      toast(path.trim() ? '工作空间已切换，旧目录没有被动过' : '已改回默认 ~/.hitv');
     } catch (e) {
       toast(String((e as { message?: string })?.message ?? e));
     } finally {
@@ -62,9 +62,8 @@ export function WorkspaceSettings() {
         </header>
 
         <p className="skdesc">
-          Skill、项目数据都放在这个目录下。Agent 跑起来时从这儿加载用户自己放的 skill ——
-          换句话说，往 <span className="mono">{info?.root ?? '~/.hitv'}/skills</span> 里放一个
-          文件夹，它下一次运行就能用上，不用改代码也不用重装。
+          Skill 和项目数据都放在这个目录下。放进
+          <span className="mono">{info?.root ?? '~/.hitv'}/skills</span> 的 Skill 下次运行就能用上。
         </p>
 
         <Fields>
@@ -83,7 +82,7 @@ export function WorkspaceSettings() {
 
           <Field label="实际路径"
             hint={isDesktop()
-              ? (info?.exists ? '目录已经建好了' : '目录还没建 —— 应用时会建出来')
+              ? (info?.exists ? '目录已经建好了' : '目录还没建，应用时会建出来')
               : '浏览器里没有文件系统，看不到目录的真实状态。装成桌面端后这里会显示真实情况。'}>
             <span className="skplain mono">{info?.root ?? '读取中…'}</span>
           </Field>
@@ -129,7 +128,7 @@ export function WorkspaceSettings() {
             <Icon name="x" />
             <span>
               <b>旧目录里的东西不会被搬过去，也不会被删。</b>
-              替你搬数据是在拿你的东西冒险 —— 要迁就自己复制，确认无误再把旧的删掉。
+              要迁就自己复制，确认无误再删旧的。
             </span>
           </li>
           <li className="issue">

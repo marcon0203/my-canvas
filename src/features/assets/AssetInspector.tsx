@@ -245,7 +245,7 @@ function EasyPanel({ rig, patch, onIntent }: {
             </div>
           ))}
           <p className="t-cap dim" style={{ margin: '10px 0 0', lineHeight: 1.7 }}>
-            滑块只是这些术语的白话版。看熟了就可以直接开专业模式，那边能调滑块表达不了的东西。
+            专业模式能调滑块表达不了的东西。
           </p>
         </div>
       </details>

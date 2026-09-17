@@ -50,7 +50,7 @@ export async function runLocalTool(
 ): Promise<LocalToolResult> {
   const fn = handlers.get(id as LocalToolId);
   if (!fn) {
-    return { ok: false, error: `「${id}」要在界面里执行，但现在没有哪个页面提供它 —— 打开分镜页的布光台再试` };
+    return { ok: false, error: `「${id}」要在界面里执行，但现在没有哪个页面提供它。打开分镜页的布光台再试` };
   }
   try {
     return { ok: true, value: await fn(args) };

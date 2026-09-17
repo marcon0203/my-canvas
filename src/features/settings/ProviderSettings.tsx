@@ -38,11 +38,8 @@ export function ProviderList({ onOpen }: { onOpen: (id: ProviderId) => void }) {
         {added.length === 0 ? (
           <div className="empty">
             <Icon name="cube" />
-            还没接入任何供应商。点右上角选一家，填上密钥就能用。
-            <span className="t-cap dim">
-              模型不预设 —— 接入之后你自己加要用的那几个。
-              国内模型 id 变得快，预设一份只会过期，而过期的默认值比没有更糟。
-            </span>
+            还没接入任何供应商。点右上角选一家，填上密钥。
+            <span className="t-cap dim">接入之后再加要用的模型，模型不预设。</span>
           </div>
         ) : (
           <div className="agrid">
@@ -97,7 +94,7 @@ function ProviderTile({ id, onOpen }: { id: ProviderId; onOpen: (id: ProviderId)
               ? '没有密钥，模型选了也跑不起来'
               : models.length
                 ? `${models.length} 个模型可用`
-                : '还没加模型 —— 点进去把要用的加上'}
+                : '还没加模型，点进去加'}
         </p>
       </button>
       <div className="atile__sw">
@@ -145,7 +142,7 @@ function AddProviderModal({ open, onClose, onAdded }: {
       if (needUrl && url.trim()) setBaseUrl(pick, url.trim());
       if (key.trim()) {
         await setKey(pick, key.trim());
-        toast(`${spec?.name} 已接入 —— 密钥写进系统钥匙串，前端不保存明文`);
+        toast(`${spec?.name} 已接入`);
       } else {
         toast(`${spec?.name} 已接入。还没填密钥，模型选了也跑不起来`);
       }
@@ -204,18 +201,11 @@ function AddProviderModal({ open, onClose, onAdded }: {
               <Input type="password" value={key} placeholder="sk-…"
                 onChange={(e) => setK(e.target.value)} />
               <span className="t-cap dim">
-                写进系统钥匙串，前端不保存明文，界面上只显示尾号。
-                {spec.console && <> 没有的话去 <a className="pcard__link" href={spec.console} target="_blank" rel="noreferrer">控制台拿 ↗</a></>}
+                只显示尾号。
+                {spec.console && <> 没有 key 就去 <a className="pcard__link" href={spec.console} target="_blank" rel="noreferrer">控制台拿 ↗</a></>}
               </span>
             </div>
 
-            <div className="mo__field">
-              <span className="sec">接下来</span>
-              <span className="t-cap dim">
-                接入之后进它的详情页，把要用的模型加上 —— 模型 id 照厂商文档填，
-                这里不预设也不猜。
-              </span>
-            </div>
           </>
         )}
       </div>
@@ -243,7 +233,7 @@ export function ProviderDetail({ id, onBack }: { id: ProviderId; onBack: () => v
   const drop = () => {
     clearKey(id);
     removeProvider(id);
-    toast(`已移除 ${spec.name} —— 密钥也从钥匙串里清掉了`);
+    toast(`已移除 ${spec.name}，密钥一起清掉了`);
     onBack();
   };
 
@@ -282,9 +272,7 @@ export function ProviderDetail({ id, onBack }: { id: ProviderId; onBack: () => v
           </Field>
 
           <Field label="密钥"
-            hint={setting.hasKey
-              ? `已写入系统钥匙串，界面只显示尾号 ${setting.keyHint}`
-              : '写入系统钥匙串，前端不保存明文'}>
+            hint={setting.hasKey ? `只显示尾号 ${setting.keyHint}` : undefined}>
             <Input type="password" value={draftKey}
               placeholder={setting.hasKey ? '重填可覆盖' : 'sk-…'}
               onChange={(e) => setDraftKey(e.target.value)} />
@@ -292,7 +280,7 @@ export function ProviderDetail({ id, onBack }: { id: ProviderId; onBack: () => v
               if (!draftKey.trim()) { toast('先填密钥'); return; }
               setKey(id, draftKey.trim());
               setDraftKey('');
-              toast(`${spec.name} 密钥已写入系统钥匙串 —— 前端不保存明文`);
+              toast(`${spec.name} 的密钥已保存`);
             }}>保存</Button>
             {setting.hasKey && (
               <Button onClick={() => { clearKey(id); toast(`已清除 ${spec.name} 的密钥`); }}>清除</Button>
@@ -304,13 +292,13 @@ export function ProviderDetail({ id, onBack }: { id: ProviderId; onBack: () => v
       <section className="pcard">
         <header className="pcard__h">
           <span className="pcard__n">模型 · {models.length}</span>
-          <span className="t-cap dim">模型 id 照厂商文档填，这里不预设也不猜</span>
+          <span className="t-cap dim">照厂商文档填</span>
           <div className="spacer" />
           <Button onClick={() => setAdding(true)}><Icon name="plus" />新增模型</Button>
         </header>
         {models.length === 0 ? (
           <p className="t-cap dim" style={{ margin: 0 }}>
-            还没有模型。点右上角加一个 —— 模型 id 照厂商文档填。
+还没有模型。点右上角加一个，模型 id 照厂商文档填。
           </p>
         ) : (
           <div className="mtable">
@@ -385,7 +373,7 @@ function AddModelModal({ open, providerId, onClose }: {
 
   const submit = () => {
     const mid = id.trim();
-    if (!mid) { toast('模型 id 必填 —— 那是调接口真正传的东西'); return; }
+    if (!mid) { toast('模型 id 必填'); return; }
     if (taken) { toast(`${mid} 已经在列表里了`); return; }
     add(providerId, makeModel({
       provider: providerId, id: mid, name, modality, contextK: Number(context.trim()), caps,
@@ -445,7 +433,7 @@ function AddModelModal({ open, providerId, onClose }: {
               </label>
             ))}
           </div>
-          <span className="t-cap dim">勾错了不会报错，但会让 Agent 配置页的检查说谎 —— 照厂商文档来。</span>
+          <span className="t-cap dim">照厂商文档勾。勾错了不报错，但 Agent 配置页的检查会跟着错。</span>
         </div>
       </div>
     </Modal>

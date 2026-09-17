@@ -90,7 +90,7 @@ export function EditingPage() {
                 {/* 配音还没有数据：audio.tts 那条链路还没通（同步返回音频字节，
                     与出图出视频不是同一套协议）。所以这条轨如实空着，
                     而不是画几条假的波形让人以为已经配过音了 */}
-                <span className="t-cap dim">还没有配音 —— 配音工具还没接通</span>
+                <span className="t-cap dim">配音工具还没接通</span>
               </div>
             </div>
             <div className="tl__row" style={{ marginBottom: 0 }}>
@@ -98,7 +98,7 @@ export function EditingPage() {
               <div className="tl__track">
                 {subtitles.cues.length === 0
                   ? <span className="t-cap dim">
-                      {planned ? '还没生成字幕 —— 让剪辑「生成字幕」' : '先排时间线，字幕要挂在时间轴上'}
+                      {planned ? '还没生成字幕，点上面的「生成字幕」' : '先排时间线，字幕要挂在时间轴上'}
                     </span>
                   : subtitles.cues.map((q: Cue, i) => (
                     <div key={`${q.at}-${i}`} className="tl__sub" style={{ width: wOf(q.dur) }} title={`${secText(q.at)}`}>

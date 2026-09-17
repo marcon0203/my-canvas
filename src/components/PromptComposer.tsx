@@ -73,7 +73,7 @@ export function PromptComposer({
       {(ejected || hint) && (
         <div className="pcomp__hint">
           {ejected
-            ? '这条提示词已手改 —— 不再跟画风与镜头语言联动。'
+            ? '这条提示词已手改，不再跟画风与镜头语言联动。'
             : hint}
         </div>
       )}

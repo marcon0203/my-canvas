@@ -70,7 +70,7 @@ export function AgentPanel() {
                 </button>
               ))}
               <p className="agent__note">
-                别的活儿也可以直接说 —— 不归我管的，我转给对的那位。
+                别的活儿也可以直接说，不归我管的我转给对的那位。
               </p>
             </>
           )}
