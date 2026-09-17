@@ -5,6 +5,7 @@ import { allBeats } from '@/domain/story/model';
 import type { AgentContext } from './context';
 import { plan } from './plans';
 import { defaultConfigs } from './config';
+import { skillOf } from './skills';
 
 /** 用真实 seed 建上下文：计划必须对得上项目现状，不能是写死的文案 */
 function ctx(input = '', over: Partial<AgentContext> = {}): AgentContext {
@@ -98,6 +99,35 @@ describe('agent/plans · 产物来自项目现状', () => {
     expect(plan('edit.autocut', ctx('', { shots: [] })).blocked).toBeTruthy();
     expect(plan('shots.prompt', ctx()).blocked).toBeTruthy(); // seed 里每镜都有提示词
     expect(plan('outline.expand', ctx()).proposal).toBeTruthy();
+  });
+
+  /**
+   * 「延展走向」是目前唯一一个**不读上下文**的功能：三个固定句式套上这一场
+   * 的标题。这条测试把这个局限钉住，而不是让它只存在于注释里 ——
+   * 界面上的说明（skills.ts 的 impl.note）必须和它一致。
+   *
+   * 接模型之后这条测试会失败，那时候它的作用是提醒：说明也该改了。
+   */
+  it('延展走向目前只套这一场的标题，没有读别的上下文', () => {
+    const base = plan('outline.expand', ctx());
+    const alts = base.proposal!.rows.map((r) => r.v);
+    expect(alts).toHaveLength(3);
+
+    const beat = allBeats(ctx().acts).find((b) => b.id === 'b3')!;
+    for (const a of alts) expect(a.startsWith(beat.t), a).toBe(true);
+
+    // 换掉资产、镜头、画风、输入 —— 三条走向一个字都不变
+    const moved = plan('outline.expand', ctx('要更黑暗一点', {
+      assets: { 角色: [], 场景: [], 道具: [] },
+      shots: [],
+      style: '像素风', stylePrompt: 'pixel art',
+    }));
+    expect(moved.proposal!.rows.map((r) => r.v)).toEqual(alts);
+
+    // 说明里必须承认这件事，别写成「按这一场的功能算出来」
+    const note = skillOf('outline.expand')!.impl.note;
+    expect(note).toContain('固定句式');
+    expect(note).toMatch(/没有读上下文|没读上下文/);
   });
 
   it('成本报告用的是真实记账口径', () => {

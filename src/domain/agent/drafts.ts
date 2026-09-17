@@ -8,9 +8,13 @@ import type { AgentContext } from './context';
 import { ctxAssets } from './context';
 
 /**
- * 草稿生成：全部从项目现状推导，不写死文案。
- * Mock 的边界在于「文字是模板拼的」，而不是「内容与项目无关」——
- * 接真模型时换掉本文件，Plan/Proposal 契约不变。
+ * 草稿生成。接真模型时换掉本文件，Plan/Proposal 契约不变。
+ *
+ * 大多数函数是从项目现状推导的（读场次、幕、资产、已有镜头），
+ * **但 `draftAlts` 不是** —— 它只有三个固定句式，套上这一场的标题就完事。
+ * 这条别在界面上说成「按这一场的功能算出来」：它一个上下文字段都没读。
+ * 每个函数的实际依据在 `skills.ts` 的 `impl.note` 里逐条写着，
+ * 改这里的逻辑时那边要跟着改。
  */
 
 /* ---------------- 大纲 ---------------- */
@@ -57,7 +61,14 @@ export function draftOutline(c: AgentContext): { acts: Act[]; added: Beat[] } {
   return { acts, added: [beat] };
 }
 
-/** 一场 → 三条备选走向。围绕这场自己的标题做变体，不是通用套话 */
+/**
+ * 一场 → 三条备选走向。
+ *
+ * **三个句式是写死的**，变的只有前面那半句（这一场的标题）。
+ * 三条之间的差别是刻意挑的（谁不干预 / 谁在场 / 异样藏在哪），
+ * 所以拿来当占位够用；但它不是「分析了这一场」的结果，
+ * 界面上不要那么说。接模型见 skills.ts 里 outline.expand 的 note。
+ */
 export function draftAlts(beat: Beat): string[] {
   return [
     `${beat.t}，但主角这次不去干预，结果自己找上门`,

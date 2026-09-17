@@ -10,7 +10,13 @@ export type SkillId = Exclude<IntentKind, 'chat'>;
 export type Impl =
   /** 桌面端走 Rust + Rig，真发请求。括号里是那个模块 */
   | { readonly by: 'model'; readonly module: string; readonly note: string }
-  /** 还没接模型：产物由前端按项目现状算出来，形状与真产物一致 */
+  /**
+   * 还没接模型：产物在前端本地生成，形状与真产物一致。
+   *
+   * **依据到什么程度各不相同**，note 里逐条写清：有的真读了项目现状
+   * （场次、幕、资产），有的只是套模板（outline.expand 就只套了标题）。
+   * 一律说成「按项目现状算出来」是在替它吹。
+   */
   | { readonly by: 'local'; readonly note: string };
 
 export interface SkillSpec {
@@ -53,14 +59,16 @@ export const SKILLS: readonly SkillSpec[] = [
     summary: '围绕选中的一场给三条不同走向，改的是谁在场、谁知情，不是换形容词。',
     needs: '大纲里至少有一场。',
     patch: 'alts', goto: 'outline',
-    impl: { by: 'local', note: '产物由 drafts.ts 按这一场的功能算出来，还没接模型。' },
+    impl: { by: 'local',
+      note: '目前是三个固定句式套上这一场的标题（drafts.ts 的 draftAlts），没有读上下文，也没有接模型。接模型时要把这一场的功能、所在幕、前后场次一起送过去 —— 不然模型给的三条和现在的模板差别不大。' },
   },
   {
     id: 'script.draft', ...INTENT_META['script.draft'],
     summary: '为选中场次写正文块：场景描写 + 对白 + 动作。',
     needs: '大纲里至少有一场。',
     patch: 'blocks', goto: 'script',
-    impl: { by: 'local', note: '产物由 drafts.ts 按这一场的功能算出来，还没接模型。' },
+    impl: { by: 'local',
+      note: '本地按模板拼一个骨架：读这一场的标题、所在幕、已有的角色与场景资产，台词和旁白留空位。还没接模型。' },
   },
   {
     id: 'script.polish', ...INTENT_META['script.polish'],
@@ -74,7 +82,8 @@ export const SKILLS: readonly SkillSpec[] = [
     summary: '从剧本正文中提取尚未入库的角色与场景，建立资产条目。',
     needs: '剧本里出现了资产库里没有的名字。',
     patch: 'assets', goto: 'assets',
-    impl: { by: 'local', note: '本地按正文里的人名/地名匹配，还没接模型。' },
+    impl: { by: 'local',
+      note: '本地按两种写法认：「说话人：台词」里的说话人算角色，「地点 · 时间」这类场景头行里的片段算场景。认不出更复杂的写法，还没接模型。' },
   },
   {
     id: 'assets.views', ...INTENT_META['assets.views'],

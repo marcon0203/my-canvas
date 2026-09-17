@@ -525,7 +525,7 @@ export function SkillDetail({ id }: { id: SkillId }) {
         <p className="skdesc">
           {s.impl.by === 'model'
             ? <>桌面端走 Rust + Rig 真发请求，实现在 <span className="mono">{s.impl.module}</span>。浏览器里没有这条链路，会回落到本地草稿。</>
-            : '还没接模型：结果按项目现状本地算出来，格式和接模型后一致。'}
+            : '还没接模型：结果在本地按规则生成，格式与接模型之后一致。具体依据见下面一行。'}
         </p>
         <p className="skdesc dim">{s.impl.note}</p>
       </section>
