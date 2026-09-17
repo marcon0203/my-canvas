@@ -71,6 +71,8 @@ pub fn of(root: &std::path::Path, id: &str, tool: &str, args: &Value) -> Result<
         "shot.write" => shot_write(root, id, args)?,
         "shot.rig" => shot_rig(root, id, args)?,
         "style.apply" => style_apply(root, id, args)?,
+        "edit.timeline" => edit_timeline(root, id, args)?,
+        "edit.subtitle" => edit_subtitle(root, id, args)?,
         _ => return Ok(None),
     }))
 }
@@ -333,6 +335,61 @@ fn shot_rig(root: &std::path::Path, id: &str, args: &Value) -> Result<Value> {
     Ok(json!({ "t": "shotRig", "edits": [{ "id": sid, "rig": patch }] }))
 }
 
+/* ---------------- 成片 ---------------- */
+
+/// 排时间线。只排**判定可用**的片段 —— 不是「有视频的」：
+/// 重摇过好几版都不满意的镜头也有视频文件，排进片子等于把废片交出去。
+fn edit_timeline(root: &std::path::Path, id: &str, args: &Value) -> Result<Value> {
+    let b = project::load(root, id)?;
+    let shots = b.shots.as_array().cloned().unwrap_or_default();
+
+    let beat = args.get("beatMs").and_then(Value::as_f64).map(|x| x.round() as u32);
+    if let Some(bm) = beat {
+        // 卡点小于 100ms 没有意义（比一帧还短），大于 5 秒也不叫卡点了
+        if !(100..=5000).contains(&bm) {
+            return Err(Error::Store(format!("卡点间隔要在 100–5000 毫秒之间，给的是 {bm}")));
+        }
+    }
+
+    let t = crate::timeline::plan(&shots, beat);
+    if t.clips.is_empty() {
+        // 说清为什么是空的：是一条都没出视频，还是出了但判定要重摇
+        let has_vid = shots.iter().any(|s| s.get("vid").and_then(Value::as_str) == Some("ok"));
+        return Err(Error::Store(if has_vid {
+            "有片段但都还没判定可用 —— 先在剪辑页把可用的标出来".into()
+        } else {
+            "还没有出好的视频片段，排不了时间线".into()
+        }));
+    }
+    Ok(json!({
+        "t": "timeline",
+        "timeline": t,
+        "totalMs": crate::timeline::total_ms(&t),
+    }))
+}
+
+/// 生成字幕。要先有时间线 —— 字幕是挂在时间轴上的，没有轴就没有「第几秒」。
+fn edit_subtitle(root: &std::path::Path, id: &str, args: &Value) -> Result<Value> {
+    let b = project::load(root, id)?;
+    if b.timeline.clips.is_empty() {
+        return Err(Error::Store(
+            "还没有时间线 —— 字幕要挂在时间轴上，先排时间线（edit.timeline）".into(),
+        ));
+    }
+    let lines = crate::timeline::speakable(&b.blocks);
+    if lines.is_empty() {
+        return Err(Error::Store(
+            "剧本里没有能念的台词或旁白 —— 字幕不从大纲和角色小传里编".into(),
+        ));
+    }
+    let lang = match args.get("lang").and_then(Value::as_str).unwrap_or("zh").trim() {
+        "" => "zh".to_string(),
+        l => l.to_string(),
+    };
+    let subs = crate::timeline::cues(&b.timeline, &lines, &lang);
+    Ok(json!({ "t": "subtitles", "subtitles": subs, "cues": subs.cues.len() }))
+}
+
 /* ---------------- 画风 ---------------- */
 
 /// 换画风。节点级单独指定过画风的镜头不跟着走 —— 那是前端应用补丁时的事，
@@ -405,8 +462,18 @@ pub fn samples() -> Value {
             body: "原有正文".into(),
         }],
         assets: json!({ "角色": [{ "aid": "CHAR-001", "name": "艾米" }], "场景": [], "道具": [] }),
-        shots: json!([{ "id": "s1-1", "sceneKey": "场景1" }]),
+        // 时间线与字幕的样本要有「判定可用的片段」和「能念的台词」，
+        // 否则那两个工具会（正确地）报「没东西可排」
+        shots: json!([
+            { "id": "s1-1", "sceneKey": "场景1", "dur": 2, "vid": "ok", "verdict": "ok" },
+            { "id": "s1-2", "sceneKey": "场景1", "dur": 3, "vid": "ok", "verdict": "ok" }
+        ]),
+        ..Default::default()
     };
+    let mut b = b;
+    b.blocks[0].body = "艾米：年糕，你今天怎么不吃东西？\n窗外下起了雨。".into();
+    // 字幕要先有时间线 —— 样本里先把它排好，模拟「时间线已采纳」
+    b.timeline = crate::timeline::plan(&b.shots.as_array().cloned().unwrap_or_default(), None);
     project::save(&tmp, &b).expect("写临时项目");
 
     let calls: &[(&str, Value)] = &[
@@ -419,6 +486,8 @@ pub fn samples() -> Value {
         ("shot.write", json!({ "shots": [{ "sceneKey": "场景1", "size": "中景", "desc": "推近" }] })),
         ("shot.rig", json!({ "shotId": "s1-1", "rig": { "az": 30, "bright": 65 } })),
         ("style.apply", json!({ "style": "胶片质感" })),
+        ("edit.timeline", json!({ "beatMs": 500 })),
+        ("edit.subtitle", json!({ "lang": "zh" })),
     ];
 
     let mut out = serde_json::Map::new();
@@ -470,6 +539,7 @@ mod tests {
             }],
             assets: json!({ "角色": [{ "aid": "CHAR-001", "name": "艾米" }], "场景": [], "道具": [] }),
             shots: json!([{ "id": "s1-1", "sceneKey": "场景1" }]),
+            ..Default::default()
         };
         project::save(tmp.path(), &b).unwrap();
         tmp
@@ -589,6 +659,114 @@ mod tests {
         let e = p(&tmp, "shot.rig", json!({ "shotId": "s9-9", "rig": { "az": 0 } })).unwrap_err();
         assert!(e.to_string().contains("没有 s9-9"));
         assert!(p(&tmp, "shot.rig", json!({ "shotId": "s1-1", "rig": {} })).is_err());
+    }
+
+    /* ---- 成片 ---- */
+
+    /// 排时间线要有判定可用的片段。测试用的 setup 里那一镜没出视频，
+    /// 所以这里单独建一个「有可用片段」的项目
+    fn with_clips() -> TempDir {
+        let tmp = TempDir::new().unwrap();
+        project::save(tmp.path(), &Bundle {
+            meta: crate::project::Meta { id: "p1".into(), ..Default::default() },
+            blocks: vec![DocBlock {
+                id: "d1".into(), kind: "text".into(), label: "正文".into(),
+                body: "艾米：年糕，你今天怎么不吃东西？\n窗外下起了雨。".into(),
+            }],
+            shots: json!([
+                { "id": "s1-1", "dur": 2, "vid": "ok", "verdict": "ok" },
+                { "id": "s1-2", "dur": 3, "vid": "ok", "verdict": "ok" },
+                { "id": "s2-1", "dur": 4, "vid": "ok", "verdict": "redo" }
+            ]),
+            ..Default::default()
+        }).unwrap();
+        tmp
+    }
+
+    #[test]
+    fn 排时间线_只排判定可用的_起点累加() {
+        let tmp = with_clips();
+        let v = p(&tmp, "edit.timeline", json!({})).unwrap();
+        assert_eq!(v["t"], "timeline");
+        assert_eq!(v["timeline"]["clips"].as_array().unwrap().len(), 2, "重摇没通过的进片子了");
+        assert_eq!(v["timeline"]["clips"][1]["at"], 2000);
+        assert_eq!(v["totalMs"], 5000);
+    }
+
+    #[test]
+    fn 排时间线_卡点要在合理区间() {
+        let tmp = with_clips();
+        for bad in [10, 50, 99, 6000] {
+            let e = p(&tmp, "edit.timeline", json!({ "beatMs": bad })).unwrap_err();
+            assert!(e.to_string().contains("100–5000"), "{bad}: {e}");
+        }
+        let v = p(&tmp, "edit.timeline", json!({ "beatMs": 500 })).unwrap();
+        assert_eq!(v["timeline"]["beatMs"], 500);
+    }
+
+    #[test]
+    fn 排时间线_没有可用片段时说清是哪种没有() {
+        // 一条都没出视频
+        let tmp = TempDir::new().unwrap();
+        project::save(tmp.path(), &Bundle {
+            meta: crate::project::Meta { id: "p1".into(), ..Default::default() },
+            shots: json!([{ "id": "s1-1", "vid": "none" }]),
+            ..Default::default()
+        }).unwrap();
+        let e = p(&tmp, "edit.timeline", json!({})).unwrap_err();
+        assert!(e.to_string().contains("还没有出好的视频"), "{e}");
+
+        // 出了但都判定要重摇 —— 这两种情况下一步要做的事完全不同
+        let tmp2 = TempDir::new().unwrap();
+        project::save(tmp2.path(), &Bundle {
+            meta: crate::project::Meta { id: "p1".into(), ..Default::default() },
+            shots: json!([{ "id": "s1-1", "vid": "ok", "verdict": "redo" }]),
+            ..Default::default()
+        }).unwrap();
+        let e = p(&tmp2, "edit.timeline", json!({})).unwrap_err();
+        assert!(e.to_string().contains("还没判定可用"), "{e}");
+    }
+
+    #[test]
+    fn 生成字幕_要先有时间线() {
+        let tmp = with_clips();
+        // 时间线还没落盘（工具只出补丁，采纳才写）—— 这时候生成字幕要被挡住
+        let e = p(&tmp, "edit.subtitle", json!({})).unwrap_err();
+        assert!(e.to_string().contains("先排时间线"), "{e}");
+    }
+
+    #[test]
+    fn 生成字幕_挂在时间轴上_只取能念的() {
+        let tmp = with_clips();
+        // 模拟「时间线已采纳」：把它写进项目再生成字幕
+        let mut b = project::load(tmp.path(), "p1").unwrap();
+        b.timeline = crate::timeline::plan(&b.shots.as_array().cloned().unwrap_or_default(), None);
+        project::save(tmp.path(), &b).unwrap();
+
+        let v = p(&tmp, "edit.subtitle", json!({ "lang": "zh" })).unwrap();
+        assert_eq!(v["t"], "subtitles");
+        assert_eq!(v["subtitles"]["lang"], "zh");
+        let cues = v["subtitles"]["cues"].as_array().unwrap();
+        assert!(!cues.is_empty());
+        // `角色：台词` 只留台词那半
+        assert!(cues.iter().all(|c| !c["text"].as_str().unwrap().starts_with("艾米")));
+    }
+
+    #[test]
+    fn 生成字幕_没台词时不从大纲里编一条() {
+        let tmp = TempDir::new().unwrap();
+        let mut b = Bundle {
+            meta: crate::project::Meta { id: "p1".into(), ..Default::default() },
+            blocks: vec![DocBlock {
+                id: "d1".into(), kind: "outline".into(), label: "梗概".into(), body: "一个女孩和一只猫。".into(),
+            }],
+            shots: json!([{ "id": "s1-1", "dur": 2, "vid": "ok", "verdict": "ok" }]),
+            ..Default::default()
+        };
+        b.timeline = crate::timeline::plan(&b.shots.as_array().cloned().unwrap_or_default(), None);
+        project::save(tmp.path(), &b).unwrap();
+        let e = p(&tmp, "edit.subtitle", json!({})).unwrap_err();
+        assert!(e.to_string().contains("没有能念的"), "{e}");
     }
 
     /* ---- 画风 ---- */

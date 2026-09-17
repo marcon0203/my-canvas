@@ -45,7 +45,8 @@ describe('Rust 算出的补丁能被 store 应用', () => {
   it('每个样本的 t 都是 store 认识的分支 —— 不认识的会被 switch 静默吃掉', () => {
     const known: ProposalPatch['t'][] = [
       'acts', 'alts', 'blocks', 'blockBody', 'assets', 'assetsDraft',
-      'assetViews', 'shots', 'shotPrompts', 'shotRig', 'style', 'assetLock', 'run',
+      'assetViews', 'shots', 'shotPrompts', 'shotRig', 'style', 'assetLock',
+      'timeline', 'subtitles', 'run',
     ];
     for (const [tool, p] of Object.entries(SAMPLES)) {
       expect(known, `${tool} 给的 t=${p.t}`).toContain(p.t);
@@ -96,6 +97,41 @@ describe('Rust 算出的补丁能被 store 应用', () => {
     const s = useProject.getState();
     expect(s.style).toBe('胶片质感');
     expect(s.stylePrompt).toBe('film photography, grainy');
+  });
+
+  it('排时间线：整条换掉，起点是累加的', () => {
+    reset();
+    const p = sample('edit.timeline');
+    if (p.t !== 'timeline') throw new Error('样本类型变了');
+    useProject.getState().applyAgentPatch(p);
+    const t = useProject.getState().timeline;
+    expect(t.clips.length).toBe(p.timeline.clips.length);
+    expect(t.clips[0]!.at).toBe(0);
+    expect(t.beatMs).toBe(500);
+    // 再排一次不该叠加 —— 逐段合并会留下上一次的残段
+    useProject.getState().applyAgentPatch(p);
+    expect(useProject.getState().timeline.clips.length).toBe(p.timeline.clips.length);
+  });
+
+  it('生成字幕：每条都落在片长之内', () => {
+    reset();
+    useProject.getState().applyAgentPatch(sample('edit.timeline'));
+    useProject.getState().applyAgentPatch(sample('edit.subtitle'));
+    const { timeline, subtitles } = useProject.getState();
+    const end = timeline.clips.reduce((n, c) => Math.max(n, c.at + c.dur), 0);
+    expect(subtitles.cues.length).toBeGreaterThan(0);
+    for (const q of subtitles.cues) {
+      expect(q.at + q.dur).toBeLessThanOrEqual(end);
+      expect(q.text.length).toBeGreaterThan(0);
+    }
+  });
+
+  it('时间线与字幕进撤销历史 —— 排错了要能撤回来', () => {
+    reset();
+    useProject.getState().applyAgentPatch(sample('edit.timeline'));
+    expect(useProject.getState().timeline.clips.length).toBeGreaterThan(0);
+    useProject.temporal.getState().undo();
+    expect(useProject.getState().timeline.clips.length).toBe(0);
   });
 
   it('写大纲与写分镜的补丁仍然能应用（回归）', () => {

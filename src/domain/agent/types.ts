@@ -1,6 +1,7 @@
 import type { Asset, AssetGroup, Rig } from '@/domain/assets/model';
 import type { Shot } from '@/domain/shots/model';
 import type { Act, DocBlock } from '@/domain/story/model';
+import type { Subtitles, Timeline } from '@/domain/clips/model';
 import type { AgentId } from './roster';
 
 /**
@@ -45,6 +46,14 @@ export type ProposalPatch =
   | { t: 'assetsDraft'; add: { group: AssetGroup; aid: string; name: string; desc: string; voice?: string }[] }
   /** `shot.rig` 的产物：**只覆盖给到的字段**，没给的保持原样 */
   | { t: 'shotRig'; edits: { id: string; rig: Partial<Rig> }[] }
+  /** `edit.timeline` 的产物：整条时间线换掉（顺序与时长是一起算出来的） */
+  | { t: 'timeline'; timeline: Timeline }
+  /** `edit.subtitle` 的产物 */
+  | { t: 'subtitles'; subtitles: Subtitles }
+  /** `edit.timeline` 的产物：整条时间线换掉（顺序与时长是一起算出来的） */
+  | { t: 'timeline'; timeline: Timeline }
+  /** `edit.subtitle` 的产物 */
+  | { t: 'subtitles'; subtitles: Subtitles }
   | { t: 'run'; action: 'video.batch' | 'edit.autocut' };
 
 /** 产物预览行：采纳前给人看的 diff 摘要 */

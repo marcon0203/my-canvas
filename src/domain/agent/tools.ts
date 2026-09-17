@@ -105,8 +105,8 @@ export const TOOLS: readonly ToolSpec[] = [
   { id: 'shot.rig', group: 'camera', name: '设机位光线', desc: '改这一镜的机位、焦距、光位；只写要改的字段，值域超了当场拒', writes: true, status: 'ready' },
 
   /* 成片 */
-  { id: 'edit.timeline', group: 'deliver', name: '排时间线', desc: '可用片段按场次与节拍排进时间线', writes: true, status: 'declared', blockedBy: '项目里还没有时间线/字幕的数据模型 —— 剪辑页的轨道现在是写死的占位，得先把这两份数据落进项目，工具才有东西可写' },
-  { id: 'edit.subtitle', group: 'deliver', name: '生成字幕', desc: '按正文与配音时间轴生成字幕', writes: true, status: 'declared', blockedBy: '项目里还没有时间线/字幕的数据模型 —— 剪辑页的轨道现在是写死的占位，得先把这两份数据落进项目，工具才有东西可写' },
+  { id: 'edit.timeline', group: 'deliver', name: '排时间线', desc: '判定可用的片段按场次与镜号排进时间线；给卡点就对齐', writes: true, status: 'ready' },
+  { id: 'edit.subtitle', group: 'deliver', name: '生成字幕', desc: '按剧本台词与时间线生成字幕；长句切成一眼能看完的短条', writes: true, status: 'ready' },
   { id: 'file.export', group: 'deliver', name: '导出文件', desc: '大纲/剧本导 .md、分镜表导 .csv；只产出内容，存哪儿由人在保存对话框里选', status: 'ready' },
 
   /* 查资料 */

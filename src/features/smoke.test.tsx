@@ -119,6 +119,31 @@ describe('页面渲染烟雾测试', () => {
     expect(html).toContain('当前片段');
     expect(html).toContain('自动成片');
     expect(html).toContain('导出 MP4');
+    // 还没排过时间线：如实说，而不是画一条看起来已经排好的轨
+    expect(html).toContain('还没排时间线');
+    expect(html).toContain('还没有配音');
+  });
+
+  it('EditingPage：排过时间线之后画的是真数据，不是写死的占位', () => {
+    const st = useProject.getState();
+    st.applyAgentPatch({
+      t: 'timeline',
+      timeline: { clips: [{ shotId: 's1-1', at: 0, dur: 2000 }, { shotId: 's1-2', at: 2000, dur: 3500 }], beatMs: 500 },
+    });
+    st.applyAgentPatch({
+      t: 'subtitles',
+      subtitles: { lang: 'zh', cues: [{ at: 0, dur: 2000, text: '年糕，你怎么不吃东西' }] },
+    });
+    const html = renderPage(<EditingPage />);
+    expect(html).toContain('已排 2 段');
+    expect(html).toContain('5.5s');            // 2000 + 3500
+    expect(html).toContain('卡点 500ms');
+    expect(html).toContain('年糕，你怎么不吃东西');
+    // 原来那三条写死的占位字幕不该再出现
+    expect(html).not.toContain('小时候，我总觉得世界上有些东西永远不会改变');
+    // 收拾干净，后面的用例还要用这份 store
+    st.applyAgentPatch({ t: 'timeline', timeline: { clips: [] } });
+    st.applyAgentPatch({ t: 'subtitles', subtitles: { lang: 'zh', cues: [] } });
   });
 
   it('CanvasPage：Idea/Story/Image/Video 节点同源渲染', () => {

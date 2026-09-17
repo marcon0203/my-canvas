@@ -10,6 +10,7 @@
 
 import { isDesktop } from './desktop';
 import type { Act, DocBlock } from '@/domain/story/model';
+import type { Subtitles, Timeline } from '@/domain/clips/model';
 
 async function invoke<T>(cmd: string, args?: Record<string, unknown>): Promise<T> {
   const { invoke: call } = await import('@tauri-apps/api/core');
@@ -39,6 +40,9 @@ export interface ProjectBundle {
   blocks: DocBlock[];
   assets: unknown;
   shots: unknown;
+  /** 成片顺序与卡点。Rust 侧空的时候不落文件，读回来是空的 */
+  timeline?: Timeline;
+  subtitles?: Subtitles;
 }
 
 export const defaultMeta = (id: string, proj: string): ProjectMeta => ({

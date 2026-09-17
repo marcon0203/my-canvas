@@ -58,6 +58,12 @@ pub struct Bundle {
     pub assets: serde_json::Value,
     #[serde(default)]
     pub shots: serde_json::Value,
+    /// 成片顺序与卡点。空 = 还没排过
+    #[serde(default)]
+    pub timeline: crate::timeline::Timeline,
+    /// 字幕轨。空 = 还没生成过
+    #[serde(default)]
+    pub subtitles: crate::timeline::Subtitles,
 }
 
 pub fn projects_dir(root: &Path) -> PathBuf {
@@ -79,6 +85,18 @@ pub fn save(root: &Path, b: &Bundle) -> Result<()> {
     write_text(&dir.join("outline.md"), &md::emit_outline(&b.acts))?;
     write_json(&dir.join("assets.json"), &b.assets)?;
     write_json(&dir.join("shots.json"), &b.shots)?;
+    // 时间线与字幕：结构化记录，走 JSON。**空的就不落文件** ——
+    // 目录里摊一堆空壳 json 会让人以为这些步骤已经做过了
+    if b.timeline.clips.is_empty() {
+        let _ = std::fs::remove_file(dir.join("timeline.json"));
+    } else {
+        write_json(&dir.join("timeline.json"), &b.timeline)?;
+    }
+    if b.subtitles.cues.is_empty() {
+        let _ = std::fs::remove_file(dir.join("subtitles.json"));
+    } else {
+        write_json(&dir.join("subtitles.json"), &b.subtitles)?;
+    }
 
     // 剧本目录整块重建：块被删掉时，留着旧文件会让它下次又冒出来
     let script = dir.join("script");
@@ -126,6 +144,8 @@ pub fn load(root: &Path, id: &str) -> Result<Bundle> {
         blocks,
         assets: read_json(&dir.join("assets.json"))?,
         shots: read_json(&dir.join("shots.json"))?,
+        timeline: read_json(&dir.join("timeline.json"))?,
+        subtitles: read_json(&dir.join("subtitles.json"))?,
     })
 }
 
@@ -176,6 +196,7 @@ mod tests {
             ],
             assets: serde_json::json!({ "角色": [{ "aid": "CHAR-001" }] }),
             shots: serde_json::json!([{ "id": "s1-1", "sceneKey": "场景1" }]),
+            ..Default::default()
         }
     }
 
@@ -302,6 +323,38 @@ mod tests {
         delete(tmp.path(), "p1").unwrap();
     }
 
+    #[test]
+    fn 时间线与字幕能往返_空的不留空壳文件() {
+        use crate::timeline::{Clip, Cue, Subtitles, Timeline};
+        let tmp = TempDir::new().unwrap();
+        let mut b = bundle("p1");
+        save(tmp.path(), &b).unwrap();
+        // 还没排过：目录里不该摊一个空 json —— 那会让人以为这步做过了
+        assert!(!tmp.path().join("projects/p1/timeline.json").exists());
+        assert!(load(tmp.path(), "p1").unwrap().timeline.clips.is_empty());
+
+        b.timeline = Timeline {
+            clips: vec![Clip { shot_id: "s1-1".into(), at: 0, dur: 2000 }],
+            beat_ms: Some(500),
+        };
+        b.subtitles = Subtitles {
+            lang: "zh".into(),
+            cues: vec![Cue { at: 0, dur: 1000, text: "第一句".into() }],
+        };
+        save(tmp.path(), &b).unwrap();
+        let back = load(tmp.path(), "p1").unwrap();
+        assert_eq!(back.timeline, b.timeline);
+        assert_eq!(back.subtitles, b.subtitles);
+
+        // 清空之后旧文件要删掉，否则下次打开它又冒出来了
+        b.timeline = Timeline::default();
+        b.subtitles = Subtitles::default();
+        save(tmp.path(), &b).unwrap();
+        assert!(!tmp.path().join("projects/p1/timeline.json").exists());
+        assert!(!tmp.path().join("projects/p1/subtitles.json").exists());
+        assert!(load(tmp.path(), "p1").unwrap().subtitles.cues.is_empty());
+    }
+
     /* ---- 导出 ---- */
 
     fn full() -> (TempDir, ()) {
@@ -316,10 +369,12 @@ mod tests {
                 id: "d1".into(), kind: "text".into(), label: "正文".into(), body: "第一段".into(),
             }],
             assets: serde_json::json!({}),
+            #[allow(clippy::needless_update)]
             shots: serde_json::json!([
                 { "id": "s1-1", "sceneKey": "场景1", "size": "中景", "dur": 2.5,
                   "desc": "推近，她转头", "own": "a girl turns, soft light", "refs": ["CHAR-001"] }
             ]),
+            ..Default::default()
         }).unwrap();
         (tmp, ())
     }

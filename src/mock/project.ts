@@ -1,6 +1,7 @@
 import type { Asset } from '@/domain/assets/model';
 import type { Shot } from '@/domain/shots/model';
 import type { Act, DocBlock } from '@/domain/story/model';
+import type { Subtitles, Timeline } from '@/domain/clips/model';
 
 /**
  * Mock 数据：项目内容。与冻结原型《The Dream of Cats》逐字段对齐。
@@ -24,6 +25,9 @@ export interface ProjectMock {
   blocks: DocBlock[];
   assets: Record<'角色' | '场景' | '道具', Asset[]>;
   shots: Shot[];
+  /** 成片顺序与字幕。mock 里不预填 —— 那两步要跑过工具才有东西 */
+  timeline?: Timeline;
+  subtitles?: Subtitles;
   /** 首页「最近的项目」卡片 */
   /** 总览画布 PIN 栏 */
   pins: { id: string; n: string }[];

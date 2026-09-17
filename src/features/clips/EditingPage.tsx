@@ -4,10 +4,13 @@ import { StageBar } from '@/components/StageBar';
 import { imgUrlFor, vidUrl } from '@/lib/media';
 import { useProject } from '@/store/project';
 import { useUi } from '@/store/ui';
+import { secText, totalMs, type Cue } from '@/domain/clips/model';
 
 /** 剪辑页：原型 viewEdit 同构（.player + .tl 三轨 + 右侧 .blk） */
 export function EditingPage() {
   const shots = useProject((s) => s.shots);
+  const timeline = useProject((s) => s.timeline);
+  const subtitles = useProject((s) => s.subtitles);
   const ratio = useProject((s) => s.ratio);
   const style = useProject((s) => s.style);
   const spend = useProject((s) => s.spend);
@@ -21,14 +24,23 @@ export function EditingPage() {
   }
   const done = shots.filter((s) => s.vid === 'ok');
   const okDur = done.reduce((n, s) => n + s.dur, 0);
+  // 排过时间线就按它画；没排过就按分镜顺序预览 —— 两者要看得出区别，
+  // 否则「排时间线」这一步跑没跑过，界面上完全一样
+  const planned = timeline.clips.length > 0;
+  const filmMs = totalMs(timeline);
+  // 每毫秒多少像素：原来写死 22px/秒，长片会把轨道拉到几千像素宽
+  const PPS = 22;
+  const wOf = (ms: number) => Math.max(8, (ms / 1000) * PPS);
 
   return (
     <div className="stage">
       <StageBar
         title="Editing"
-        pills={<Chip>{done.length} 段可用 · {okDur}s</Chip>}
+        pills={planned
+          ? <Chip tone="ok">已排 {timeline.clips.length} 段 · {secText(filmMs)}{timeline.beatMs ? ` · 卡点 ${timeline.beatMs}ms` : ''}</Chip>
+          : <Chip>{done.length} 段可用 · {okDur}s（还没排时间线）</Chip>}
         actions={<>
-          <Button onClick={() => toast('已按配乐节拍自动排好片段顺序')}>
+          <Button onClick={() => toast('去对话里让剪辑说「排时间线」—— 工具会按判定可用的片段排，重摇没通过的不进片子')}>
             <Icon name="scissors" />自动成片
           </Button>
           <Button variant="primary" style={{ height: 34, fontSize: 13 }}
@@ -49,32 +61,45 @@ export function EditingPage() {
             <div className="tl__row">
               <span className="tl__lab">画面</span>
               <div className="tl__track">
-                {shots.map((s) => (
-                  <div key={s.id} className="tl__clip" role="button" tabIndex={0}
-                    aria-selected={s.id === cur.id}
-                    style={{ width: s.dur * 22, background: 'var(--color-bg-muted)' }}
-                    onClick={() => setUi('clipSel', s.id)}
-                    onKeyDown={(e) => { if (e.key === 'Enter') setUi('clipSel', s.id); }}>
-                    {s.vid === 'ok' && <img className="ph" src={imgUrlFor(s.id, 'wide')} alt="" />}
-                    <span>{s.dur}s</span>
-                  </div>
-                ))}
+                {(planned
+                  ? timeline.clips.map((c) => ({ id: c.shotId, ms: c.dur }))
+                  : shots.map((x) => ({ id: x.id, ms: x.dur * 1000 }))
+                ).map(({ id, ms }) => {
+                  const sh = shots.find((x) => x.id === id);
+                  return (
+                    <div key={id} className="tl__clip" role="button" tabIndex={0}
+                      aria-selected={id === cur.id}
+                      style={{ width: wOf(ms), background: 'var(--color-bg-muted)' }}
+                      onClick={() => setUi('clipSel', id)}
+                      onKeyDown={(e) => { if (e.key === 'Enter') setUi('clipSel', id); }}>
+                      {sh?.vid === 'ok' && <img className="ph" src={imgUrlFor(id, 'wide')} alt="" />}
+                      <span>{secText(ms)}</span>
+                    </div>
+                  );
+                })}
               </div>
             </div>
             <div className="tl__row">
               <span className="tl__lab">配音</span>
               <div className="tl__track">
-                <div className="tl__aud" style={{ width: (4 + 3 + 3) * 22 }} />
-                <div className="tl__aud" style={{ width: (1 + 2 + 2) * 22, opacity: 0.5 }} />
-                <div className="tl__aud" style={{ width: (4 + 4) * 22 }} />
+                {/* 配音还没有数据：audio.tts 那条链路还没通（同步返回音频字节，
+                    与出图出视频不是同一套协议）。所以这条轨如实空着，
+                    而不是画几条假的波形让人以为已经配过音了 */}
+                <span className="t-cap dim">还没有配音 —— 配音工具还没接通</span>
               </div>
             </div>
             <div className="tl__row" style={{ marginBottom: 0 }}>
               <span className="tl__lab">字幕</span>
               <div className="tl__track">
-                <div className="tl__sub" style={{ width: 10 * 22 }}>小时候，我总觉得世界上有些东西永远不会改变。</div>
-                <div className="tl__sub" style={{ width: 5 * 22 }}>它不会说话…</div>
-                <div className="tl__sub" style={{ width: 8 * 22 }}>那一天，我第一次知道，永远是有期限的。</div>
+                {subtitles.cues.length === 0
+                  ? <span className="t-cap dim">
+                      {planned ? '还没生成字幕 —— 让剪辑「生成字幕」' : '先排时间线，字幕要挂在时间轴上'}
+                    </span>
+                  : subtitles.cues.map((q: Cue, i) => (
+                    <div key={`${q.at}-${i}`} className="tl__sub" style={{ width: wOf(q.dur) }} title={`${secText(q.at)}`}>
+                      {q.text}
+                    </div>
+                  ))}
               </div>
             </div>
           </div>

@@ -18,6 +18,7 @@ pub mod run;
 pub mod shotprompt;
 pub mod skills;
 pub mod store;
+pub mod timeline;
 pub mod tools;
 pub mod vault;
 pub mod web;

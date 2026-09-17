@@ -15,6 +15,44 @@
     ],
     "t": "assetsDraft"
   },
+  "edit.subtitle": {
+    "cues": 2,
+    "subtitles": {
+      "cues": [
+        {
+          "at": 0,
+          "dur": 2000,
+          "text": "年糕，你今天怎么不吃东西？"
+        },
+        {
+          "at": 2000,
+          "dur": 3000,
+          "text": "窗外下起了雨。"
+        }
+      ],
+      "lang": "zh"
+    },
+    "t": "subtitles"
+  },
+  "edit.timeline": {
+    "t": "timeline",
+    "timeline": {
+      "beatMs": 500,
+      "clips": [
+        {
+          "at": 0,
+          "dur": 2000,
+          "shotId": "s1-1"
+        },
+        {
+          "at": 2000,
+          "dur": 3000,
+          "shotId": "s1-2"
+        }
+      ]
+    },
+    "totalMs": 5000
+  },
   "outline.write": {
     "acts": [
       {
@@ -59,7 +97,7 @@
     "shots": [
       {
         "desc": "推近",
-        "id": "s1-2",
+        "id": "s1-3",
         "sceneKey": "场景1",
         "size": "中景"
       }

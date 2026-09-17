@@ -127,17 +127,17 @@ pub fn all() -> Vec<ToolSpec> {
     use Risk::{Egress, Read as R, Spend, Write as W};
     use Status::{Declared, Ready, Unverified};
 
-    // 没实现时的共同原因，写一次。
-    // 原来这儿写的是「写类工具与前端 store 的同步」—— 那个问题已经由
-    // Outcome::Patch 解决了（只有一个写入者）。剩下这两个卡的是别的东西：
-    // 项目里根本还没有「时间线」和「字幕」这两份数据，剪辑页那三条轨是写死的占位。
+    // 没实现时的原因。**每条都要是真的原因** ——
+    // 这里先后有两条被写着「还没搬」而其实早就不是那个问题了：
+    // 「与前端 store 同步」由 Outcome::Patch 解决（只有一个写入者），
+    // 「项目里没有时间线/字幕」由 timeline.rs 解决。一条过期的理由会让人
+    // 以为还有很多活要干，而其实只差把 status 改一下。
+    //
     // 配音卡的不是「还没写」，是协议对不上：TTS 多数同步返回音频字节，
     // 不是「提交 → 轮询 → 拿 URL」。硬套那套协议只会拿到一个永远轮询不到的
     // 任务号。要先把「同步拿字节 + 存进项目目录」那条机制做出来。
     const TTS: &str = "配音不走异步任务协议 —— 多数厂商是同步返回音频字节。\
                        要先做「同步取字节 + 落进项目目录」那条机制，再接具体厂商";
-    const NO_TL: &str = "项目里还没有时间线/字幕的数据模型 —— 剪辑页的轨道现在是写死的占位，\
-                         得先把这两份数据落进项目（store + 落盘 + 界面），工具才有东西可写";
     const ADAPTER: &str = "协议已实现并测过，但厂商字段映射（task_id 在哪个字段等）没对过真实文档 —— 接第一家时拿真 key 调一次，照报错改 generate::adapters 里那一两行";
 
     vec![
@@ -289,14 +289,15 @@ pub fn all() -> Vec<ToolSpec> {
 
         /* ---------------- 成片 ---------------- */
         t("edit.timeline", "排时间线", Deliver,
-          "把判定可用的片段按场次与节拍排进时间线。",
-          W, Rust, Declared, Some(NO_TL),
-          obj(json!({ "beatMs": { "type": "number", "description": "卡点间隔，可选" } }), &[])),
+          "把判定可用的片段按场次与镜号排进时间线。只排判定可用的 —— 重摇没通过的不进片子。给 beatMs 就按卡点对齐。",
+          W, Rust, Ready, None,
+          obj(json!({ "beatMs": { "type": "number", "minimum": 100, "maximum": 5000,
+              "description": "卡点间隔（毫秒），可选" } }), &[])),
 
         t("edit.subtitle", "生成字幕", Deliver,
-          "按剧本正文与配音时间轴生成字幕。",
-          W, Rust, Declared, Some(NO_TL),
-          obj(json!({ "lang": { "type": "string" } }), &[])),
+          "按剧本正文与时间线生成字幕。要先排过时间线。长句按标点切成一眼能看完的短条。",
+          W, Rust, Ready, None,
+          obj(json!({ "lang": { "type": "string", "description": "语言标记，默认 zh" } }), &[])),
 
         // 只产出内容，落盘路径由用户在保存对话框里选 —— 见 export_file
         t("file.export", "导出文件", Deliver,
@@ -772,6 +773,7 @@ mod tests {
                 { "id": "s1-2", "takes": 2, "verdict": "redo" },
                 { "id": "s1-3", "takes": 0, "verdict": null }
             ]),
+            ..Default::default()
         };
         project::save(tmp.path(), &b).unwrap();
         tmp

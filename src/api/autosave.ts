@@ -34,6 +34,7 @@ async function flush(): Promise<void> {
       proj: s.proj, ratio: s.ratio, style: s.style, stylePrompt: s.stylePrompt,
       styles: s.styles, credits: s.credits, budget: s.budget,
       acts: s.acts, blocks: s.blocks, assets: s.assets, shots: s.shots,
+      timeline: s.timeline, subtitles: s.subtitles,
     }), workspace);
   } catch (e) {
     // 写不进去要让人知道 —— 静默失败等于数据在你不知情时丢了

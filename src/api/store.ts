@@ -70,6 +70,7 @@ export async function loadProject(id: string, workspace: string): Promise<Projec
       ratio: b.meta.ratio, style: b.meta.style, stylePrompt: b.meta.stylePrompt,
       styles: b.meta.styles, credits: b.meta.credits, budget: b.meta.budget,
       acts: b.acts, blocks: b.blocks, assets, shots,
+      timeline: b.timeline, subtitles: b.subtitles,
       alts: {}, pins: [],
     } as ProjectBootstrap['project'],
     config: MOCK_CONFIG,
@@ -82,6 +83,7 @@ export function toBundleFrom(id: string, s: {
   credits: number; budget: number;
   acts: ProjectBundle['acts']; blocks: ProjectBundle['blocks'];
   assets: unknown; shots: unknown;
+  timeline?: ProjectBundle['timeline']; subtitles?: ProjectBundle['subtitles'];
 }): ProjectBundle {
   return {
     meta: {
@@ -91,5 +93,7 @@ export function toBundleFrom(id: string, s: {
       updatedAt: new Date().toISOString(),
     },
     acts: s.acts, blocks: s.blocks, assets: s.assets, shots: s.shots,
+    // 空的也照传：Rust 侧会把空的那份文件删掉（清空过就该真的清掉）
+    timeline: s.timeline, subtitles: s.subtitles,
   };
 }

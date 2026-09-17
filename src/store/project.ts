@@ -11,6 +11,7 @@ import { applyIntentToView, RIG_COPY_KEYS } from '@/domain/prompt/apply';
 import type { ProjectBootstrap } from '@/api/mock';
 import type { Act, DocBlock } from '@/domain/story/model';
 import type { ProposalPatch } from '@/domain/agent/types';
+import type { Clip, Cue } from '@/domain/clips/model';
 import { assetShell } from '@/domain/agent/drafts';
 
 export type { AssetGroup } from '@/domain/assets/model';
@@ -28,6 +29,13 @@ export interface ProjectState {
   blocks: DocBlock[];
   assets: Record<AssetGroup, Asset[]>;
   shots: Shot[];
+  /**
+   * 成片顺序与卡点。空 = 还没排过。
+   * store 里存可变副本（immer 的 draft 要求），对外仍按 Timeline 读
+   */
+  timeline: { clips: Clip[]; beatMs?: number };
+  /** 字幕轨。空 = 还没生成过 */
+  subtitles: { lang: string; cues: Cue[] };
   /** 服务端能力配置（mock 下发） */
   models: string[];
   ratios: string[];
@@ -75,7 +83,8 @@ export interface ProjectState {
 const contentEqual = (a: ProjectState, b: ProjectState): boolean => {
   const strip = (x: unknown) => JSON.stringify(x, (_k, v) =>
     typeof v === 'string' && v.length > 512 ? '<long>' : v);
-  return strip([a.blocks, a.assets, a.shots, a.acts, a.alts]) === strip([b.blocks, b.assets, b.shots, b.acts, b.alts]);
+  const of = (x: ProjectState) => [x.blocks, x.assets, x.shots, x.acts, x.alts, x.timeline, x.subtitles];
+  return strip(of(a)) === strip(of(b));
 };
 
 export const useProject = create<ProjectState>()(
@@ -92,6 +101,8 @@ export const useProject = create<ProjectState>()(
       blocks: [],
       assets: { 角色: [], 场景: [], 道具: [] },
       shots: [],
+      timeline: { clips: [] },
+      subtitles: { lang: 'zh', cues: [] },
       models: [],
       ratios: [],
       pins: [],
@@ -108,6 +119,9 @@ export const useProject = create<ProjectState>()(
         s.blocks = b.project.blocks;
         s.assets = b.project.assets;
         s.shots = b.project.shots;
+        // 结构化克隆：mock 与工作空间给的都是只读形状，直接塞进 draft 会被 immer 冻住
+        s.timeline = { clips: [...(b.project.timeline?.clips ?? [])], beatMs: b.project.timeline?.beatMs };
+        s.subtitles = { lang: b.project.subtitles?.lang ?? 'zh', cues: [...(b.project.subtitles?.cues ?? [])] };
         s.models = [...b.config.models];
         s.ratios = [...b.config.ratios];
         s.pins = [...b.project.pins];
@@ -303,6 +317,13 @@ export const useProject = create<ProjectState>()(
           case 'style':
             s.style = patch.style;
             s.stylePrompt = patch.stylePrompt;
+            break;
+          case 'timeline':
+            // 整条换掉：顺序与时长是一起算出来的，逐段合并会留下上一次的残段
+            s.timeline = { clips: [...patch.timeline.clips], beatMs: patch.timeline.beatMs };
+            break;
+          case 'subtitles':
+            s.subtitles = { lang: patch.subtitles.lang, cues: [...patch.subtitles.cues] };
             break;
           case 'run':
             // 运行类产物不改内容，由 store 的既有动作执行（见 store/agent.ts）
