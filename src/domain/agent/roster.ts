@@ -192,11 +192,11 @@ export const hasPersona = (id: AgentId): boolean => BY_ID.has(id);
 
 const ghost = (id: AgentId): Persona => ({
   id, name: id, en: '', icon: 'users', custom: true,
-  tagline: '这位已经不在了',
+  tagline: '该智能体已被删除',
   steps: [], owns: [],
   greeting: '',
   preamble: '',
-  handoff: '这位已经不在了，%s 接手。',
+  handoff: '该智能体已被删除，转交给 %s。',
 });
 
 /** URL 段是不是一个真的 Agent —— 路由直达时用它挡住乱填的名字 */

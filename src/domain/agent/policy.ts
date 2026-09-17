@@ -35,10 +35,10 @@ export const RISK_LABEL: Record<Risk, string> = {
 };
 
 export const RISK_WHY: Record<Risk, string> = {
-  read: '不改任何东西',
-  write: '改项目内容，进撤销历史，退得回来',
-  spend: '要花积分，跑完撤销也退不回额度',
-  egress: '东西会离开这台机器，收不回来',
+  read: '不修改任何内容',
+  write: '修改项目内容，会进入撤销历史，可以退回',
+  spend: '消耗积分，执行后撤销也无法退回额度',
+  egress: '数据会离开本机，无法收回',
 };
 
 /**
@@ -140,7 +140,7 @@ export function autoAllowed(risk: Risk, autoMax: Risk = DEFAULT_AUTO_MAX): boole
 export type ToolApproval = 'allow' | 'ask';
 
 export const APPROVAL_LABEL: Record<ToolApproval, string> = {
-  allow: '总是允许', ask: '总是问我',
+  allow: '始终允许', ask: '每次确认',
 };
 
 /**
@@ -180,6 +180,6 @@ export function effectiveApproval(
 /** 挡下来时给人话：为什么停在这儿 */
 export function holdReason(risk: Risk): string {
   return risk === 'egress'
-    ? '这一步会把东西送出这台机器。自主模式也不会自己做，等你点头。'
-    : `这一步${RISK_WHY[risk]}，超过了你给的自主上限。`;
+    ? '这一步会把数据送出本机。即使开启自主执行也不会自动进行，等待你确认。'
+    : `这一步会${RISK_WHY[risk]}，超出了你设定的自动执行范围。`;
 }

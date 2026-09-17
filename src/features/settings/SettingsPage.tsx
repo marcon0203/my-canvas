@@ -70,7 +70,7 @@ export function SettingsPage({ section, detail, onOpen, onBack }: {
       ) : sk ? (
         <StageBar
           title={<span className="crumb"><Icon name={sk.icon} />{sk.name}</span>}
-          pills={<span className="mono dim t-cap">{sk.id}</span>}
+          pills={<span className="t-cap dim">{sk.summary}</span>}
           actions={<Button onClick={onBack}><Icon name="left" />返回 Skill</Button>}
         />
       ) : prov ? (

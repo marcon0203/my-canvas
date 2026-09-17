@@ -89,7 +89,7 @@ export function SkillList({ onOpen }: { onOpen: (id: string) => void }) {
   const fork = async (name: string) => {
     try {
       await skillFork(name, workspace);
-      toast(`已复制「${name}」到工作空间，改那份就生效`);
+      toast(`已复制「${name}」到工作空间，修改副本即可生效`);
       reload();
     } catch (e) {
       toast(String((e as { message?: string })?.message ?? e));
@@ -141,14 +141,14 @@ export function SkillList({ onOpen }: { onOpen: (id: string) => void }) {
           <>
             <section className="pcard">
               <header className="pcard__h">
-                <span className="pcard__n">装了哪些</span>
+                <span className="pcard__n">已安装</span>
                 <span className="t-cap dim">
                   {isDesktop() ? '内置的 + 你自己放进去的' : '浏览器里没有文件系统，只能看到内置的'}
                 </span>
               </header>
               <p className="skdesc dim">
-                Skill 是一份写给智能体的操作说明。放进 skills 目录就生效；
-                和内置同名时，用你的那份。
+                Skill 是一份写给智能体的操作说明。放入 skills 目录即生效；
+                与内置同名时，以你的为准。
               </p>
               {loaded?.skills.length
                 ? (
@@ -160,7 +160,7 @@ export function SkillList({ onOpen }: { onOpen: (id: string) => void }) {
                       <div key={m.name} className="skrow">
                         <span className="skrow__ic"><Icon name="wand" /></span>
                         <button className="skrow__main" onClick={() => onOpen(m.name)}
-                          title="看它的正文与附件">
+                          title="查看正文与附件">
                           <span className="skrow__n mono">{m.name}</span>
                           <span className="dim skrow__k">{m.description}</span>
                         </button>
@@ -175,8 +175,8 @@ export function SkillList({ onOpen }: { onOpen: (id: string) => void }) {
                         <span className="skrow__own">
                           {m.source === '内置' && isDesktop() && (
                             <Button onClick={() => void fork(m.name)}
-                              title="复制到工作空间，之后改副本就生效，升级不会覆盖">
-                              改一份
+                              title="复制到工作空间后即可修改，程序升级不会覆盖你的副本">
+                              创建副本
                             </Button>
                           )}
                         </span>
@@ -214,12 +214,12 @@ export function SkillList({ onOpen }: { onOpen: (id: string) => void }) {
             <header className="pcard__h">
               <span className="pcard__n">每个功能由谁负责</span>
               <span className="t-cap dim">
-                其中 {migrated.size} 个的做法写在 Skill 文件里，可以改；其余内置在程序里
+                其中 {migrated.size} 项的实现写在 Skill 文件里，可修改；其余内置在程序中
               </span>
             </header>
             <div className="sktable">
               <div className="skhead">
-                <span /><span>功能</span><span>结果写到</span><span>做法</span><span>负责人</span>
+                <span /><span>功能</span><span>结果写入</span><span>实现方式</span><span>负责人</span>
               </div>
               {SKILLS.map((s) => {
                 const owner = ownerOfConfigured(s.id, agents);
@@ -228,11 +228,13 @@ export function SkillList({ onOpen }: { onOpen: (id: string) => void }) {
                   <div key={s.id} className={`skrow${owner ? '' : ' skrow--orphan'}`}>
                     <span className="skrow__ic"><Icon name={s.icon} /></span>
                     <button className="skrow__main" onClick={() => onOpen(s.id)}
-                      title="查看它在什么情况下触发、需要什么前置条件、结果写到哪儿">
+                      title="查看触发条件、前置条件与结果写入位置">
                       <span className="skrow__n">{s.name}</span>
-                      <span className="mono dim skrow__k">{s.id}</span>
+                      {/* 这里原来显示 intent key（outline.draft 这种）。那是内部标识，
+                          对着它猜这件事到底做什么，不如直接把它做什么写出来 */}
+                      <span className="dim skrow__k">{s.summary}</span>
                     </button>
-                    <span className="skrow__out">{s.goto ? GOTO_LABEL[s.goto] : '只出报告'}</span>
+                    <span className="skrow__out">{s.goto ? GOTO_LABEL[s.goto] : '仅输出报告'}</span>
                     <span>
                       {skill
                         ? <Chip tone="ok">{skill}</Chip>
@@ -265,8 +267,8 @@ function Roots({ roots }: { roots: readonly SkillRoot[] }) {
   return (
     <section className="pcard">
       <header className="pcard__h">
-        <span className="pcard__n">从哪儿加载</span>
-        <span className="t-cap dim">按顺序扫，同名时后面那份生效</span>
+        <span className="pcard__n">加载目录</span>
+        <span className="t-cap dim">按顺序扫描，同名时以靠后的目录为准</span>
       </header>
       <ul className="issues">
         {roots.map((r) => (
@@ -275,8 +277,8 @@ function Roots({ roots }: { roots: readonly SkillRoot[] }) {
             <span>
               <b>{r.name}</b>
               <span className="mono dim"> {r.path}</span>
-              {!r.exists && <span className="dim"> · 目录还不存在，往里放东西时会自动建</span>}
-              {r.wins && roots.length > 1 && <span className="dim"> · 同名时用这里的</span>}
+              {!r.exists && <span className="dim"> · 目录尚未创建，放入文件时会自动建立</span>}
+              {r.wins && roots.length > 1 && <span className="dim"> · 同名时以此目录为准</span>}
             </span>
           </li>
         ))}
@@ -345,13 +347,13 @@ function AddSkillModal({ open, onClose, onAdded }: {
           <span className="sec">格式要求</span>
           <span className="t-cap dim">
             一个文件夹，里面必须有 <span className="mono">SKILL.md</span>：开头写它叫什么、
-            什么时候用，下面写做法。可以另带 <span className="mono">references/</span>（资料）
+            什么时候用，下面写执行步骤。可另带 <span className="mono">references/</span>（资料）
             和 <span className="mono">scripts/</span>（脚本）。
           </span>
         </div>
 
         <div className="mo__field">
-          <span className="sec">要导入的目录</span>
+          <span className="sec">导入目录</span>
           <Input value={path} placeholder="例如 /Users/me/我的skill/write-ad-copy"
             disabled={!isDesktop() || busy}
             onChange={(e) => { setPath(e.target.value); setErr(''); }}
@@ -364,7 +366,7 @@ function AddSkillModal({ open, onClose, onAdded }: {
         </div>
 
         <div className="mo__field">
-          <span className="sec">会复制到</span>
+          <span className="sec">安装位置</span>
           <span className="skplain mono">{dir || '读取中…'}</span>
           <span className="t-cap dim">也可以直接把文件夹拷进这个目录，效果一样</span>
         </div>
@@ -390,8 +392,8 @@ export function SkillFileDetail({ name }: { name: string }) {
     <>
       <section className="pcard">
         <header className="pcard__h">
-          <span className="pcard__n">什么时候用它</span>
-          <span className="t-cap dim">智能体只凭这一句判断要不要用这个 Skill</span>
+          <span className="pcard__n">适用场景</span>
+          <span className="t-cap dim">智能体仅凭这一句判断是否需要使用该 Skill</span>
           <div className="spacer" />
           {meta && <Chip>{meta.source}</Chip>}
         </header>
@@ -402,7 +404,7 @@ export function SkillFileDetail({ name }: { name: string }) {
       <section className="pcard">
         <header className="pcard__h">
           <span className="pcard__n">操作说明</span>
-          <span className="t-cap dim">真用到它的那一轮才会读进去</span>
+          <span className="t-cap dim">仅在实际用到它的那一轮才载入上下文</span>
         </header>
         <pre className="skbody">{body ?? '读取中…'}</pre>
       </section>
@@ -411,7 +413,7 @@ export function SkillFileDetail({ name }: { name: string }) {
         <section className="pcard">
           <header className="pcard__h">
             <span className="pcard__n">附带文件</span>
-            <span className="t-cap dim">操作说明里点到哪个才读哪个</span>
+            <span className="t-cap dim">操作说明引用到哪个才载入哪个</span>
           </header>
           <div className="chipwall">
             {meta.hasReferences && <Chip tone="a">references/</Chip>}
@@ -419,7 +421,7 @@ export function SkillFileDetail({ name }: { name: string }) {
             {meta.hasAssets && <Chip tone="a">assets/</Chip>}
           </div>
           <p className="t-cap dim" style={{ marginTop: 12, marginBottom: 0 }}>
-            scripts 里的是脚本，直接运行，不当文字读。
+            scripts 目录下的是脚本，直接运行，不作为文字载入。
           </p>
         </section>
       )}
@@ -439,7 +441,7 @@ export function SkillDetail({ id }: { id: SkillId }) {
     <>
       <section className="pcard">
         <header className="pcard__h">
-          <span className="pcard__n">这个功能做什么</span>
+          <span className="pcard__n">功能说明</span>
           <div className="spacer" />
           {s.impl.by === 'model' ? <Chip tone="ok">调模型</Chip> : <Chip>本地生成</Chip>}
         </header>
@@ -450,7 +452,7 @@ export function SkillDetail({ id }: { id: SkillId }) {
             : '现在无人负责，用户要求时会被告知做不了。'}>
             <OwnerSelect kind={id} />
           </Field>
-          <Field label="前置条件" hint="不满足时会明确说做不了，而不是假装做完">
+          <Field label="前置条件" hint="不满足时会明确告知无法执行，而不是假装完成">
             <span className="skplain">{s.needs}</span>
           </Field>
           <Field label="结果">
@@ -465,8 +467,8 @@ export function SkillDetail({ id }: { id: SkillId }) {
 
       <section className="pcard">
         <header className="pcard__h">
-          <span className="pcard__n">什么时候会触发</span>
-          <span className="t-cap dim">你随手打一句话时，按这些词判断该做哪件事</span>
+          <span className="pcard__n">触发条件</span>
+          <span className="t-cap dim">你输入一句话时，按这些关键词判断该执行哪个功能</span>
         </header>
         <Fields>
           <Field wide label={`动作词 · 命中一个记 ${TRIGGER_WEIGHT.act} 分`}>
@@ -487,7 +489,7 @@ export function SkillDetail({ id }: { id: SkillId }) {
 
       <section className="pcard">
         <header className="pcard__h">
-          <span className="pcard__n">要哪些工具</span>
+          <span className="pcard__n">依赖的工具</span>
           <span className="t-cap dim">
             {owner ? `勾掉任意一个，${personaById(owner).name}就接不了这件活` : '指派给谁，就自动补给谁'}
           </span>
@@ -518,7 +520,7 @@ export function SkillDetail({ id }: { id: SkillId }) {
 
       <section className="pcard">
         <header className="pcard__h">
-          <span className="pcard__n">怎么实现的</span>
+          <span className="pcard__n">实现方式</span>
         </header>
         <p className="skdesc">
           {s.impl.by === 'model'

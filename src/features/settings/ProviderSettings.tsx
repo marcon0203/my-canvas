@@ -91,7 +91,7 @@ function ProviderTile({ id, onOpen }: { id: ProviderId; onOpen: (id: ProviderId)
           {off
             ? '已停用，它的模型不会出现在选择列表里'
             : !setting.hasKey
-              ? '没有密钥，模型选了也跑不起来'
+              ? '未填写密钥，即使选了模型也无法调用'
               : models.length
                 ? `${models.length} 个模型可用`
                 : '还没加模型，点进去加'}
@@ -144,7 +144,7 @@ function AddProviderModal({ open, onClose, onAdded }: {
         await setKey(pick, key.trim());
         toast(`${spec?.name} 已接入`);
       } else {
-        toast(`${spec?.name} 已接入。还没填密钥，模型选了也跑不起来`);
+        toast(`${spec?.name} 已接入。尚未填写密钥，暂时无法调用`);
       }
       const id = pick;
       close();

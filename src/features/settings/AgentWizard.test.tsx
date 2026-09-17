@@ -50,30 +50,33 @@ describe('编辑向导：一次只走一步', () => {
 
   it('五步都列出来，默认停在第一步', () => {
     const { host } = mount(<AgentWizard id="dp" />);
-    expect(steps(host)).toEqual(['身份', '侧重方向', '能干什么', '模型', '放手到哪一档']);
-    expect(host.querySelector('.wstep--on .wstep__t')?.textContent).toBe('身份');
+    expect(steps(host)).toEqual(['基本信息', '系统提示词', '任务与工具', '模型', '执行权限']);
+    expect(host.querySelector('.wstep--on .wstep__t')?.textContent).toBe('基本信息');
     host.remove();
   });
 
   it('当前这一步之外的内容不在页面上 —— 那正是不摊开的意义', () => {
     const { host, click } = mount(<AgentWizard id="dp" />);
+    // 查的是控件本身，不是文案里的词：步骤条上也写着步骤名，按文案查会假通过
+    const has = (sel: string) => !!host.querySelector(sel);
     expect(text(host)).toContain('描述');
-    expect(text(host)).not.toContain('系统提示词');
+    expect(has('textarea'), '第一步不该出现提示词输入框').toBe(false);
+    expect(has('.toolgrp'), '第一步不该出现工具').toBe(false);
 
-    click(stepBtn(host, '侧重方向'));
-    expect(text(host)).toContain('系统提示词');
-    expect(text(host)).not.toContain('接的活儿');
+    click(stepBtn(host, '系统提示词'));
+    expect(has('textarea')).toBe(true);
+    expect(has('.toolgrp')).toBe(false);
 
-    click(stepBtn(host, '能干什么'));
-    expect(text(host)).toContain('接的活儿');
-    expect(text(host)).not.toContain('系统提示词');
-    host.remove();
+    click(stepBtn(host, '任务与工具'));
+    expect(text(host)).toContain('负责的任务');
+    expect(has('.toolgrp')).toBe(true);
+    expect(has('textarea'), '切走之后提示词输入框要消失').toBe(false);
   });
 
   it('内置那位的名字改不了，也没有删除按钮', () => {
     const { host } = mount(<AgentWizard id="dp" />);
     expect(host.querySelector('input')).toBe(null);
-    expect(text(host)).toContain('内置的五位删不掉');
+    expect(text(host)).toContain('内置智能体不可删除');
     expect([...host.querySelectorAll('button')].some((b) => b.textContent?.includes('删掉这位')))
       .toBe(false);
     host.remove();
@@ -97,7 +100,7 @@ describe('逐个工具的审批策略', () => {
   const open = () => {
     const id = customPersonas()[0]!.id;
     const m = mount(<AgentWizard id={id} />);
-    m.click(stepBtn(m.host, '放手到哪一档'));
+    m.click(stepBtn(m.host, '执行权限'));
     return { ...m, id };
   };
 
@@ -109,12 +112,12 @@ describe('逐个工具的审批策略', () => {
     host.remove();
   });
 
-  it('出本机的那个没有下拉框，只有一句「永远问你」', () => {
+  it('出本机的那个没有下拉框，只有一句「始终需要确认」', () => {
     const { host } = open();
     const rows = [...host.querySelectorAll('.apol__row')];
     const exportRow = rows.find((r) => r.textContent?.includes('导出文件'))!;
     expect(exportRow.querySelector('select'), '出本机的工具不该给出「总是允许」这个选项').toBe(null);
-    expect(exportRow.textContent).toContain('永远问你');
+    expect(exportRow.textContent).toContain('始终需要确认');
 
     // 同一份表格里，花钱那档是可以改的 —— 说明「没有下拉框」不是整表都没有
     const imgRow = rows.find((r) => r.textContent?.includes('出图'))!;
@@ -140,9 +143,9 @@ describe('逐个工具的审批策略', () => {
     const id = customPersonas()[0]!.id;
     useSettings.getState().patchAgent(id, { autonomy: 'propose' });
     const { host, click } = mount(<AgentWizard id={id} />);
-    click(stepBtn(host, '放手到哪一档'));
+    click(stepBtn(host, '执行权限'));
     expect(host.querySelectorAll('.apol__row')).toHaveLength(0);
-    expect(text(host)).toContain('自主度');
+    expect(text(host)).toContain('执行方式');
     host.remove();
   });
 });
@@ -162,9 +165,9 @@ describe('新建向导', () => {
       <NewAgentModal open onClose={() => {}} onCreated={() => {}} />,
     );
     expect(btn(host, '下一步').disabled).toBe(true);
-    expect(btn(host, '先保存').disabled).toBe(true);
+    expect(btn(host, '保存').disabled).toBe(true);
     // 后面几步也点不动
-    expect((stepBtn(host, '能干什么') as HTMLButtonElement).disabled).toBe(true);
+    expect((stepBtn(host, '任务与工具') as HTMLButtonElement).disabled).toBe(true);
     host.remove();
   });
 
@@ -174,9 +177,9 @@ describe('新建向导', () => {
       <NewAgentModal open onClose={() => {}} onCreated={(id) => { created = id; }} />,
     );
     type(host.querySelector('.mo input') as HTMLInputElement, '广告片编剧');
-    expect(btn(host, '先保存').disabled).toBe(false);
+    expect(btn(host, '保存').disabled).toBe(false);
 
-    act(() => { btn(host, '先保存').click(); });
+    act(() => { btn(host, '保存').click(); });
     expect(created).toBeTruthy();
     expect(personaById(created).name).toBe('广告片编剧');
     // 没填的字段不替人编内容

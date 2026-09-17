@@ -431,7 +431,7 @@ export function toolProposal(tool: ToolId, patch: ProposalPatch, value: unknown)
 export function toolOkText(tool: ToolId, value: unknown): string {
   const v = (value ?? {}) as Record<string, unknown>;
   if (tool === 'file.export') {
-    return `已生成 ${String(v['filename'])}（${Math.round(Number(v['bytes'] ?? 0) / 1024)} KB）。存到哪儿由你在保存对话框里选。`;
+    return `已生成 ${String(v['filename'])}（${Math.round(Number(v['bytes'] ?? 0) / 1024)} KB）。保存位置由你在保存对话框里选。`;
   }
   if (tool === 'prompt.compile') {
     const list = (v['prompts'] ?? []) as { id: string; text: string }[];

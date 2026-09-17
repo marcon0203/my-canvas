@@ -48,12 +48,12 @@ describe('Skill 管理：已安装与功能清单分页', () => {
 
   it('默认这一页看不到功能清单的表头，切过去才有', () => {
     const { host, click } = render();
-    expect(text(host)).toContain('装了哪些');
+    expect(text(host)).toContain('已安装');
     expect(text(host)).not.toContain('每个功能由谁负责');
 
     click(tabNamed(host, '功能清单'));
     expect(text(host)).toContain('每个功能由谁负责');
-    expect(text(host)).not.toContain('装了哪些');
+    expect(host.querySelector('.skhead')?.textContent).not.toContain('来源');
     // 切过去之后，导入相关的按钮不该还挂在那儿 —— 那一页没有文件可导
     expect(text(host)).not.toContain('添加 Skill');
     host.remove();
@@ -89,7 +89,7 @@ describe('Skill 管理：已安装与功能清单分页', () => {
     const modal = document.querySelector('.mo__box')!;
     expect(modal).not.toBe(null);
     expect(modal.textContent).toContain('SKILL.md');
-    expect(modal.textContent).toContain('要导入的目录');
+    expect(modal.textContent).toContain('导入目录');
 
     // 关掉之后不留在 DOM 里
     click(modal.querySelector('.mo__h .tbtn')!);

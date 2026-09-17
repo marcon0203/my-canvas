@@ -86,7 +86,7 @@ export function parseModelKey(key: string): ModelRef | undefined {
 export const CAPS_OF: Record<Modality, readonly { k: keyof ModelCaps; n: string; hint: string }[]> = {
   text: [
     { k: 'stream', n: '流式', hint: '一个字一个字往外吐，对话观感靠它' },
-    { k: 'tools', n: '工具调用', hint: '不支持的话复杂任务只能靠提示词硬来' },
+    { k: 'tools', n: '工具调用', hint: '不支持时复杂任务只能靠提示词引导，稳定性较差' },
     { k: 'vision', n: '读图', hint: '能看懂图片输入' },
     { k: 'reasoning', n: '推理', hint: '有显式思考过程，慢但稳' },
   ],

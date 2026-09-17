@@ -158,6 +158,6 @@ describe('agent/policy · 自主执行的边界', () => {
     const b = holdReason('egress');
     expect(a).not.toBe(b);
     expect(a).toContain('积分');
-    expect(b).toContain('这台机器');
+    expect(b).toContain('本机');
   });
 });

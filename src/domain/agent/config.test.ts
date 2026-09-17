@@ -73,17 +73,27 @@ describe('agent/config · 默认配置自洽', () => {
 });
 
 describe('agent/config · 报问题而不是偷偷改', () => {
-  it('接了活却勾掉工具 → 明确报缺哪几件', () => {
+  it('承接了任务却勾掉工具 → 明确报缺哪几件，且用工具名不是内部 id', () => {
     const dp = defaultConfig(personaById('dp'));
     const crippled = { ...dp, tools: dp.tools.filter((t) => t !== 'video.generate') };
     const issues = checkConfig(crippled, ALL, MODELS);
-    expect(issues.some((i) => i.level === 'error' && i.text.includes('video.generate'))).toBe(true);
+    const hit = issues.find((i) => i.level === 'error' && i.text.includes('缺少工具'));
+    expect(hit, JSON.stringify(issues)).toBeTruthy();
+    // 界面上摆内部 id（video.generate / shots.prompt）等于让人拿标识去猜是哪件事
+    expect(hit!.text).toContain('出视频');
+    expect(hit!.text).toContain('批量转视频');
+    expect(hit!.text).not.toContain('video.generate');
   });
 
   it('模型配错模态 → 报错', () => {
     const dp = defaultConfig(personaById('dp'));
     const wrong = { ...dp, models: { video: IMAGE } };
-    expect(checkConfig(wrong, ALL, MODELS).some((i) => i.level === 'error' && i.text.includes('用不了'))).toBe(true);
+    const issues = checkConfig(wrong, ALL, MODELS);
+    const hit = issues.find((i) => i.level === 'error' && i.text.includes('不能用在'));
+    expect(hit, JSON.stringify(issues)).toBeTruthy();
+    // 模态也要用中文名，不是 image/video 这种内部值
+    expect(hit!.text).toContain('图片模型');
+    expect(hit!.text).toContain('视频');
   });
 
   it('一个模型都没加 → 每个模态都报找不到，不静默当成配好了', () => {

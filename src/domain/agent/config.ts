@@ -2,7 +2,7 @@ import type { Modality, ModelRef, ModelSpec } from '@/domain/providers/model';
 import { MODALITY_LABEL } from '@/domain/providers/model';
 import { findModel } from '@/domain/providers/catalog';
 import type { AgentId, BuiltinAgentId, Persona } from './roster';
-import { roster, personaById } from './roster';
+import { intentName, roster, personaById } from './roster';
 import { EXTRA_TOOLS, TOOLS, canRun, defaultTools, missingTools, type ToolId } from './tools';
 import type { IntentKind } from './types';
 import type { Risk, ToolApproval } from './policy';
@@ -62,8 +62,8 @@ export const AUTONOMY_LABEL: Record<Autonomy, string> = {
 };
 
 export const AUTONOMY_HINT: Record<Autonomy, string> = {
-  propose: '先给结果，你点采纳才写进项目',
-  auto: '能干的自己干完，只在要花钱或动定稿资产时停下来问',
+  propose: '先给出结果，你点「采纳」后才写入项目',
+  auto: '在权限范围内自行完成，涉及消耗积分或定稿资产时暂停并征求确认',
 };
 
 export function defaultConfig(p: Persona): AgentConfig {
@@ -144,13 +144,20 @@ export function checkConfig(
   const out: ConfigIssue[] = [];
   const p = personaById(cfg.agentId);
 
-  if (!cfg.enabled) return [{ level: 'warn', text: `${p.name}已停用，它负责的功能没人做` }];
+  if (!cfg.enabled) {
+    return [{ level: 'warn', text: `${p.name}已停用，它负责的功能当前没有负责人` }];
+  }
 
-  // 技能缺工具
+  // 任务缺工具。报的是**任务名**而不是 intent key：intent key 是内部标识，
+  // 摆在界面上等于让人拿着 shots.prompt 去猜它指哪件事
   for (const k of cfg.skills) {
     const miss = missingTools(cfg.tools, k);
     if (miss.length) {
-      out.push({ level: 'error', text: `接了「${k}」却没给工具：缺 ${miss.join('、')}` });
+      const tools = miss.map((t) => TOOLS.find((x) => x.id === t)?.name ?? t);
+      out.push({
+        level: 'error',
+        text: `已承接「${intentName(k)}」，但缺少工具：${tools.join('、')}`,
+      });
     }
   }
 
@@ -158,22 +165,34 @@ export function checkConfig(
   for (const m of neededModalities(cfg)) {
     const ref = modelFor(cfg, m, globals);
     if (!ref) {
-      out.push({ level: 'error', text: `需要${MODALITY_LABEL[m]}模型，但没配也没有全局默认` });
+      out.push({
+        level: 'error',
+        text: `需要${MODALITY_LABEL[m]}模型，但尚未指定，也没有可用的全局默认`,
+      });
       continue;
     }
     const spec = findModel(ref, extraModels);
     if (!spec) {
-      out.push({ level: 'error', text: `配的模型 ${ref.provider}/${ref.model} 找不到。它不在已添加的模型里，可能被移除了，或者 id 填错了` });
+      out.push({
+        level: 'error',
+        text: `找不到模型 ${ref.provider}/${ref.model}。它不在已添加的模型列表中，可能已被移除，或 id 填写有误`,
+      });
     } else if (spec.modality !== m) {
-      out.push({ level: 'error', text: `${spec.name} 是${spec.modality}模型，配到${m}上用不了` });
+      out.push({
+        level: 'error',
+        text: `${spec.name} 是${MODALITY_LABEL[spec.modality]}模型，不能用在${MODALITY_LABEL[m]}上`,
+      });
     }
   }
 
-  // 工具调用能力：接了活儿但模型不支持 function calling，只能靠提示词硬来
+  // 工具调用能力：承接了任务但模型不支持 function calling，只能靠提示词引导
   const textRef = modelFor(cfg, 'text', globals);
   const textSpec = findModel(textRef, extraModels);
   if (textSpec && !textSpec.caps.tools && cfg.skills.some((k) => k !== 'chat')) {
-    out.push({ level: 'warn', text: `${textSpec.name} 不支持工具调用，复杂任务的稳定性会差一些` });
+    out.push({
+      level: 'warn',
+      text: `${textSpec.name} 不支持工具调用，复杂任务的稳定性会差一些`,
+    });
   }
 
   return out;

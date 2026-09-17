@@ -145,13 +145,13 @@ function ToolCard({ msgId, t }: { msgId: number; t: ToolRun }) {
   if (t.state === 'approval') {
     return (
       <div className="atool atool--ask">
-        <div className="atool__h"><Icon name="bolt" /><span className="atool__t">{t.name} 要你点头</span></div>
+        <div className="atool__h"><Icon name="bolt" /><span className="atool__t">{t.name} 需要你确认</span></div>
         <p className="atool__why">{t.why}</p>
         <div className="atool__act">
           <button className="tbtn tbtn--pri" onClick={() => approveTool(msgId)}>
             <Icon name="check" />同意并执行
           </button>
-          <span className="t-cap dim">只放行这一次</span>
+          <span className="t-cap dim">仅本次生效</span>
         </div>
       </div>
     );
@@ -174,7 +174,7 @@ function ToolCard({ msgId, t }: { msgId: number; t: ToolRun }) {
   // blocked / failed
   return (
     <div className="atool atool--bad">
-      <div className="atool__h"><Icon name="x" /><span className="atool__t">{t.name} 没跑起来</span></div>
+      <div className="atool__h"><Icon name="x" /><span className="atool__t">{t.name} 执行失败</span></div>
       <p className="atool__why">{t.why}</p>
     </div>
   );

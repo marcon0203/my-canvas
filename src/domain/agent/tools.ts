@@ -107,7 +107,7 @@ export const TOOLS: readonly ToolSpec[] = [
   /* 成片 */
   { id: 'edit.timeline', group: 'deliver', name: '排时间线', desc: '判定可用的片段按场次与镜号排进时间线；给卡点就对齐', writes: true, status: 'ready' },
   { id: 'edit.subtitle', group: 'deliver', name: '生成字幕', desc: '按剧本台词与时间线生成字幕；长句切成一眼能看完的短条', writes: true, status: 'ready' },
-  { id: 'file.export', group: 'deliver', name: '导出文件', desc: '大纲/剧本导 .md、分镜表导 .csv；只产出内容，存哪儿由人在保存对话框里选', status: 'ready' },
+  { id: 'file.export', group: 'deliver', name: '导出文件', desc: '大纲/剧本导 .md、分镜表导 .csv；只产出内容，保存位置由人在保存对话框里选', status: 'ready' },
 
   /* 查资料 */
   { id: 'web.search', group: 'research', name: '搜网页', desc: '查产品卖点、考据这类外部资料', status: 'declared', blockedBy: '要先在设置里接入一家搜索服务（端点 + key），现在没有这一项。查询词会离开本机，接哪家该由用户决定，不在代码里挑一家写死' },

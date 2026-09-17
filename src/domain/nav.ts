@@ -42,10 +42,10 @@ export const WORKBENCH_SUB: readonly SubItem[] = [
 export const STEPS: readonly Step[] = WORKBENCH_SUB.map((s) => s.k as Step);
 
 export const SETTINGS_SUB: readonly SubItem[] = [
-  { k: 'workspace', n: '工作空间', icon: 'home', hint: '数据放哪儿' },
-  { k: 'models', n: '模型设置', icon: 'cube', hint: '厂商接入与模型' },
-  { k: 'skills', n: 'Skill 管理', icon: 'wand', hint: '每个功能由谁做、需要什么' },
-  { k: 'agents', n: '智能体管理', icon: 'users', hint: '侧重方向、模型、工具' },
+  { k: 'workspace', n: '工作空间', icon: 'home', hint: '数据存储位置' },
+  { k: 'models', n: '模型设置', icon: 'cube', hint: '供应商接入与模型' },
+  { k: 'skills', n: 'Skill 管理', icon: 'wand', hint: '功能负责人与依赖' },
+  { k: 'agents', n: '智能体管理', icon: 'users', hint: '提示词、模型与工具' },
 ];
 
 export const SECTIONS: readonly Section[] = [

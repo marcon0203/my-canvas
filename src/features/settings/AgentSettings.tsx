@@ -19,9 +19,9 @@ export function AgentList({ onOpen }: { onOpen: (id: AgentId) => void }) {
   return (
     <>
       <div className="settabs">
-        <span className="pcard__n">班底 · {roster().length}</span>
+        <span className="pcard__n">智能体 · {roster().length}</span>
         <span className="t-cap dim">
-          出厂五位各管一个环节{customs.length ? `，另外 ${customs.length} 位是你自己建的` : ''}
+          内置 5 个各负责一个创作环节{customs.length ? `，另有 ${customs.length} 个为你自建` : ''}
         </span>
         <div className="spacer" />
         <Button variant="primary" onClick={() => setAdding(true)}>
@@ -77,14 +77,14 @@ function AgentTile({ id, onOpen }: { id: AgentId; onOpen: (id: AgentId) => void 
         </p>
         <p className={`atile__st${errs ? ' atile__st--bad' : ''}`}>
           {!cfg.enabled
-            ? '已停用，它负责的功能没人做'
+            ? '已停用，它负责的功能当前没有负责人'
             : errs
-              ? `${errs} 个问题要处理`
+              ? `${errs} 项配置待处理`
               : issues.length
                 ? issues[0]!.text
                 : offline
-                  ? '配置没问题，但这家厂商还没接入，跑不起来'
-                  : '配置自洽，可以跑'}
+                  ? '配置完整，但该供应商尚未接入，暂时无法调用'
+                  : '配置完整，可以调用'}
         </p>
       </button>
       {/* 开关放在可点区之外：它不是「进详情」，而是就地生效 */}

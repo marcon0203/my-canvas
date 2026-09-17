@@ -29,12 +29,12 @@ function renderWith(tool: ToolRun): string {
 const base = { id: 'file.export' as const, name: '导出文件', args: {} };
 
 describe('工具卡', () => {
-  it('要人点头：给按钮，并说明只放行这一次', () => {
+  it('要人确认：给按钮，并说明仅本次生效', () => {
     const html = renderWith({ ...base, state: 'approval', risk: 'egress', why: '会把东西送出这台机器' });
-    expect(html).toContain('导出文件 要你点头');
+    expect(html).toContain('导出文件 需要你确认');
     expect(html).toContain('会把东西送出这台机器');
     expect(html).toContain('同意并执行');
-    expect(html).toContain('只放行这一次');
+    expect(html).toContain('仅本次生效');
   });
 
   it('缺配置：指到模型设置，而不是只说用不了', () => {
@@ -46,7 +46,7 @@ describe('工具卡', () => {
 
   it('跑不起来：把原因摆出来，不给采纳按钮', () => {
     const html = renderWith({ ...base, id: 'edit.timeline', name: '排时间线', state: 'failed', why: '还没有出好的视频片段' });
-    expect(html).toContain('排时间线 没跑起来');
+    expect(html).toContain('排时间线 执行失败');
     expect(html).toContain('还没有出好的视频片段');
     expect(html).not.toContain('采纳');
   });

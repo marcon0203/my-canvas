@@ -91,7 +91,7 @@ export function PosePanel({ rig, onPatch, skin, onSkin, refCount = 0 }: {
           )}
           {mode !== 'text' && refCount >= 3 && (
             <p className="t-cap" style={{ color: 'var(--color-warning)', margin: '8px 0 0', lineHeight: 1.6 }}>
-              这一镜已经有 {refCount} 个资产引用。灰白的姿态图和它们一起传，有把画面带灰的风险 —— 拿不准就先试「文字」。
+              这一镜已经有 {refCount} 个资产引用。灰白的姿态图和它们一起传，有把画面带灰的风险 —— 不确定时可以先用「文字」。
             </p>
           )}
         </div>

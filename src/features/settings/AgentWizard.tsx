@@ -39,11 +39,11 @@ const GROUPS: ToolGroup[] = ['read', 'write', 'prompt', 'generate', 'camera', 'd
  * 顺序就是依赖顺序，所以每一步只需要知道上一步的结果。
  */
 export const AGENT_STEPS = [
-  { key: 'who', name: '身份', hint: '叫什么、一句话说清它管哪一摊' },
-  { key: 'brief', name: '侧重方向', hint: '系统提示词：它先看什么、什么算做完' },
-  { key: 'can', name: '能干什么', hint: '接哪些活儿、给哪些工具' },
-  { key: 'model', name: '模型', hint: '按上一步需要的模态各配一个' },
-  { key: 'trust', name: '放手到哪一档', hint: '哪些动作它自己干，哪些停下来问你' },
+  { key: 'who', name: '基本信息', hint: '名称、描述与图标' },
+  { key: 'brief', name: '系统提示词', hint: '决定它的判断倾向：先看什么、什么算完成' },
+  { key: 'can', name: '任务与工具', hint: '它负责哪些任务，可以调用哪些工具' },
+  { key: 'model', name: '模型', hint: '按上一步用到的模态分别指定' },
+  { key: 'trust', name: '执行权限', hint: '哪些操作自动执行，哪些需要你确认' },
 ] as const;
 
 export type StepKey = (typeof AGENT_STEPS)[number]['key'];
@@ -103,20 +103,20 @@ function Who({ p, cfg, patch, patchP, creating }: StepProps) {
   const builtin = !p.custom;
   return (
     <Fields>
-      <Field label="名字" hint={builtin ? '出厂那五位的名字对应环节，改不了' : '显示在会话抬头与卡片上'}>
+      <Field label="名称" hint={builtin ? '内置智能体与创作环节一一对应，名称不可修改' : '显示在会话标题与卡片上'}>
         {builtin
           ? <span className="skplain">{p.name}<span className="dim"> · 内置</span></span>
-          : <Input value={p.name} placeholder="比如 广告片编剧"
+          : <Input value={p.name} placeholder="例如：广告片编剧"
               onChange={(e) => patchP({ name: e.target.value })} />}
       </Field>
-      <Field label="描述" hint="一句话说清它管哪一摊。空着就空着，不用凑字数">
+      <Field label="描述" hint="一句话说明它负责的范围，可以留空">
         {builtin
           ? <span className="skplain">{p.tagline}</span>
-          : <Input value={p.tagline} placeholder="比如 15 秒，前 3 秒要留住人"
+          : <Input value={p.tagline} placeholder="例如：15 秒短片，前 3 秒要留住人"
               onChange={(e) => patchP({ tagline: e.target.value })} />}
       </Field>
       {!builtin && (
-        <Field wide label="图标" hint="只影响头像，和它会做什么无关">
+        <Field wide label="图标" hint="仅用于头像显示，不影响能力">
           <div className="chipwall">
             {AGENT_ICONS.map((ic) => (
               <button key={ic} className={`icpick${p.icon === ic ? ' icpick--on' : ''}`}
@@ -130,7 +130,10 @@ function Who({ p, cfg, patch, patchP, creating }: StepProps) {
       )}
       {creating && <CopyFrom patch={patch} patchP={patchP} />}
       {!creating && !builtin && (
-        <Field label="状态" hint={cfg.enabled ? '停用之后它认领的活儿会变成没人接' : '它认领的活儿现在没人做'}>
+        <Field label="状态"
+          hint={cfg.enabled
+            ? '停用后，它负责的任务将没有负责人'
+            : '已停用，它负责的任务当前没有负责人'}>
           <Switch on={cfg.enabled} onChange={(v) => patch({ enabled: v })} label="启用" />
         </Field>
       )}
@@ -160,12 +163,12 @@ function CopyFrom({ patch, patchP }: Pick<StepProps, 'patch' | 'patchP'>) {
   };
 
   return (
-    <Field label="照着谁来"
+    <Field label="复制自"
       hint={from
-        ? `已把${personaById(from).name}的提示词、活儿、工具抄过来，后面几步照常改`
-        : '可以不选。选了就把那位现在的配置抄一份过来，再改'}>
-      <Select ariaLabel="照着哪位来" value={from}
-        options={[{ value: '', label: '从空白开始' },
+        ? `已复制「${personaById(from).name}」的提示词、任务与工具，后续步骤可继续修改`
+        : '可不选。选择后将复制该智能体当前的配置作为起点'}>
+      <Select ariaLabel="复制自哪个智能体" value={from}
+        options={[{ value: '', label: '不复制，从空白开始' },
           ...roster().map((x) => ({ value: x.id, label: x.name }))]}
         onChange={(v) => (v ? take(v) : setFrom(''))} />
     </Field>
@@ -179,11 +182,11 @@ function Brief({ p, cfg, patchP, patch }: StepProps) {
     <Fields>
       <Field wide label="系统提示词"
         hint={<>
-          自主规划下，这段比多勾几个技能更能决定它的行为：先看什么、什么算做完、
-          拿不准时偏向哪边。<b>空着也行</b> —— 那它就只按工具和活儿行事，没有判断倾向。
+          自主执行时，这段内容比多勾几个任务更能决定它的行为：先看什么、什么算完成、
+          不确定时偏向哪一边。<b>可以留空</b>，留空时它只按任务与工具执行，没有判断倾向。
         </>}>
         <Textarea rows={12} value={text} aria-label={`${p.name}的系统提示词`}
-          placeholder="比如：只写 15 秒能拍完的东西。前 3 秒必须有一个具体动作。"
+          placeholder="例如：只写 15 秒内能拍完的内容。前 3 秒必须有一个具体动作。"
           onChange={(e) => {
             // 出厂那五位有自己的 preamble，改回原文等于没改写 —— 那就别存一份副本
             const v = e.target.value;
@@ -192,9 +195,9 @@ function Brief({ p, cfg, patchP, patch }: StepProps) {
           }} />
       </Field>
       {custom && !p.custom && (
-        <Field label="已改写" hint="不再跟随出厂那份">
+        <Field label="已修改" hint="当前使用你改写的版本，不再跟随内置提示词">
           <Button onClick={() => patch({ preamble: undefined })}>
-            <Icon name="undo" />恢复出厂那段
+            <Icon name="undo" />恢复内置提示词
           </Button>
         </Field>
       )}
@@ -219,8 +222,8 @@ function Can({ cfg, patch }: StepProps) {
 
   return (
     <Fields>
-      <Field wide label={`接的活儿 · ${cfg.skills.length}`}
-        hint="勾上时它需要的工具会自动补齐。¥ 要花积分，↗ 会把东西送出本机">
+      <Field wide label={`负责的任务 · ${cfg.skills.length}`}
+        hint="选中后会自动补齐该任务所需的工具。¥ 表示消耗积分，↗ 表示数据会离开本机">
         <div className="chipwall">
           {ALL_INTENTS.map((k) => {
             const on = cfg.skills.includes(k);
@@ -238,10 +241,10 @@ function Can({ cfg, patch }: StepProps) {
           })}
         </div>
       </Field>
-      <Field wide label={`工具 · 已给 ${cfg.tools.length} / ${TOOLS.length}`}
+      <Field wide label={`可调用工具 · ${cfg.tools.length} / ${TOOLS.length}`}
         hint={<>
-          <b>虚线的还没实现</b>，<b>点线的实现了但还没拿真 key 验过</b>；
-          鼠标停上去看具体缺什么。
+          <b>虚线边框：尚未实现。</b><b>点线边框：已实现，但未用真实密钥验证过。</b>
+          鼠标悬停可查看具体缺什么。
         </>}>
         {GROUPS.map((g) => {
           const list = TOOLS.filter((t) => t.group === g);
@@ -285,7 +288,7 @@ function Models({ cfg, patch }: StepProps) {
   if (!needs.length) {
     return (
       <p className="skdesc dim" style={{ margin: 0 }}>
-        上一步给的工具都不调模型，所以这一步没有要配的。加了出图或出视频那类工具再回来。
+        上一步选择的工具都不调用模型，本步无需配置。添加出图、出视频一类工具后再回到这里。
       </p>
     );
   }
@@ -293,7 +296,7 @@ function Models({ cfg, patch }: StepProps) {
     <Fields>
       {needs.map((m) => (
         <Field key={m} label={MODALITY_LABEL[m]}
-          hint={`上一步给的工具里有要${MODALITY_LABEL[m]}模型的`}>
+          hint={`上一步选择的工具中有需要${MODALITY_LABEL[m]}模型的`}>
           <ModelSelect modality={m} value={cfg.models[m]} inherited={globals[m]}
             onChange={(ref) => {
               const next = { ...cfg.models };
@@ -328,8 +331,8 @@ function Trust({ cfg, patch }: StepProps) {
 
   return (
     <Fields>
-      <Field label="自主度" hint={AUTONOMY_HINT[cfg.autonomy]}>
-        <Segmented ariaLabel="自主度"
+      <Field label="执行方式" hint={AUTONOMY_HINT[cfg.autonomy]}>
+        <Segmented ariaLabel="执行方式"
           items={(['propose', 'auto'] as Autonomy[]).map((a) => ({
             key: a, label: AUTONOMY_LABEL[a], title: AUTONOMY_HINT[a],
           }))}
@@ -339,19 +342,19 @@ function Trust({ cfg, patch }: StepProps) {
 
       {cfg.autonomy === 'auto' && (
         <>
-          <Field label="自主上限"
+          <Field label="自动执行范围"
             hint={<>
-              超过这一档的动作照样停下来等你点头。
-              <b>导出文件、联网这类会把东西送出本机的，调到最高也不会自动做。</b>
+              超出该范围的操作仍会暂停，等待你确认。
+              <b>导出文件、联网等会让数据离开本机的操作，调到最高也不会自动执行。</b>
             </>}>
-            <Segmented ariaLabel="自主上限"
+            <Segmented ariaLabel="自动执行范围"
               items={AUTO_MAX_CHOICES.map((r) => ({ key: r, label: RISK_LABEL[r], title: RISK_WHY[r] }))}
               value={autoMax}
               onChange={(v) => patch({ autoMax: v as Risk })} />
           </Field>
 
-          <Field wide label={`逐个工具${changed.length ? ` · 改过 ${changed.length} 个` : ''}`}
-            hint="默认跟随上面那档。个别工具想单独放开或单独卡住，在这儿改">
+          <Field wide label={`单个工具${changed.length ? ` · 已调整 ${changed.length} 项` : ''}`}
+            hint="默认跟随上面的范围。个别工具需要单独放开或单独限制时，在这里调整">
             <div className="apol">
               {mine.map((t) => {
                 const eff = effectiveApproval(t.id, autoMax, over[t.id]);
@@ -361,15 +364,15 @@ function Trust({ cfg, patch }: StepProps) {
                     <span className="apol__r">{RISK_LABEL[riskOfTool(t.id)]}</span>
                     {eff === 'locked'
                       ? (
-                        <span className="apol__lock" title="会把东西送出这台机器，这一条不给配置绕">
-                          <Icon name="bolt" />永远问你
+                        <span className="apol__lock" title="数据会离开本机，该限制不可通过配置绕过">
+                          <Icon name="bolt" />始终需要确认
                         </span>
                       )
                       : (
                         <Select ariaLabel={`${t.name} 的审批策略`}
                           value={over[t.id] ?? ''}
                           options={[
-                            { value: '', label: eff === 'auto' ? '跟随上限 · 自动跑' : '跟随上限 · 问你' },
+                            { value: '', label: eff === 'auto' ? '跟随范围 · 自动执行' : '跟随范围 · 需确认' },
                             { value: 'allow', label: APPROVAL_LABEL.allow },
                             { value: 'ask', label: APPROVAL_LABEL.ask },
                           ]}
@@ -378,7 +381,7 @@ function Trust({ cfg, patch }: StepProps) {
                   </div>
                 );
               })}
-              {!mine.length && <span className="t-cap dim">上一步还没给它任何工具。</span>}
+              {!mine.length && <span className="t-cap dim">上一步尚未为它选择任何工具。</span>}
             </div>
           </Field>
         </>
@@ -418,7 +421,7 @@ function ModelSelect({ modality, value, inherited, onChange }: {
         onChange={(v) => onChange(v ? parseModelKey(v) : undefined)} />
       {/* 一个模型都没有时，光一个空下拉框说不清该去哪儿加 */}
       {list.length === 0 && (
-        <span className="t-cap dim">去「模型设置」接入厂商，再把要用的模型加上</span>
+        <span className="t-cap dim">请先到「模型设置」接入供应商，并添加要使用的模型</span>
       )}
     </>
   );
@@ -483,7 +486,7 @@ export function NewAgentModal({ open, onClose, onCreated }: {
         {/* 名字之外都可以留着以后改，所以除了第一步都能直接保存 —— 
             走完五步才让保存的话，只想建个空壳的人得点四次「下一步」 */}
         <Button disabled={!named} onClick={save}>
-          <Icon name="check" />{i === AGENT_STEPS.length - 1 ? '建好了' : '先保存，剩下的以后配'}
+          <Icon name="check" />{i === AGENT_STEPS.length - 1 ? '完成创建' : '保存，稍后再配置'}
         </Button>
         {i < AGENT_STEPS.length - 1 && (
           <Button variant="primary" disabled={!named}
@@ -498,7 +501,7 @@ export function NewAgentModal({ open, onClose, onCreated }: {
           reachable={(_k, n) => named || n === 0} />
         <div className="wzd__b">
           {!named && at === 'who' && (
-            <p className="t-cap dim" style={{ marginTop: 0 }}>先起个名字，后面几步才能往下走。</p>
+            <p className="t-cap dim" style={{ marginTop: 0 }}>请先填写名称，之后才能进入下一步。</p>
           )}
           <StepBody at={at} p={p} cfg={cfg} creating
             patch={(x) => setCfg((c) => ({ ...c, ...x }))}
@@ -564,7 +567,7 @@ export function AgentWizard({ id }: { id: AgentId }) {
         <section className="pcard pcard--warn">
           <header className="pcard__h">
             <Icon name="bolt" />
-            <span className="pcard__n">{issues.length} 条要注意</span>
+            <span className="pcard__n">{issues.length} 项配置待处理</span>
           </header>
           <ul className="issues">
             {issues.map((it, n) => (
@@ -578,10 +581,10 @@ export function AgentWizard({ id }: { id: AgentId }) {
 
       <section className="pcard">
         <header className="pcard__h">
-          <span className="pcard__n">这份配置</span>
-          <span className="t-cap dim">改动即时生效，不用点保存</span>
+          <span className="pcard__n">配置管理</span>
+          <span className="t-cap dim">修改即时生效，无需保存</span>
           <div className="spacer" />
-          {p.custom && <Chip>自己建的</Chip>}
+          {p.custom && <Chip>自建</Chip>}
         </header>
         <div className="row">
           <Button onClick={() => { reset(id); toast(`${p.name} 的配置已恢复默认`); }}>
@@ -592,16 +595,16 @@ export function AgentWizard({ id }: { id: AgentId }) {
             <Button className="tbtn--bad"
               onClick={() => {
                 remove(id);
-                toast(`已删掉「${p.name}」。它认领的活儿现在没人接`);
+                toast(`已删除「${p.name}」，它负责的任务现在没有负责人`);
               }}>
-              <Icon name="x" />删掉这位
+              <Icon name="x" />删除
             </Button>
           )}
         </div>
         {!p.custom && (
           <p className="t-cap dim" style={{ marginBottom: 0 }}>
-            内置的五位删不掉 —— 它们各自对应一个环节，删了那个环节就没人当班。
-            不想用的话在上面停用，或者新建一位把活儿挪过去。
+            内置智能体不可删除 —— 它们各自对应一个创作环节，删除后该环节将没有负责人。
+            不需要时可以在上方停用，或新建一个智能体并把任务转移过去。
           </p>
         )}
       </section>
