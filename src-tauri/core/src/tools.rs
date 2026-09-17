@@ -298,23 +298,29 @@ pub fn all() -> Vec<ToolSpec> {
           W, Rust, Declared, Some(NO_TL),
           obj(json!({ "lang": { "type": "string" } }), &[])),
 
+        // 只产出内容，落盘路径由用户在保存对话框里选 —— 见 export_file
         t("file.export", "导出文件", Deliver,
-          "把剧本导成 .md 或成片导成 .mp4。东西会离开这台机器。",
-          Egress, Rust, Declared,
-          Some("导出路径要用户选，不能由 Agent 决定写到哪儿"),
-          obj(json!({ "what": { "type": "string", "enum": ["script", "film", "shots"] } }), &["what"])),
+          "导出大纲/剧本（Markdown）或分镜表（CSV）。只产出内容，存到哪儿由人在保存对话框里选。",
+          Egress, Rust, Ready, None,
+          obj(json!({ "what": { "type": "string", "enum": ["outline", "script", "shots"],
+              "description": "成片导出还没有渲染管线" } }), &["what"])),
 
         /* ---------------- 查资料 ---------------- */
+        // 缺的不是代码，是**一个决定**：接哪家搜索服务。
+        // 设置里没有「搜索服务」这一项（没有端点也没有 key），
+        // 而查询词会离开本机 —— 这个选择该由用户做，不该由我在这儿挑一家写死。
         t("web.search", "搜网页", Research,
           "查外部资料。做广告片要查产品卖点、做历史题材要查考据时用它。",
           Egress, Rust, Declared,
-          Some("会把查询词发出本机，要先想清楚哪些内容不该进搜索框"),
+          Some("要先在设置里接入一家搜索服务（端点 + key）—— 现在没有这一项。\
+                查询词会离开本机，接哪家是个该由用户做的决定，不该在代码里挑一家写死"),
           obj(json!({ "q": { "type": "string" }, "limit": { "type": "integer" } }), &["q"])),
 
         t("web.fetch", "读网页", Research,
-          "读一个指定网址的正文。",
-          Egress, Rust, Declared, Some("同 web.search"),
-          obj(json!({ "url": { "type": "string" } }), &["url"])),
+          "读一个指定网址的正文（只读 http/https 的文本页面）。脚本样式会被剥掉，过长会截断并告诉你截了。",
+          Egress, Rust, Ready, None,
+          obj(json!({ "url": { "type": "string" },
+              "timeoutSec": { "type": "integer", "minimum": 1, "maximum": 60 } }), &["url"])),
     ]
 }
 
@@ -462,6 +468,15 @@ pub async fn dispatch(
         });
     }
 
+    // 读网页：出网的，所以到这儿意味着人已经点过同意（egress 过不了自主闸门）
+    if t.id == "web.fetch" {
+        let url = args.get("url").and_then(Value::as_str).unwrap_or("");
+        let secs = args.get("timeoutSec").and_then(Value::as_u64).unwrap_or(20).clamp(1, 60);
+        return Ok(Outcome::Ok {
+            value: crate::web::fetch(url, std::time::Duration::from_secs(secs)).await?,
+        });
+    }
+
     // 写类工具：算出补丁交回去，不落盘（见 Outcome::Patch 上的说明）
     if let Some(patch) = crate::patch::of(root, project_id, t.id, &args)? {
         return Ok(Outcome::Patch { tool: t.id.into(), patch });
@@ -473,6 +488,7 @@ pub async fn dispatch(
         "metrics.read" => read_metrics(root, project_id)?,
         "cost.estimate" => estimate_cost(&args)?,
         "prompt.compile" => crate::prompt::compile(root, project_id, &args)?,
+        "file.export" => export_file(root, project_id, &args)?,
         // status == Ready 的工具必须在这儿有分支，否则是注册表和实现对不上
         other => return Err(Error::UnknownTool(format!("{other} 标成已实现却没有实现"))),
     };
@@ -635,6 +651,21 @@ fn gen_body(tool: &str, model: &str, args: &Value) -> Result<Value> {
         other => return Err(Error::Generate(format!("{other} 不是生成类工具"))),
     }
     Ok(body)
+}
+
+/// 导出：**只产生内容，不决定写到哪儿。**
+///
+/// 路径必须由用户在系统保存对话框里选 —— 让 Agent 决定往哪个目录写，
+/// 等于给它一个任意写文件的能力，那是这个产品里最不该有的东西。
+/// 所以这里返回文件名建议与正文，由 app 层弹对话框再落盘。
+fn export_file(root: &Path, id: &str, args: &Value) -> Result<Value> {
+    let what = args.get("what").and_then(Value::as_str).unwrap_or("").trim();
+    let (filename, mime, text) = project::export(root, id, what)?;
+    Ok(json!({
+        "filename": filename, "mime": mime, "text": text,
+        "bytes": text.len(),
+        "note": "路径由你在保存对话框里选 —— Agent 不决定写到哪儿",
+    }))
 }
 
 /// 在项目里找关键词。返回**命中在哪儿**而不是整段内容 —— 让模型自己决定要不要细读
@@ -859,9 +890,18 @@ mod tests {
     #[tokio::test]
     async fn 人点过同意的那一次要能跑_不然_egress_工具全是死代码() {
         let tmp = setup();
-        let o = dispatch(tmp.path(), "p1", "file.export", json!({ "what": "script" }), None, By::Human, Ctx::default())
+        let o = dispatch(tmp.path(), "p1", "file.export", json!({ "what": "outline" }), None, By::Human, Ctx::default())
             .await.unwrap();
-        assert!(!matches!(o, Outcome::NeedsApproval { .. }), "人都点了同意还挡：{o:?}");
+        let Outcome::Ok { value } = o else { panic!("人都点了同意还没跑：{o:?}") };
+        // 真出了内容，而且没有替人决定写到哪儿
+        assert!(value["text"].as_str().unwrap().contains("第一幕"));
+        assert!(value["filename"].as_str().unwrap().ends_with(".md"));
+        assert!(value.get("path").is_none(), "不该由 Agent 决定路径");
+
+        // 同一次调用，Agent 自己来就得先问人 —— 上限调到最高也一样
+        let o = dispatch(tmp.path(), "p1", "file.export", json!({ "what": "outline" }),
+            Some(Risk::Egress), By::Agent, Ctx::default()).await.unwrap();
+        assert!(matches!(o, Outcome::NeedsApproval { .. }), "{o:?}");
     }
 
     #[tokio::test]

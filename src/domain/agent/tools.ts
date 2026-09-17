@@ -107,11 +107,11 @@ export const TOOLS: readonly ToolSpec[] = [
   /* 成片 */
   { id: 'edit.timeline', group: 'deliver', name: '排时间线', desc: '可用片段按场次与节拍排进时间线', writes: true, status: 'declared', blockedBy: '项目里还没有时间线/字幕的数据模型 —— 剪辑页的轨道现在是写死的占位，得先把这两份数据落进项目，工具才有东西可写' },
   { id: 'edit.subtitle', group: 'deliver', name: '生成字幕', desc: '按正文与配音时间轴生成字幕', writes: true, status: 'declared', blockedBy: '项目里还没有时间线/字幕的数据模型 —— 剪辑页的轨道现在是写死的占位，得先把这两份数据落进项目，工具才有东西可写' },
-  { id: 'file.export', group: 'deliver', name: '导出文件', desc: '导出剧本 .md、成片 .mp4', status: 'declared', blockedBy: '导出路径要用户选，不能由 Agent 决定' },
+  { id: 'file.export', group: 'deliver', name: '导出文件', desc: '大纲/剧本导 .md、分镜表导 .csv；只产出内容，存哪儿由人在保存对话框里选', status: 'ready' },
 
   /* 查资料 */
-  { id: 'web.search', group: 'research', name: '搜网页', desc: '查产品卖点、考据这类外部资料', status: 'declared', blockedBy: '查询词会发出本机，要先想清边界' },
-  { id: 'web.fetch', group: 'research', name: '读网页', desc: '读指定网址的正文', status: 'declared', blockedBy: '内容会发出本机，要先想清边界' },
+  { id: 'web.search', group: 'research', name: '搜网页', desc: '查产品卖点、考据这类外部资料', status: 'declared', blockedBy: '要先在设置里接入一家搜索服务（端点 + key）—— 现在没有这一项。查询词会离开本机，接哪家该由用户决定，不在代码里挑一家写死' },
+  { id: 'web.fetch', group: 'research', name: '读网页', desc: '读一个 http(s) 文本页面的正文；脚本样式剥掉，过长截断并说明', status: 'ready' },
 ];
 
 const BY_ID = new Map(TOOLS.map((t) => [t.id, t]));

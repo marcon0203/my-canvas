@@ -301,4 +301,193 @@ mod tests {
         assert!(list(tmp.path()).is_empty());
         delete(tmp.path(), "p1").unwrap();
     }
+
+    /* ---- 导出 ---- */
+
+    fn full() -> (TempDir, ()) {
+        let tmp = TempDir::new().unwrap();
+        save(tmp.path(), &Bundle {
+            meta: Meta { id: "p1".into(), proj: "猫 的 梦".into(), ..Meta::default() },
+            acts: vec![Act {
+                id: "a1".into(), t: "第一幕".into(), span: "0:00–1:00".into(),
+                beats: vec![Beat { id: "b1".into(), k: "场景1".into(), t: "窗边".into() }],
+            }],
+            blocks: vec![DocBlock {
+                id: "d1".into(), kind: "text".into(), label: "正文".into(), body: "第一段".into(),
+            }],
+            assets: serde_json::json!({}),
+            shots: serde_json::json!([
+                { "id": "s1-1", "sceneKey": "场景1", "size": "中景", "dur": 2.5,
+                  "desc": "推近，她转头", "own": "a girl turns, soft light", "refs": ["CHAR-001"] }
+            ]),
+        }).unwrap();
+        (tmp, ())
+    }
+
+    #[test]
+    fn 导出大纲与剧本是_markdown() {
+        let (tmp, _) = full();
+        let (name, mime, text) = export(tmp.path(), "p1", "outline").unwrap();
+        assert!(name.ends_with("-大纲.md"), "{name}");
+        assert_eq!(mime, "text/markdown");
+        assert!(text.contains("第一幕"));
+
+        let (name, _, text) = export(tmp.path(), "p1", "script").unwrap();
+        assert!(name.ends_with("-剧本.md"), "{name}");
+        assert!(text.contains("# 猫 的 梦") || text.contains("猫"));
+        assert!(text.contains("第一段"));
+    }
+
+    #[test]
+    fn 分镜表导成_csv_且带逗号的字段会被转义() {
+        let (tmp, _) = full();
+        let (name, mime, text) = export(tmp.path(), "p1", "shots").unwrap();
+        assert!(name.ends_with(".csv"), "{name}");
+        assert_eq!(mime, "text/csv");
+        let lines: Vec<&str> = text.lines().collect();
+        assert_eq!(lines[0], "镜号,场次,景别,时长,内容,提示词,引用");
+        // 不转义的话，一条带逗号的提示词就能把整张表错位 —— 而且错位后
+        // 看起来仍然是一张正常的表。所以这里按 CSV 规则真解一遍列数
+        assert!(lines[1].contains("\"a girl turns, soft light\""), "带逗号的没转义：{}", lines[1]);
+        assert_eq!(fields(lines[0]).len(), 7);
+        assert_eq!(fields(lines[1]).len(), 7, "列数对不上，说明有字段没转义：{}", lines[1]);
+        assert_eq!(fields(lines[1])[5], "a girl turns, soft light");
+    }
+
+    /// 按 CSV 规则切一行（只够测试用：认双引号包裹与 "" 转义）
+    fn fields(line: &str) -> Vec<String> {
+        let mut out = vec![String::new()];
+        let mut quoted = false;
+        let mut chars = line.chars().peekable();
+        while let Some(c) = chars.next() {
+            match c {
+                '"' if quoted && chars.peek() == Some(&'"') => {
+                    chars.next();
+                    out.last_mut().unwrap().push('"');
+                }
+                '"' => quoted = !quoted,
+                ',' if !quoted => out.push(String::new()),
+                _ => out.last_mut().unwrap().push(c),
+            }
+        }
+        out
+    }
+
+    #[test]
+    fn 空剧本空分镜说清没东西可导_不给一个空文件() {
+        let tmp = TempDir::new().unwrap();
+        save(tmp.path(), &Bundle {
+            meta: Meta { id: "空".into(), ..Meta::default() },
+            shots: serde_json::json!([]), ..Default::default()
+        }).unwrap();
+        for what in ["script", "shots"] {
+            let e = export(tmp.path(), "空", what).unwrap_err();
+            assert!(e.to_string().contains("没有东西可导"), "{what}: {e}");
+        }
+    }
+
+    #[test]
+    fn 成片导出如实说没有渲染管线_而不是给一个空_mp4() {
+        let (tmp, _) = full();
+        let e = export(tmp.path(), "p1", "film").unwrap_err();
+        assert!(e.to_string().contains("渲染管线"), "{e}");
+        let e = export(tmp.path(), "p1", "怪东西").unwrap_err();
+        assert!(e.to_string().contains("不认识的导出类型"));
+    }
+}
+
+/* ---------------- 导出 ---------------- */
+
+/// 导出一份可以拿走的文件：**只产生内容，不决定写到哪儿。**
+///
+/// 路径必须由用户选（系统保存对话框）—— 让 Agent 决定往哪个目录写，
+/// 等于给它一个任意写文件的能力，那是这个产品里最不该有的东西。
+/// 所以这里返回 `(文件名建议, mime, 正文)`，由 app 层拿去弹对话框。
+///
+/// 成片（film）不在这里：那需要一条真的渲染管线（拼片段、转码、烧字幕），
+/// 现在没有 —— 与其导出一个空 mp4，不如说清还没有。
+pub fn export(root: &Path, id: &str, what: &str) -> Result<(String, String, String)> {
+    let b = load(root, id)?;
+    let stem = md::safe_name(&b.meta.proj);
+    let stem = if stem.is_empty() { id.to_string() } else { stem };
+
+    match what {
+        "outline" => Ok((
+            format!("{stem}-大纲.md"),
+            "text/markdown".into(),
+            md::emit_outline(&b.acts),
+        )),
+
+        "script" => {
+            if b.blocks.is_empty() {
+                return Err(Error::Store("剧本是空的 —— 没有东西可导".into()));
+            }
+            // 一个块一节，与磁盘上一场一个 .md 的分法一致
+            let mut out = format!("# {}\n\n", b.meta.proj);
+            for blk in &b.blocks {
+                out.push_str(&format!("## {}\n\n{}\n\n", blk.label.trim(), blk.body.trim()));
+            }
+            Ok((format!("{stem}-剧本.md"), "text/markdown".into(), out))
+        }
+
+        "shots" => {
+            let shots = b.shots.as_array().cloned().unwrap_or_default();
+            if shots.is_empty() {
+                return Err(Error::Store("还没有分镜 —— 没有东西可导".into()));
+            }
+            // 分镜表导成 CSV：它的用处是拿去排期、发给外包、对账，
+            // 这些事都在表格软件里做，Markdown 表格反而更难用
+            let mut out = String::from("镜号,场次,景别,时长,内容,提示词,引用\n");
+            for s in &shots {
+                let f = |k: &str| {
+                    s.get(k)
+                        .and_then(serde_json::Value::as_str)
+                        .unwrap_or("")
+                        .to_string()
+                };
+                let refs = s
+                    .get("refs")
+                    .and_then(serde_json::Value::as_array)
+                    .map(|a| {
+                        a.iter()
+                            .filter_map(|x| x.as_str())
+                            .collect::<Vec<_>>()
+                            .join(" ")
+                    })
+                    .unwrap_or_default();
+                let dur = s
+                    .get("dur")
+                    .and_then(serde_json::Value::as_f64)
+                    .unwrap_or(0.0);
+                out.push_str(&format!(
+                    "{},{},{},{},{},{},{}\n",
+                    csv(&f("id")), csv(&f("sceneKey")), csv(&f("size")),
+                    dur, csv(&f("desc")), csv(&f("own")), csv(&refs),
+                ));
+            }
+            Ok((format!("{stem}-分镜表.csv"), "text/csv".into(), out))
+        }
+
+        "film" => Err(Error::Store(
+            "成片导出还没有渲染管线（拼片段、转码、烧字幕都还没有）—— \
+             现在能导的是大纲、剧本和分镜表"
+                .into(),
+        )),
+
+        other => Err(Error::Store(format!(
+            "不认识的导出类型「{other}」—— 能导 outline / script / shots"
+        ))),
+    }
+}
+
+/// CSV 转义。**不做的话一条带逗号的提示词就能把整张表错位**，
+/// 而且错位后看起来仍然是一张正常的表 —— 那种错最难发现。
+fn csv(v: &str) -> String {
+    let one_line = v.replace('\n', " ").replace('\r', "");
+    if one_line.contains(',') || one_line.contains('"') {
+        format!("\"{}\"", one_line.replace('"', "\"\""))
+    } else {
+        one_line
+    }
+
 }
