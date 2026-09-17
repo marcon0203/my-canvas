@@ -1,11 +1,11 @@
 import type { Modality, ModelRef, ModelSpec } from '@/domain/providers/model';
 import { MODALITY_LABEL } from '@/domain/providers/model';
 import { findModel } from '@/domain/providers/catalog';
-import type { AgentId, Persona } from './roster';
-import { PERSONAS, personaById } from './roster';
+import type { AgentId, BuiltinAgentId, Persona } from './roster';
+import { roster, personaById } from './roster';
 import { EXTRA_TOOLS, TOOLS, canRun, defaultTools, missingTools, type ToolId } from './tools';
 import type { IntentKind } from './types';
-import type { Risk } from './policy';
+import type { Risk, ToolApproval } from './policy';
 
 /**
  * 每个 Agent 单独一套配置：接哪些活、用什么模型、给哪些工具。
@@ -41,6 +41,16 @@ export interface AgentConfig {
    * 「自主」省的是点采纳的手，不是取消把关。
    */
   readonly autoMax?: Risk;
+  /**
+   * 单个工具的审批策略。**没这一项就是跟随上面那档** —— 缺省是空表，
+   * 不是「都允许」。
+   *
+   * 要它是因为风险档是按后果分的粗粒度：出图和出视频都算花钱，但一次出图
+   * 一两个积分、一条视频几十个，有人愿意让出图自动跑、视频每次问。
+   *
+   * 出本机的那几个（导出、联网）设成「总是允许」也无效，见 `autoAllowedTool`。
+   */
+  readonly toolPolicy?: Readonly<Partial<Record<ToolId, ToolApproval>>>;
   readonly enabled: boolean;
 }
 
@@ -73,8 +83,18 @@ export function defaultConfig(p: Persona): AgentConfig {
 export const preambleOf = (cfg: AgentConfig | undefined, p: Persona): string =>
   cfg?.preamble?.trim() || p.preamble;
 
-export const defaultConfigs = (): Record<AgentId, AgentConfig> =>
-  Object.fromEntries(PERSONAS.map((p) => [p.id, defaultConfig(p)])) as Record<AgentId, AgentConfig>;
+/**
+ * 全班底的配置表。
+ *
+ * 类型这么写是为了说清一件事：**内置五位一定有配置，自定义的不一定**。
+ * 自定义 Agent 可能被删掉，而某件活儿的归属里还留着它的 id —— 那时候
+ * 按 id 取要能拿到 undefined，而不是让类型假装它在。
+ */
+export type AgentConfigs =
+  Record<BuiltinAgentId, AgentConfig> & Partial<Record<AgentId, AgentConfig>>;
+
+export const defaultConfigs = (): AgentConfigs =>
+  Object.fromEntries(roster().map((p) => [p.id, defaultConfig(p)])) as AgentConfigs;
 
 /** 模态的规范顺序。界面各处都按它排，免得同一个 Agent 换个页面顺序就变 */
 export const MODALITY_ORDER: readonly Modality[] = ['text', 'image', 'video', 'audio'];
@@ -161,12 +181,12 @@ export function checkConfig(
 
 /** 全班底的问题汇总 */
 export function checkAll(
-  configs: Record<AgentId, AgentConfig>,
+  configs: AgentConfigs,
   globals: Partial<Record<Modality, ModelRef>>,
   extraModels: readonly ModelSpec[] = [],
 ): Record<AgentId, ConfigIssue[]> {
   return Object.fromEntries(
-    PERSONAS.map((p) => [p.id, checkConfig(configs[p.id] ?? defaultConfig(p), globals, extraModels)]),
+    roster().map((p) => [p.id, checkConfig(configs[p.id] ?? defaultConfig(p), globals, extraModels)]),
   ) as Record<AgentId, ConfigIssue[]>;
 }
 
@@ -183,10 +203,10 @@ export const configCanRun = (cfg: AgentConfig, kind: IntentKind): boolean =>
  */
 export function ownerOfConfigured(
   kind: IntentKind,
-  configs: Record<AgentId, AgentConfig>,
+  configs: AgentConfigs,
 ): AgentId | undefined {
   if (kind === 'chat') return undefined;
-  const hit = PERSONAS.find((p) => {
+  const hit = roster().find((p) => {
     const c = configs[p.id];
     return c && c.enabled && c.skills.includes(kind) && canRun(c.tools, kind);
   });
@@ -197,7 +217,7 @@ export function ownerOfConfigured(
 export function canHandleConfigured(
   agentId: AgentId,
   kind: IntentKind,
-  configs: Record<AgentId, AgentConfig>,
+  configs: AgentConfigs,
 ): boolean {
   const c = configs[agentId];
   if (!c) return kind === 'chat';

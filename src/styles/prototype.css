@@ -963,6 +963,8 @@ body { background: var(--color-bg-canvas); overflow: hidden; }
 .aface--dp       { background: var(--color-data-3-soft); color: var(--color-data-3); }
 .aface--editor   { background: var(--color-data-4-soft); color: var(--color-data-4); }
 .aface--producer { background: var(--color-data-5-soft); color: var(--color-data-5); }
+/* 自己建的那几位共用一个配色：给每位分一个会撞，而且撞的那天看不出是撞了 */
+.aface--custom   { background: var(--color-bg-muted); color: var(--color-text-secondary); }
 
 .agent__who { display: flex; align-items: baseline; gap: var(--space-2); min-width: 0; }
 .agent__name { font-size: 14px; font-weight: 600; color: var(--color-text-primary); }
@@ -1050,6 +1052,65 @@ body { background: var(--color-bg-canvas); overflow: hidden; }
   color: var(--color-text-primary); border-bottom-color: var(--color-accent);
 }
 .settabs > .tbtn, .settabs > .ds-btn { margin-bottom: var(--space-2); }
+
+/* ---- 配置向导：左边步骤条，右边当前这一步 ---- */
+.wzd { display: grid; grid-template-columns: 148px minmax(0, 1fr); gap: var(--space-5); }
+.wzd__b { min-width: 0; }
+
+.wsteps {
+  list-style: none; margin: 0; padding: 0;
+  display: flex; flex-direction: column; gap: 2px;
+  border-right: 1px solid var(--color-border-default);
+}
+.wstep__hit {
+  width: 100%; display: flex; align-items: center; gap: var(--space-2);
+  padding: 7px 10px 7px 0; text-align: left;
+  color: var(--color-text-secondary); font-size: 13px;
+}
+.wstep__hit:disabled { color: var(--color-text-tertiary); cursor: default; }
+.wstep__hit:not(:disabled):hover { color: var(--color-text-primary); }
+/* 序号圈。走过的打勾，当前的实心 —— 光靠文字颜色分不出「在第几步」 */
+.wstep__n {
+  flex: 0 0 auto; width: 20px; height: 20px; border-radius: 999px;
+  display: inline-flex; align-items: center; justify-content: center;
+  font-size: 11px; font-variant-numeric: tabular-nums;
+  background: var(--color-bg-muted); color: var(--color-text-tertiary);
+}
+.wstep__n svg { width: 11px; height: 11px; }
+.wstep--on .wstep__hit { color: var(--color-text-primary); font-weight: 600; }
+.wstep--on .wstep__n { background: var(--color-accent); color: var(--color-text-inverse); }
+.wstep--done .wstep__n { background: var(--color-accent-soft); color: var(--color-accent); }
+
+/* 图标挑选。一排小方格，选中的描个边 */
+.icpick {
+  width: 30px; height: 30px; border-radius: var(--radius-control);
+  border: 1px solid var(--color-border-default); background: var(--color-bg-surface);
+  color: var(--color-text-secondary);
+  display: inline-flex; align-items: center; justify-content: center;
+}
+.icpick svg { width: 14px; height: 14px; }
+.icpick:hover { border-color: var(--color-border-strong); color: var(--color-text-primary); }
+.icpick--on {
+  border-color: var(--color-accent); color: var(--color-accent);
+  background: var(--color-accent-soft);
+}
+
+/* 逐个工具的审批策略。三列：名字、风险档、策略 */
+.apol { display: flex; flex-direction: column; }
+.apol__row {
+  display: grid; grid-template-columns: minmax(0, 1fr) 68px 176px;
+  align-items: center; gap: var(--space-2);
+  padding: 6px 0; border-bottom: 1px solid var(--color-border-subtle);
+}
+.apol__row:last-child { border-bottom: 0; }
+.apol__n { font-size: 13px; color: var(--color-text-primary); }
+.apol__r { font-size: 11px; color: var(--color-text-tertiary); }
+/* 出本机那几个没有下拉框，只有一句话 —— 它不是「默认问你」，是改不了 */
+.apol__lock {
+  display: inline-flex; align-items: center; gap: 5px;
+  font-size: 12px; color: var(--color-text-tertiary);
+}
+.apol__lock svg { width: 12px; height: 12px; }
 
 /* 智能体卡片墙。整张卡可点进详情，右上角的启用开关不在可点区里 */
 .agrid {

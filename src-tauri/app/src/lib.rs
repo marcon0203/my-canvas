@@ -159,14 +159,20 @@ async fn tool_call(
         timeout: std::time::Duration::from_secs(300),
     });
 
-    let by = if approved == Some(true) { tools::By::Human } else { tools::By::Agent };
+    // 人点过同意就只放行这一次；否则按这位 Agent 的自主上限判，
+    // 再看这个工具有没有单独设过审批策略（没设就跟随那一档）
+    let gate = if approved == Some(true) {
+        tools::Gate::human()
+    } else {
+        tools::Gate::agent(auto_max, cfg.as_ref().and_then(|c| c.tool_policy.get(&tool).copied()))
+    };
     let chat = chat_owned.as_ref().map(|(m, base, key)| studio_core::prompt::ChatCtx {
         model: m,
         base_url: base,
         api_key: key,
         timeout: std::time::Duration::from_secs(60),
     });
-    tools::dispatch(&w.root, &project_id, &tool, args, auto_max, by, tools::Ctx { task, chat }).await
+    tools::dispatch(&w.root, &project_id, &tool, args, gate, tools::Ctx { task, chat }).await
 }
 
 /* ---------------- Skill ---------------- */

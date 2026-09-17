@@ -8,10 +8,20 @@ import type { IntentKind } from './types';
  * 所以「找错人」在这个产品里不是死路，是一次交接。
  */
 
-export type AgentId = 'writer' | 'art' | 'dp' | 'editor' | 'producer';
+/** 出厂那五位的 id。这个联合类型还留着，是因为有几张表按位置登记（EXTRA_TOOLS、头像配色） */
+export type BuiltinAgentId = 'writer' | 'art' | 'dp' | 'editor' | 'producer';
+
+/**
+ * 一位 Agent 的 id。**不是联合类型** —— 用户可以自己建，id 在运行时才产生。
+ *
+ * 出厂五位的 id 仍然是那五个字符串，内置逻辑（环节归属、头像配色）按它们认人。
+ */
+export type AgentId = string;
 
 export interface Persona {
   readonly id: AgentId;
+  /** 用户自己建的。内置的没有这个标记 —— 内置的不能删 */
+  readonly custom?: boolean;
   readonly name: string;
   readonly en: string;
   readonly icon: string;
@@ -34,7 +44,7 @@ export interface Persona {
   readonly handoff: string;
 }
 
-export const PERSONAS: readonly Persona[] = [
+export const BUILTIN_PERSONAS: readonly Persona[] = [
   {
     id: 'writer', name: '编剧', en: 'Writer', icon: 'book',
     tagline: '三幕、场次、正文、润色',
@@ -126,14 +136,71 @@ export const PERSONAS: readonly Persona[] = [
   },
 ];
 
-const BY_ID = new Map(PERSONAS.map((p) => [p.id, p]));
-const BY_STEP = new Map(PERSONAS.flatMap((p) => p.steps.map((s) => [s, p] as const)));
-const BY_INTENT = new Map(PERSONAS.flatMap((p) => p.owns.map((k) => [k, p] as const)));
+/* ---------------- 班底 = 内置 + 用户建的 ---------------- */
 
-export const personaById = (id: AgentId): Persona => BY_ID.get(id)!;
+/**
+ * 用户自己建的那几位。
+ *
+ * **这份数据的家在 settings store 里**（要持久化），这儿只是一份副本，
+ * 由 store 在变化时推进来。方向是单向的：store → roster。
+ * 反过来让 roster 去 import store 会成环（store 本来就 import roster），
+ * 而且会把一个纯数据模块变成要有运行时状态才能用的东西。
+ *
+ * 没推进来时是空的 —— 那时候班底就是内置五位，所有逻辑照旧成立。
+ */
+let CUSTOM: readonly Persona[] = [];
+
+let BY_ID = new Map<AgentId, Persona>();
+let BY_STEP = new Map<string, Persona>();
+let BY_INTENT = new Map<IntentKind, Persona>();
+
+function reindex() {
+  const all = [...BUILTIN_PERSONAS, ...CUSTOM];
+  BY_ID = new Map(all.map((p) => [p.id, p]));
+  // 环节与出厂分工只认内置那五位：自定义的不占环节，也不改出厂默认的归属。
+  // 谁实际接哪件活由配置说话（config.ts 的 ownerOfConfigured），不是这儿。
+  BY_STEP = new Map(BUILTIN_PERSONAS.flatMap((p) => p.steps.map((s) => [s, p] as const)));
+  BY_INTENT = new Map(BUILTIN_PERSONAS.flatMap((p) => p.owns.map((k) => [k, p] as const)));
+}
+reindex();
+
+/** store 在自定义 Agent 变化时调它。传空数组就回到「只有内置五位」 */
+export function setCustomPersonas(list: readonly Persona[]): void {
+  CUSTOM = list;
+  reindex();
+}
+
+/** 当前全班底：内置五位 + 用户建的，按这个顺序 */
+export const roster = (): readonly Persona[] => [...BUILTIN_PERSONAS, ...CUSTOM];
+
+export const customPersonas = (): readonly Persona[] => CUSTOM;
+
+/**
+ * 按 id 找人。
+ *
+ * **找不到时给一个占位的，不抛也不返回 undefined。** 会找不到是因为配置里
+ * 可能留着一位已经删掉的自定义 Agent（某件活儿还记着它的 id）。那种情况下
+ * 界面该显示「这位已经不在了」，而不是整页崩掉 —— 崩掉的话人连「哪儿还记着
+ * 它」都看不到。占位的名字就写 id，看见 id 的人知道去哪儿找。
+ */
+export function personaById(id: AgentId): Persona {
+  return BY_ID.get(id) ?? ghost(id);
+}
+
+/** 这个 id 现在是不是真有这么一位 */
+export const hasPersona = (id: AgentId): boolean => BY_ID.has(id);
+
+const ghost = (id: AgentId): Persona => ({
+  id, name: id, en: '', icon: 'users', custom: true,
+  tagline: '这位已经不在了',
+  steps: [], owns: [],
+  greeting: '',
+  preamble: '',
+  handoff: '这位已经不在了，%s 接手。',
+});
 
 /** URL 段是不是一个真的 Agent —— 路由直达时用它挡住乱填的名字 */
-export const isAgentId = (id: string | undefined): id is AgentId => !!id && BY_ID.has(id as AgentId);
+export const isAgentId = (id: string | undefined): id is AgentId => !!id && BY_ID.has(id);
 
 /** 环节 → 当班的 Agent。没配到的环节交给制片（总览类） */
 export const personaForStep = (step: string): Persona => BY_STEP.get(step) ?? personaById('producer');
@@ -144,6 +211,73 @@ export const ownerOf = (kind: IntentKind): Persona | undefined => BY_INTENT.get(
 /** 这位 Agent 接不接得了这件事 */
 export const canHandle = (p: Persona, kind: IntentKind): boolean =>
   kind === 'chat' || p.owns.includes(kind);
+
+/* ---------------- 新建一位 ---------------- */
+
+/** 可以给自定义 Agent 挑的图标。都是界面上已有的那套，不另引一套 */
+export const AGENT_ICONS: readonly string[] = [
+  'users', 'book', 'video', 'scissors', 'bolt', 'wand', 'map', 'layers', 'image', 'spark',
+];
+
+/** 出厂五位的头像有各自的配色，自定义的统一用一个 —— 见 prototype.css 的 .aface--custom */
+export const faceClass = (id: AgentId): string =>
+  BUILTIN_PERSONAS.some((p) => p.id === id) ? `aface--${id}` : 'aface--custom';
+
+/**
+ * 造一个 id。名字里的中文没法当 id，所以不从名字生成 —— 那会出现
+ * `agent--1` 这种一半是随机数的东西。直接编号，可读、不会撞。
+ */
+export function nextAgentId(existing: readonly AgentId[]): AgentId {
+  const used = new Set(existing);
+  for (let i = 1; ; i += 1) {
+    const id = `custom-${i}`;
+    if (!used.has(id)) return id;
+  }
+}
+
+export interface NewAgent {
+  readonly name: string;
+  readonly tagline: string;
+  readonly icon: string;
+  readonly preamble: string;
+  readonly owns: readonly IntentKind[];
+}
+
+/**
+ * 把新建表单变成一位 Persona。
+ *
+ * 空着的字段**不替用户编内容**：没写描述就是没有描述，界面上如实空着；
+ * 没写提示词就没有提示词，这位 Agent 只按工具和活儿行事。编一段
+ * 「你是一个有用的助手」进去，等于让每一位新建的 Agent 都带上同一段废话。
+ */
+export function makeCustomPersona(id: AgentId, a: NewAgent): Persona {
+  return {
+    id,
+    custom: true,
+    name: a.name.trim() || id,
+    en: '',
+    icon: AGENT_ICONS.includes(a.icon) ? a.icon : 'users',
+    tagline: a.tagline.trim(),
+    steps: [],
+    owns: [...a.owns],
+    greeting: a.tagline.trim(),
+    preamble: a.preamble.trim(),
+    handoff: '这件事不在我这儿，%s 接手更合适。',
+  };
+}
+
+/** 从某位身上复制一份：提示词、活儿、图标照搬，名字换成「XX 副本」 */
+export function copyOfPersona(src: Persona, id: AgentId, name?: string): Persona {
+  return {
+    ...src,
+    id,
+    custom: true,
+    name: (name ?? `${src.name}副本`).trim() || id,
+    en: '',
+    // 环节不跟着复制：一个环节只有一位当班，复制一份不该把原来那位顶掉
+    steps: [],
+  };
+}
 
 /* ---------------- 技能卡 ---------------- */
 
@@ -169,10 +303,13 @@ export const INTENT_META: Record<Exclude<IntentKind, 'chat'>, { icon: string; na
   'cost.report': { icon: 'bolt', name: '成本与命中率报告' },
 };
 
-/** 一位 Agent 的技能卡 = 它能接的活儿。两处不会再走偏 */
-export const skillsOf = (p: Persona): Skill[] =>
-  p.owns.filter((k): k is Exclude<IntentKind, 'chat'> => k !== 'chat')
+/** 一组活儿的技能卡。措辞与转交提示共用 INTENT_META，两处不会走偏 */
+export const skillsOfKinds = (kinds: readonly IntentKind[]): Skill[] =>
+  kinds.filter((k): k is Exclude<IntentKind, 'chat'> => k !== 'chat')
     .map((kind) => ({ kind, ...INTENT_META[kind] }));
+
+/** 一位 Agent 的**出厂**技能卡。界面上该按配置来（配置才是运行时那份） */
+export const skillsOf = (p: Persona): Skill[] => skillsOfKinds(p.owns);
 
 export const intentName = (kind: IntentKind): string =>
   kind === 'chat' ? '闲聊' : INTENT_META[kind].name;

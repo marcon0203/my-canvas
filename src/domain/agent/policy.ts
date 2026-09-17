@@ -130,6 +130,53 @@ export function autoAllowed(risk: Risk, autoMax: Risk = DEFAULT_AUTO_MAX): boole
   return ORDER[risk] <= ORDER[autoMax];
 }
 
+/**
+ * 单个工具的审批策略覆盖。**不写 = 跟随风险档**，那是绝大多数情况。
+ *
+ * 存在的理由：风险档是按后果分的粗粒度，同一档里的工具人未必想一样对待。
+ * 「出图」和「出视频」都算花钱，但一次出图一两个积分、一条视频几十个 ——
+ * 有人愿意让出图自动跑，视频每次都问。按档设做不到这件事。
+ */
+export type ToolApproval = 'allow' | 'ask';
+
+export const APPROVAL_LABEL: Record<ToolApproval, string> = {
+  allow: '总是允许', ask: '总是问我',
+};
+
+/**
+ * 某个工具能不能不问就干。**与 Rust 侧 `auto_allowed_tool` 同一套判断**，
+ * 有 parity 测试。
+ *
+ * `egress` 那句写在最前面不是顺手：只要它可以被一个配置项关掉，
+ * 这个配置项迟早会被关掉 —— 可能是用户图省事，也可能是模型往配置里写。
+ * 所以「总是允许」在出本机的工具上无效。
+ */
+export function autoAllowedTool(
+  id: ToolId,
+  autoMax: Risk = DEFAULT_AUTO_MAX,
+  over?: ToolApproval,
+): boolean {
+  const risk = riskOfTool(id);
+  if (risk === 'egress') return false;
+  if (over === 'ask') return false;
+  if (over === 'allow') return true;
+  return autoAllowed(risk, autoMax);
+}
+
+/**
+ * 这个工具现在实际会怎么走 —— 界面上要一眼看出「设了这个之后它到底自动不自动」。
+ *
+ * 三种：自动跑、每次问、出本机永远问（这一种和配置无关）。
+ */
+export function effectiveApproval(
+  id: ToolId,
+  autoMax: Risk = DEFAULT_AUTO_MAX,
+  over?: ToolApproval,
+): 'auto' | 'ask' | 'locked' {
+  if (riskOfTool(id) === 'egress') return 'locked';
+  return autoAllowedTool(id, autoMax, over) ? 'auto' : 'ask';
+}
+
 /** 挡下来时给人话：为什么停在这儿 */
 export function holdReason(risk: Risk): string {
   return risk === 'egress'

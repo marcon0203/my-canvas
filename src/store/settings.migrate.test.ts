@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { describe, expect, it } from 'vitest';
 import { defaultConfigs, ownerOfConfigured } from '@/domain/agent/config';
-import type { AgentConfig } from '@/domain/agent/config';
+import type { AgentConfigs } from '@/domain/agent/config';
 import type { AgentId } from '@/domain/agent/roster';
 import { useSettings } from './settings';
 
@@ -16,7 +16,7 @@ const merge = (persisted: unknown) => {
   // 直接取 persist 选项里的 merge：它就是升级逻辑本身
   const opt = (useSettings as unknown as { persist: { getOptions: () => { merge?: (p: unknown, c: unknown) => unknown } } })
     .persist.getOptions().merge!;
-  return opt(persisted, useSettings.getState()) as { agents: Record<AgentId, AgentConfig> };
+  return opt(persisted, useSettings.getState()) as { agents: AgentConfigs };
 };
 
 describe('设置的版本迁移', () => {
@@ -34,7 +34,7 @@ describe('设置的版本迁移', () => {
   it('12 件活儿迁移后都有人接', () => {
     const stale = defaultConfigs();
     for (const id of Object.keys(stale) as AgentId[]) {
-      stale[id] = { ...stale[id], tools: ['project.read'] };   // 把工具全撸掉
+      stale[id] = { ...stale[id]!, tools: ['project.read'] };   // 把工具全撸掉
     }
     const { agents } = merge({ agents: stale });
     for (const kind of ['outline.draft', 'script.draft', 'assets.extract', 'assets.views',
@@ -62,7 +62,7 @@ describe('设置的版本迁移', () => {
   });
 
   it('班底加人了：存的那份里缺的 agent 补默认值，不整份丢弃', () => {
-    const partial = { ...defaultConfigs() } as Partial<Record<AgentId, AgentConfig>>;
+    const partial = { ...defaultConfigs() } as Partial<AgentConfigs>;
     delete partial.producer;
     const { agents } = merge({ agents: partial });
     expect(agents.producer).toBeTruthy();

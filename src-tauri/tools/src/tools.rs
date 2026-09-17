@@ -21,11 +21,38 @@
 use studio_conf::config::ModelRef;
 use studio_error::{Error, Result};
 use studio_net::generate::{self, Job, TaskApi};
-use studio_conf::policy::{Risk, auto_allowed};
+use studio_conf::policy::{Risk, ToolApproval, auto_allowed_tool};
 use studio_doc::project;
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use std::path::Path;
+
+/// 这一次调用要不要停下来问人，由三件事一起决定：发起方、这位 Agent 的
+/// 自主上限、这个工具在它身上的单独覆盖。
+///
+/// 收成一个结构是因为它们**只有合在一起才有意义** —— 单看 `auto_max` 答不了
+/// 「这次能不能干」，而把三个参数平铺在 `dispatch` 上，调用处很容易把
+/// `None`（跟随上限）和 `By::Human`（人点过同意）的位置记错。
+#[derive(Debug, Clone, Copy, Default)]
+pub struct Gate {
+    /// 这位 Agent 最多允许到哪一档。None = 出厂默认（能改项目，不能花钱）
+    pub auto_max: Option<Risk>,
+    /// 这个工具在它身上的审批覆盖。None = 跟随上面那档
+    pub approval: Option<ToolApproval>,
+    pub by: By,
+}
+
+impl Gate {
+    /// Agent 自主调，按上限判
+    pub fn agent(auto_max: Option<Risk>, approval: Option<ToolApproval>) -> Self {
+        Self { auto_max, approval, by: By::Agent }
+    }
+
+    /// 人点过同意 —— 只放行这一次
+    pub fn human() -> Self {
+        Self { by: By::Human, ..Self::default() }
+    }
+}
 
 /// 这次调用是谁发起的。
 ///
@@ -35,10 +62,11 @@ use std::path::Path;
 ///
 /// **`Human` 只放行这一次调用。** 它不是一个设置，不会留在任何配置里，
 /// 也不该由模型的输出决定 —— 调用方只在人真的点了那一下时才传它。
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub enum By {
     /// Agent 自主调 —— 要过自主上限
+    #[default]
     Agent,
     /// 人点了同意 —— 放行这一次
     Human,
@@ -325,6 +353,41 @@ pub fn all() -> Vec<ToolSpec> {
     ]
 }
 
+/* ---------------- 给前端对答案的判定表 ---------------- */
+
+/// 闸门判定表：每个工具 × 每档自主上限 × 每种审批覆盖 → 能不能不问就干。
+///
+/// 为什么要落成文件：这套判断两边各写了一份（`conf/policy.rs` 与前端
+/// `domain/agent/policy.ts`）。判得不一样的后果是**一边的把关是假的** ——
+/// 前端放行、Rust 挡住只是白跑一趟，反过来则是真漏。靠「两边注释都写着
+/// 要一致」靠不住，所以让 Rust 把答案写下来，前端拿这份对。
+///
+/// 表里多铺一个没登记风险的假工具：兜底那条（算 Egress，且覆盖也放不开）
+/// 也要被对到。
+pub fn gate_table() -> Value {
+    let mut ids: Vec<String> = all().iter().map(|t| t.id.to_string()).collect();
+    ids.push("某个还没登记的工具".into());
+    let maxes = [None, Some(Risk::Read), Some(Risk::Write), Some(Risk::Spend), Some(Risk::Egress)];
+    let overs = [None, Some(ToolApproval::Allow), Some(ToolApproval::Ask)];
+    let mut rows = Vec::new();
+    for id in &ids {
+        for m in maxes {
+            for o in overs {
+                rows.push(json!({
+                    "tool": id,
+                    "autoMax": m,
+                    "over": o,
+                    "risk": studio_conf::policy::risk_of_tool(id),
+                    "allowed": auto_allowed_tool(id, m, o),
+                }));
+            }
+        }
+    }
+    json!(rows)
+}
+
+pub const GATE_TABLE_PATH: &str = "../../src/domain/agent/__fixtures__/rust-gate.json";
+
 /// 走异步任务协议的那几个。**配音不在里面** —— 它多数是同步返回音频字节，
 /// 见 `generate::adapters::of` 上的说明。
 pub const GENERATE_TOOLS: &[&str] = &[
@@ -406,20 +469,22 @@ impl<'a> Ctx<'a> {
     }
 }
 
+/// 调一个工具。
+///
+/// `gate` 只影响「要不要停下来问人」，不影响这个工具本身能不能跑。
 pub async fn dispatch(
     root: &Path,
     project_id: &str,
     tool_id: &str,
     args: Value,
-    auto_max: Option<Risk>,
-    by: By,
+    gate: Gate,
     ctx: Ctx<'_>,
 ) -> Result<Outcome> {
     let Some(t) = spec(tool_id) else {
         return Err(Error::UnknownTool(tool_id.to_string()));
     };
 
-    if by == By::Agent && !auto_allowed(t.risk, auto_max) {
+    if gate.by == By::Agent && !auto_allowed_tool(t.id, gate.auto_max, gate.approval) {
         return Ok(Outcome::NeedsApproval {
             tool: t.id.into(),
             risk: t.risk,
@@ -782,7 +847,7 @@ mod tests {
     #[tokio::test]
     async fn 读项目能只读一部分_整份太长塞进上下文是浪费() {
         let tmp = setup();
-        let o = dispatch(tmp.path(), "p1", "project.read", json!({ "part": "outline" }), None, By::Agent, Ctx::default())
+        let o = dispatch(tmp.path(), "p1", "project.read", json!({ "part": "outline" }), Gate::agent(None, None), Ctx::default())
             .await.unwrap();
         let Outcome::Ok { value } = o else { panic!("{o:?}") };
         assert!(value.get("acts").is_some());
@@ -792,7 +857,7 @@ mod tests {
     #[tokio::test]
     async fn 读项目_all_给全份() {
         let tmp = setup();
-        let o = dispatch(tmp.path(), "p1", "project.read", json!({ "part": "all" }), None, By::Agent, Ctx::default()).await.unwrap();
+        let o = dispatch(tmp.path(), "p1", "project.read", json!({ "part": "all" }), Gate::agent(None, None), Ctx::default()).await.unwrap();
         let Outcome::Ok { value } = o else { panic!() };
         for k in ["meta", "acts", "blocks", "assets", "shots"] {
             assert!(value.get(k).is_some(), "缺 {k}");
@@ -802,7 +867,7 @@ mod tests {
     #[tokio::test]
     async fn 记账算出的数对得上() {
         let tmp = setup();
-        let Outcome::Ok { value } = dispatch(tmp.path(), "p1", "metrics.read", json!({}), None, By::Agent, Ctx::default()).await.unwrap()
+        let Outcome::Ok { value } = dispatch(tmp.path(), "p1", "metrics.read", json!({}), Gate::agent(None, None), Ctx::default()).await.unwrap()
             else { panic!() };
         assert_eq!(value["shots"], 3);
         assert_eq!(value["takes"], 5);      // 3 + 2 + 0
@@ -818,7 +883,7 @@ mod tests {
             meta: Meta { id: "空".into(), ..Meta::default() },
             shots: json!([]), ..Default::default()
         }).unwrap();
-        let Outcome::Ok { value } = dispatch(tmp.path(), "空", "metrics.read", json!({}), None, By::Agent, Ctx::default()).await.unwrap()
+        let Outcome::Ok { value } = dispatch(tmp.path(), "空", "metrics.read", json!({}), Gate::agent(None, None), Ctx::default()).await.unwrap()
             else { panic!() };
         assert!(value["hitRate"].is_null());
         assert!(value["note"].as_str().unwrap().contains("算不出"));
@@ -828,7 +893,7 @@ mod tests {
     async fn 超出自主上限的工具不执行_返回要人点头() {
         let tmp = setup();
         // 出厂上限是 write，出图是 spend
-        let o = dispatch(tmp.path(), "p1", "image.generate", json!({ "prompt": "x" }), None, By::Agent, Ctx::default()).await.unwrap();
+        let o = dispatch(tmp.path(), "p1", "image.generate", json!({ "prompt": "x" }), Gate::agent(None, None), Ctx::default()).await.unwrap();
         match o {
             Outcome::NeedsApproval { tool, risk, why } => {
                 assert_eq!(tool, "image.generate");
@@ -844,15 +909,14 @@ mod tests {
         let tmp = setup();
         // image.generate 既没实现、风险又超标。必须报越权而不是「还没做」——
         // 否则将来补上实现，拦截行为会悄悄变
-        let o = dispatch(tmp.path(), "p1", "image.generate", json!({}), None, By::Agent, Ctx::default()).await.unwrap();
+        let o = dispatch(tmp.path(), "p1", "image.generate", json!({}), Gate::agent(None, None), Ctx::default()).await.unwrap();
         assert!(matches!(o, Outcome::NeedsApproval { .. }));
     }
 
     #[tokio::test]
     async fn 上限放开但没给模型密钥时_如实说缺什么_不假装跑了() {
         let tmp = setup();
-        let o = dispatch(tmp.path(), "p1", "image.generate", json!({ "prompt": "cat" }),
-            Some(Risk::Spend), By::Agent, Ctx::default()).await.unwrap();
+        let o = dispatch(tmp.path(), "p1", "image.generate", json!({ "prompt": "cat" }), Gate::agent(Some(Risk::Spend), None), Ctx::default()).await.unwrap();
         // 缺配置是 NeedsSetup，不是 NotImplemented —— 用户手上有能解决的办法，
         // 界面要说「去配一下」，而不是「用不了」
         match o {
@@ -878,9 +942,58 @@ mod tests {
     async fn 出本机的工具_自主上限调到最高也得先问人() {
         let tmp = setup();
         for m in [None, Some(Risk::Write), Some(Risk::Spend), Some(Risk::Egress)] {
-            let o = dispatch(tmp.path(), "p1", "file.export", json!({ "what": "script" }), m, By::Agent, Ctx::default())
+            let o = dispatch(tmp.path(), "p1", "file.export", json!({ "what": "script" }), Gate::agent(m, None), Ctx::default())
                 .await.unwrap();
             assert!(matches!(o, Outcome::NeedsApproval { .. }), "上限 {m:?} 下没挡住：{o:?}");
+        }
+    }
+
+    #[test]
+    fn 判定表文件与当前实现一致_否则前端对的是过期答案() {
+        let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join(GATE_TABLE_PATH);
+        let want = studio_doc::store::pretty_json(&gate_table());
+        let got = std::fs::read_to_string(&path).unwrap_or_default();
+        assert_eq!(
+            got, want,
+            "闸门判断变了但 {} 没跟着更新 —— 跑 `npm run fixtures` 重新生成",
+            path.display()
+        );
+    }
+
+    #[tokio::test]
+    async fn 单个工具设成总是允许_闸门就放它过() {
+        let tmp = setup();
+        // 上限只到「改项目」，出图本来要先问
+        let o = dispatch(tmp.path(), "p1", "image.generate", json!({ "prompt": "cat" }), Gate::agent(Some(Risk::Write), None), Ctx::default()).await.unwrap();
+        assert!(matches!(o, Outcome::NeedsApproval { .. }), "{o:?}");
+
+        // 单独放开这一个：过了闸门，于是走到「缺模型和密钥」——
+        // 那正说明它不再是被审批挡住，而是真的开始要干活了
+        let o = dispatch(tmp.path(), "p1", "image.generate", json!({ "prompt": "cat" }), Gate::agent(Some(Risk::Write), Some(ToolApproval::Allow)), Ctx::default()).await.unwrap();
+        assert!(matches!(o, Outcome::NeedsSetup { .. }), "{o:?}");
+    }
+
+    #[tokio::test]
+    async fn 单个工具设成总是问我_哪怕在上限之内也停() {
+        let tmp = setup();
+        // 上限给到花钱，写大纲本来直接跑
+        let args = || json!({
+            "acts": [{ "id": "", "t": "第一幕", "span": "0:00–1:00",
+                       "beats": [{ "id": "", "k": "开场", "t": "一场" }] }]
+        });
+        let o = dispatch(tmp.path(), "p1", "outline.write", args(), Gate::agent(Some(Risk::Spend), None), Ctx::default()).await.unwrap();
+        assert!(matches!(o, Outcome::Patch { .. }), "{o:?}");
+
+        let o = dispatch(tmp.path(), "p1", "outline.write", args(), Gate::agent(Some(Risk::Spend), Some(ToolApproval::Ask)), Ctx::default()).await.unwrap();
+        assert!(matches!(o, Outcome::NeedsApproval { .. }), "{o:?}");
+    }
+
+    #[tokio::test]
+    async fn 出本机的工具_设成总是允许也照样得问人() {
+        let tmp = setup();
+        for m in [Some(Risk::Spend), Some(Risk::Egress)] {
+            let o = dispatch(tmp.path(), "p1", "file.export", json!({ "what": "script" }), Gate::agent(m, Some(ToolApproval::Allow)), Ctx::default()).await.unwrap();
+            assert!(matches!(o, Outcome::NeedsApproval { .. }), "被放开了（上限 {m:?}）：{o:?}");
         }
     }
 
@@ -892,7 +1005,7 @@ mod tests {
     #[tokio::test]
     async fn 人点过同意的那一次要能跑_不然_egress_工具全是死代码() {
         let tmp = setup();
-        let o = dispatch(tmp.path(), "p1", "file.export", json!({ "what": "outline" }), None, By::Human, Ctx::default())
+        let o = dispatch(tmp.path(), "p1", "file.export", json!({ "what": "outline" }), Gate::human(), Ctx::default())
             .await.unwrap();
         let Outcome::Ok { value } = o else { panic!("人都点了同意还没跑：{o:?}") };
         // 真出了内容，而且没有替人决定写到哪儿
@@ -901,15 +1014,14 @@ mod tests {
         assert!(value.get("path").is_none(), "不该由 Agent 决定路径");
 
         // 同一次调用，Agent 自己来就得先问人 —— 上限调到最高也一样
-        let o = dispatch(tmp.path(), "p1", "file.export", json!({ "what": "outline" }),
-            Some(Risk::Egress), By::Agent, Ctx::default()).await.unwrap();
+        let o = dispatch(tmp.path(), "p1", "file.export", json!({ "what": "outline" }), Gate::agent(Some(Risk::Egress), None), Ctx::default()).await.unwrap();
         assert!(matches!(o, Outcome::NeedsApproval { .. }), "{o:?}");
     }
 
     #[tokio::test]
     async fn 浏览器里跑的工具明说在别处跑() {
         let tmp = setup();
-        let o = dispatch(tmp.path(), "p1", "stage.render", json!({ "shotId": "s1-1" }), None, By::Agent, Ctx::default()).await.unwrap();
+        let o = dispatch(tmp.path(), "p1", "stage.render", json!({ "shotId": "s1-1" }), Gate::agent(None, None), Ctx::default()).await.unwrap();
         match o {
             Outcome::Elsewhere { runs_in, .. } => assert_eq!(runs_in, RunsIn::Browser),
             x => panic!("{x:?}"),
@@ -919,7 +1031,7 @@ mod tests {
     #[tokio::test]
     async fn 不存在的工具报错_而不是悄悄当成没实现() {
         let tmp = setup();
-        let e = dispatch(tmp.path(), "p1", "rm.rf", json!({}), None, By::Agent, Ctx::default()).await.unwrap_err();
+        let e = dispatch(tmp.path(), "p1", "rm.rf", json!({}), Gate::agent(None, None), Ctx::default()).await.unwrap_err();
         assert_eq!(e.code(), "unknown_tool");
     }
 
@@ -932,7 +1044,7 @@ mod tests {
     async fn 标成已实现的工具真能调到_否则注册表在说谎() {
         let tmp = setup();
         for t in all().into_iter().filter(|t| t.status == Status::Ready) {
-            match dispatch(tmp.path(), "p1", t.id, json!({}), None, By::Human, Ctx::default()).await {
+            match dispatch(tmp.path(), "p1", t.id, json!({}), Gate::human(), Ctx::default()).await {
                 Ok(Outcome::NotImplemented { tool, .. }) => panic!("{tool} 标成 Ready 却说没实现"),
                 Err(e) => assert_ne!(e.code(), "unknown_tool", "{}：{e}", t.id),
                 Ok(_) => {}
@@ -990,8 +1102,7 @@ mod tests {
         let base = fake_image_provider().await;
         let m = ModelRef { provider: "volcengine".into(), model: "doubao-seedream".into() };
         let o = dispatch(tmp.path(), "p1", "image.generate",
-            json!({ "prompt": "a cat in the rain", "batch": 2 }),
-            Some(Risk::Spend), By::Agent, Ctx::task(gen_ctx(&base, &m))).await.unwrap();
+            json!({ "prompt": "a cat in the rain", "batch": 2 }), Gate::agent(Some(Risk::Spend), None), Ctx::task(gen_ctx(&base, &m))).await.unwrap();
         let Outcome::Ok { value } = o else { panic!("{o:?}") };
         assert_eq!(value["urls"][0], "http://img/1.png");
         assert_eq!(value["model"], "doubao-seedream");
@@ -1003,8 +1114,7 @@ mod tests {
         let base = fake_image_provider().await;
         let m = ModelRef { provider: "volcengine".into(), model: "x".into() };
         // 出厂上限是 write，出图是 spend
-        let o = dispatch(tmp.path(), "p1", "image.generate", json!({ "prompt": "x" }),
-            None, By::Agent, Ctx::task(gen_ctx(&base, &m))).await.unwrap();
+        let o = dispatch(tmp.path(), "p1", "image.generate", json!({ "prompt": "x" }), Gate::agent(None, None), Ctx::task(gen_ctx(&base, &m))).await.unwrap();
         assert!(matches!(o, Outcome::NeedsApproval { .. }), "该被挡住，实际 {o:?}");
     }
 
@@ -1013,8 +1123,7 @@ mod tests {
         let tmp = setup();
         let base = fake_image_provider().await;
         let m = ModelRef { provider: "volcengine".into(), model: "x".into() };
-        let e = dispatch(tmp.path(), "p1", "image.generate", json!({ "prompt": "   " }),
-            Some(Risk::Spend), By::Agent, Ctx::task(gen_ctx(&base, &m))).await.unwrap_err();
+        let e = dispatch(tmp.path(), "p1", "image.generate", json!({ "prompt": "   " }), Gate::agent(Some(Risk::Spend), None), Ctx::task(gen_ctx(&base, &m))).await.unwrap_err();
         assert!(e.to_string().contains("空的"));
     }
 
@@ -1025,7 +1134,7 @@ mod tests {
         let o = dispatch(tmp.path(), "p1", "outline.write", json!({
             "acts": [{ "id": "", "t": "新的一幕", "span": "0:00–1:00",
                        "beats": [{ "id": "", "k": "随便写的", "t": "一场" }] }]
-        }), None, By::Agent, Ctx::default()).await.unwrap();
+        }), Gate::agent(None, None), Ctx::default()).await.unwrap();
         match o {
             Outcome::Patch { tool, patch } => {
                 assert_eq!(tool, "outline.write");
@@ -1045,7 +1154,7 @@ mod tests {
             "acts": [{ "id": "", "t": "幕", "span": "",
                        "beats": [{ "id": "", "k": "模型瞎写的", "t": "甲" },
                                  { "id": "", "k": "模型瞎写的", "t": "乙" }] }]
-        }), None, By::Agent, Ctx::default()).await.unwrap() else { panic!() };
+        }), Gate::agent(None, None), Ctx::default()).await.unwrap() else { panic!() };
         // seed 里已有 1 场，所以接着编 2、3
         assert_eq!(patch["acts"][0]["beats"][0]["k"], "场景2");
         assert_eq!(patch["acts"][0]["beats"][1]["k"], "场景3");
@@ -1058,7 +1167,7 @@ mod tests {
         let Outcome::Patch { patch, .. } = dispatch(tmp.path(), "p1", "shot.write", json!({
             "shots": [{ "sceneKey": "场景1", "desc": "新的" },
                       { "sceneKey": "场景1", "desc": "又一个" }]
-        }), None, By::Agent, Ctx::default()).await.unwrap() else { panic!() };
+        }), Gate::agent(None, None), Ctx::default()).await.unwrap() else { panic!() };
         let ids: Vec<&str> = patch["shots"].as_array().unwrap().iter()
             .map(|s| s["id"].as_str().unwrap()).collect();
         assert_eq!(ids, ["s1-4", "s1-5"]);
@@ -1067,7 +1176,7 @@ mod tests {
     #[tokio::test]
     async fn 空大纲不算产物_直接报错() {
         let tmp = setup();
-        let e = dispatch(tmp.path(), "p1", "outline.write", json!({ "acts": [] }), None, By::Agent, Ctx::default())
+        let e = dispatch(tmp.path(), "p1", "outline.write", json!({ "acts": [] }), Gate::agent(None, None), Ctx::default())
             .await.unwrap_err();
         assert!(e.to_string().contains("空大纲"));
     }
@@ -1075,11 +1184,11 @@ mod tests {
     #[tokio::test]
     async fn 锁不存在的资产直接报错_而不是让分镜引一个空的() {
         let tmp = setup();
-        let e = dispatch(tmp.path(), "p1", "asset.lock", json!({ "aid": "CHAR-999" }), None, By::Agent, Ctx::default())
+        let e = dispatch(tmp.path(), "p1", "asset.lock", json!({ "aid": "CHAR-999" }), Gate::agent(None, None), Ctx::default())
             .await.unwrap_err();
         assert!(e.to_string().contains("CHAR-999"));
         // 存在的能锁
-        let o = dispatch(tmp.path(), "p1", "asset.lock", json!({ "aid": "CHAR-001" }), None, By::Agent, Ctx::default())
+        let o = dispatch(tmp.path(), "p1", "asset.lock", json!({ "aid": "CHAR-001" }), Gate::agent(None, None), Ctx::default())
             .await.unwrap();
         assert!(matches!(o, Outcome::Patch { .. }));
     }
@@ -1088,8 +1197,7 @@ mod tests {
     async fn 写类工具照样过闸门_上限只读时挡住() {
         let tmp = setup();
         let o = dispatch(tmp.path(), "p1", "outline.write",
-            json!({ "acts": [{ "id": "", "t": "x", "span": "", "beats": [] }] }),
-            Some(Risk::Read), By::Agent, Ctx::default()).await.unwrap();
+            json!({ "acts": [{ "id": "", "t": "x", "span": "", "beats": [] }] }), Gate::agent(Some(Risk::Read), None), Ctx::default()).await.unwrap();
         assert!(matches!(o, Outcome::NeedsApproval { .. }));
     }
 
@@ -1171,7 +1279,7 @@ mod tests {
     async fn 找内容返回命中在哪儿_不把整份项目倒出来() {
         let tmp = setup();
         let Outcome::Ok { value } = dispatch(tmp.path(), "p1", "project.search",
-            json!({ "q": "画猫" }), None, By::Agent, Ctx::default()).await.unwrap() else { panic!() };
+            json!({ "q": "画猫" }), Gate::agent(None, None), Ctx::default()).await.unwrap() else { panic!() };
         assert_eq!(value["hits"], 1);
         assert_eq!(value["results"][0]["where"], "outline");
         assert_eq!(value["results"][0]["key"], "场景1");
@@ -1180,17 +1288,17 @@ mod tests {
     #[tokio::test]
     async fn 找内容_关键词为空时报错_而不是把全部倒出来() {
         let tmp = setup();
-        assert!(dispatch(tmp.path(), "p1", "project.search", json!({ "q": "  " }), None, By::Agent, Ctx::default()).await.is_err());
+        assert!(dispatch(tmp.path(), "p1", "project.search", json!({ "q": "  " }), Gate::agent(None, None), Ctx::default()).await.is_err());
     }
 
     #[tokio::test]
     async fn 估花费按价目表算_不让模型自己编一个数() {
         let tmp = setup();
         let Outcome::Ok { value } = dispatch(tmp.path(), "p1", "cost.estimate",
-            json!({ "kind": "video", "count": 18 }), None, By::Agent, Ctx::default()).await.unwrap() else { panic!() };
+            json!({ "kind": "video", "count": 18 }), Gate::agent(None, None), Ctx::default()).await.unwrap() else { panic!() };
         assert_eq!(value["credits"], 216);   // 12 × 18 × 1
         let Outcome::Ok { value } = dispatch(tmp.path(), "p1", "cost.estimate",
-            json!({ "kind": "image", "count": 4, "batch": 2 }), None, By::Agent, Ctx::default()).await.unwrap() else { panic!() };
+            json!({ "kind": "image", "count": 4, "batch": 2 }), Gate::agent(None, None), Ctx::default()).await.unwrap() else { panic!() };
         assert_eq!(value["credits"], 24);    // 3 × 4 × 2
     }
 
@@ -1198,7 +1306,7 @@ mod tests {
     async fn 估花费是只读的_自主模式下不用等人点头() {
         let tmp = setup();
         // 「先报个数」这件事本身不该被闸门挡住，否则报数也要人点头就没意义了
-        let o = dispatch(tmp.path(), "p1", "cost.estimate", json!({ "kind": "image", "count": 1 }), None, By::Agent, Ctx::default())
+        let o = dispatch(tmp.path(), "p1", "cost.estimate", json!({ "kind": "image", "count": 1 }), Gate::agent(None, None), Ctx::default())
             .await.unwrap();
         assert!(matches!(o, Outcome::Ok { .. }));
     }

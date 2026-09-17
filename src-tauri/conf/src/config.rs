@@ -60,6 +60,10 @@ pub struct AgentConfig {
     /// 自主执行时最多允许到哪一档风险。None = 用出厂默认（能改项目，不能花钱）
     #[serde(default)]
     pub auto_max: Option<crate::policy::Risk>,
+    /// 单个工具的审批策略覆盖。**没这个键就是跟随上面那档**，
+    /// 所以缺省是空表，不是「都允许」
+    #[serde(default)]
+    pub tool_policy: std::collections::HashMap<String, crate::policy::ToolApproval>,
     #[serde(default = "yes")]
     pub enabled: bool,
 }

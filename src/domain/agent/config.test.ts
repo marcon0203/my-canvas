@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { PERSONAS, personaById } from './roster';
+import { roster, personaById } from './roster';
 import { TOOLS_FOR_INTENT, canRun, defaultTools } from './tools';
 import {
   canHandleConfigured, checkConfig, defaultConfig, defaultConfigs,
@@ -25,7 +25,7 @@ const MODELS: ModelSpec[] = [
 
 describe('agent/config · 默认配置自洽', () => {
   it('出厂默认下每位都能接自己认领的全部活儿', () => {
-    for (const p of PERSONAS) {
+    for (const p of roster()) {
       const c = defaultConfig(p);
       for (const k of p.owns) {
         expect(canRun(c.tools, k), `${p.name} 接不了 ${k}`).toBe(true);
@@ -35,8 +35,8 @@ describe('agent/config · 默认配置自洽', () => {
 
   it('默认配置 + 三个模态都配了模型 → 零问题', () => {
     const cfgs = defaultConfigs();
-    for (const p of PERSONAS) {
-      expect(checkConfig(cfgs[p.id], ALL, MODELS).filter((i) => i.level === 'error'), p.name).toEqual([]);
+    for (const p of roster()) {
+      expect(checkConfig(cfgs[p.id]!, ALL, MODELS).filter((i) => i.level === 'error'), p.name).toEqual([]);
     }
   });
 
@@ -151,9 +151,9 @@ describe('agent/config · 配置真的改变分工', () => {
 
 describe('agent/config · 侧重方向与自主度', () => {
   it('每位都有自己的系统提示词，不是同一段套话', () => {
-    const texts = PERSONAS.map((p) => p.preamble);
-    expect(new Set(texts).size).toBe(PERSONAS.length);
-    for (const p of PERSONAS) expect(p.preamble.length, p.name).toBeGreaterThan(80);
+    const texts = roster().map((p) => p.preamble);
+    expect(new Set(texts).size).toBe(roster().length);
+    for (const p of roster()) expect(p.preamble.length, p.name).toBeGreaterThan(80);
   });
 
   /**
@@ -162,30 +162,30 @@ describe('agent/config · 侧重方向与自主度', () => {
    * 一个模子填五遍是最明显的 AI 味，所以改成反过来查：**不许有共用脚手架**。
    */
   it('五段提示词不是一个模子填的 —— 不许有共用的骨架句', () => {
-    const lines = PERSONAS.map((p) =>
+    const lines = roster().map((p) =>
       new Set(p.preamble.split('\n').map((l) => l.trim()).filter((l) => l.length >= 6)));
     for (let i = 0; i < lines.length; i++) {
       for (let j = i + 1; j < lines.length; j++) {
         const both = [...lines[i]!].filter((l) => lines[j]!.has(l));
-        expect(both, `${PERSONAS[i]!.name} 与 ${PERSONAS[j]!.name} 有相同的句子`).toEqual([]);
+        expect(both, `${roster()[i]!.name} 与 ${roster()[j]!.name} 有相同的句子`).toEqual([]);
       }
     }
     // 同一个小标题出现在三段以上，就是模板
     for (const head of ['判断顺序：', '拿不准时：', '你是']) {
-      const n = PERSONAS.filter((p) => p.preamble.includes(head)).length;
+      const n = roster().filter((p) => p.preamble.includes(head)).length;
       expect(n, `「${head}」出现在 ${n} 段里`).toBeLessThan(3);
     }
   });
 
   it('自我介绍与一句专长也不能是同一个句式', () => {
     // 原来 5/5 的 tagline 都是「管X与Y：a、b、c」，4/5 的 greeting 都用「——」接一句金句
-    const molded = PERSONAS.filter((p) => /^管.+[：:]/.test(p.tagline));
+    const molded = roster().filter((p) => /^管.+[：:]/.test(p.tagline));
     expect(molded.length, '「管X：a、b、c」这个句式').toBeLessThan(3);
-    expect(PERSONAS.filter((p) => p.greeting.includes('——')).length).toBeLessThan(2);
+    expect(roster().filter((p) => p.greeting.includes('——')).length).toBeLessThan(2);
   });
 
   it('默认先出方案，不自作主张', () => {
-    for (const p of PERSONAS) expect(defaultConfig(p).autonomy).toBe('propose');
+    for (const p of roster()) expect(defaultConfig(p).autonomy).toBe('propose');
   });
 
   it('改写后用改写的，清空回落出厂默认', () => {

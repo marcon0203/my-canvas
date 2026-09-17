@@ -1,0 +1,2942 @@
+[
+  {
+    "allowed": true,
+    "autoMax": null,
+    "over": null,
+    "risk": "read",
+    "tool": "project.read"
+  },
+  {
+    "allowed": true,
+    "autoMax": null,
+    "over": "allow",
+    "risk": "read",
+    "tool": "project.read"
+  },
+  {
+    "allowed": false,
+    "autoMax": null,
+    "over": "ask",
+    "risk": "read",
+    "tool": "project.read"
+  },
+  {
+    "allowed": true,
+    "autoMax": "read",
+    "over": null,
+    "risk": "read",
+    "tool": "project.read"
+  },
+  {
+    "allowed": true,
+    "autoMax": "read",
+    "over": "allow",
+    "risk": "read",
+    "tool": "project.read"
+  },
+  {
+    "allowed": false,
+    "autoMax": "read",
+    "over": "ask",
+    "risk": "read",
+    "tool": "project.read"
+  },
+  {
+    "allowed": true,
+    "autoMax": "write",
+    "over": null,
+    "risk": "read",
+    "tool": "project.read"
+  },
+  {
+    "allowed": true,
+    "autoMax": "write",
+    "over": "allow",
+    "risk": "read",
+    "tool": "project.read"
+  },
+  {
+    "allowed": false,
+    "autoMax": "write",
+    "over": "ask",
+    "risk": "read",
+    "tool": "project.read"
+  },
+  {
+    "allowed": true,
+    "autoMax": "spend",
+    "over": null,
+    "risk": "read",
+    "tool": "project.read"
+  },
+  {
+    "allowed": true,
+    "autoMax": "spend",
+    "over": "allow",
+    "risk": "read",
+    "tool": "project.read"
+  },
+  {
+    "allowed": false,
+    "autoMax": "spend",
+    "over": "ask",
+    "risk": "read",
+    "tool": "project.read"
+  },
+  {
+    "allowed": true,
+    "autoMax": "egress",
+    "over": null,
+    "risk": "read",
+    "tool": "project.read"
+  },
+  {
+    "allowed": true,
+    "autoMax": "egress",
+    "over": "allow",
+    "risk": "read",
+    "tool": "project.read"
+  },
+  {
+    "allowed": false,
+    "autoMax": "egress",
+    "over": "ask",
+    "risk": "read",
+    "tool": "project.read"
+  },
+  {
+    "allowed": true,
+    "autoMax": null,
+    "over": null,
+    "risk": "read",
+    "tool": "project.search"
+  },
+  {
+    "allowed": true,
+    "autoMax": null,
+    "over": "allow",
+    "risk": "read",
+    "tool": "project.search"
+  },
+  {
+    "allowed": false,
+    "autoMax": null,
+    "over": "ask",
+    "risk": "read",
+    "tool": "project.search"
+  },
+  {
+    "allowed": true,
+    "autoMax": "read",
+    "over": null,
+    "risk": "read",
+    "tool": "project.search"
+  },
+  {
+    "allowed": true,
+    "autoMax": "read",
+    "over": "allow",
+    "risk": "read",
+    "tool": "project.search"
+  },
+  {
+    "allowed": false,
+    "autoMax": "read",
+    "over": "ask",
+    "risk": "read",
+    "tool": "project.search"
+  },
+  {
+    "allowed": true,
+    "autoMax": "write",
+    "over": null,
+    "risk": "read",
+    "tool": "project.search"
+  },
+  {
+    "allowed": true,
+    "autoMax": "write",
+    "over": "allow",
+    "risk": "read",
+    "tool": "project.search"
+  },
+  {
+    "allowed": false,
+    "autoMax": "write",
+    "over": "ask",
+    "risk": "read",
+    "tool": "project.search"
+  },
+  {
+    "allowed": true,
+    "autoMax": "spend",
+    "over": null,
+    "risk": "read",
+    "tool": "project.search"
+  },
+  {
+    "allowed": true,
+    "autoMax": "spend",
+    "over": "allow",
+    "risk": "read",
+    "tool": "project.search"
+  },
+  {
+    "allowed": false,
+    "autoMax": "spend",
+    "over": "ask",
+    "risk": "read",
+    "tool": "project.search"
+  },
+  {
+    "allowed": true,
+    "autoMax": "egress",
+    "over": null,
+    "risk": "read",
+    "tool": "project.search"
+  },
+  {
+    "allowed": true,
+    "autoMax": "egress",
+    "over": "allow",
+    "risk": "read",
+    "tool": "project.search"
+  },
+  {
+    "allowed": false,
+    "autoMax": "egress",
+    "over": "ask",
+    "risk": "read",
+    "tool": "project.search"
+  },
+  {
+    "allowed": true,
+    "autoMax": null,
+    "over": null,
+    "risk": "read",
+    "tool": "metrics.read"
+  },
+  {
+    "allowed": true,
+    "autoMax": null,
+    "over": "allow",
+    "risk": "read",
+    "tool": "metrics.read"
+  },
+  {
+    "allowed": false,
+    "autoMax": null,
+    "over": "ask",
+    "risk": "read",
+    "tool": "metrics.read"
+  },
+  {
+    "allowed": true,
+    "autoMax": "read",
+    "over": null,
+    "risk": "read",
+    "tool": "metrics.read"
+  },
+  {
+    "allowed": true,
+    "autoMax": "read",
+    "over": "allow",
+    "risk": "read",
+    "tool": "metrics.read"
+  },
+  {
+    "allowed": false,
+    "autoMax": "read",
+    "over": "ask",
+    "risk": "read",
+    "tool": "metrics.read"
+  },
+  {
+    "allowed": true,
+    "autoMax": "write",
+    "over": null,
+    "risk": "read",
+    "tool": "metrics.read"
+  },
+  {
+    "allowed": true,
+    "autoMax": "write",
+    "over": "allow",
+    "risk": "read",
+    "tool": "metrics.read"
+  },
+  {
+    "allowed": false,
+    "autoMax": "write",
+    "over": "ask",
+    "risk": "read",
+    "tool": "metrics.read"
+  },
+  {
+    "allowed": true,
+    "autoMax": "spend",
+    "over": null,
+    "risk": "read",
+    "tool": "metrics.read"
+  },
+  {
+    "allowed": true,
+    "autoMax": "spend",
+    "over": "allow",
+    "risk": "read",
+    "tool": "metrics.read"
+  },
+  {
+    "allowed": false,
+    "autoMax": "spend",
+    "over": "ask",
+    "risk": "read",
+    "tool": "metrics.read"
+  },
+  {
+    "allowed": true,
+    "autoMax": "egress",
+    "over": null,
+    "risk": "read",
+    "tool": "metrics.read"
+  },
+  {
+    "allowed": true,
+    "autoMax": "egress",
+    "over": "allow",
+    "risk": "read",
+    "tool": "metrics.read"
+  },
+  {
+    "allowed": false,
+    "autoMax": "egress",
+    "over": "ask",
+    "risk": "read",
+    "tool": "metrics.read"
+  },
+  {
+    "allowed": true,
+    "autoMax": null,
+    "over": null,
+    "risk": "read",
+    "tool": "cost.estimate"
+  },
+  {
+    "allowed": true,
+    "autoMax": null,
+    "over": "allow",
+    "risk": "read",
+    "tool": "cost.estimate"
+  },
+  {
+    "allowed": false,
+    "autoMax": null,
+    "over": "ask",
+    "risk": "read",
+    "tool": "cost.estimate"
+  },
+  {
+    "allowed": true,
+    "autoMax": "read",
+    "over": null,
+    "risk": "read",
+    "tool": "cost.estimate"
+  },
+  {
+    "allowed": true,
+    "autoMax": "read",
+    "over": "allow",
+    "risk": "read",
+    "tool": "cost.estimate"
+  },
+  {
+    "allowed": false,
+    "autoMax": "read",
+    "over": "ask",
+    "risk": "read",
+    "tool": "cost.estimate"
+  },
+  {
+    "allowed": true,
+    "autoMax": "write",
+    "over": null,
+    "risk": "read",
+    "tool": "cost.estimate"
+  },
+  {
+    "allowed": true,
+    "autoMax": "write",
+    "over": "allow",
+    "risk": "read",
+    "tool": "cost.estimate"
+  },
+  {
+    "allowed": false,
+    "autoMax": "write",
+    "over": "ask",
+    "risk": "read",
+    "tool": "cost.estimate"
+  },
+  {
+    "allowed": true,
+    "autoMax": "spend",
+    "over": null,
+    "risk": "read",
+    "tool": "cost.estimate"
+  },
+  {
+    "allowed": true,
+    "autoMax": "spend",
+    "over": "allow",
+    "risk": "read",
+    "tool": "cost.estimate"
+  },
+  {
+    "allowed": false,
+    "autoMax": "spend",
+    "over": "ask",
+    "risk": "read",
+    "tool": "cost.estimate"
+  },
+  {
+    "allowed": true,
+    "autoMax": "egress",
+    "over": null,
+    "risk": "read",
+    "tool": "cost.estimate"
+  },
+  {
+    "allowed": true,
+    "autoMax": "egress",
+    "over": "allow",
+    "risk": "read",
+    "tool": "cost.estimate"
+  },
+  {
+    "allowed": false,
+    "autoMax": "egress",
+    "over": "ask",
+    "risk": "read",
+    "tool": "cost.estimate"
+  },
+  {
+    "allowed": true,
+    "autoMax": null,
+    "over": null,
+    "risk": "write",
+    "tool": "outline.write"
+  },
+  {
+    "allowed": true,
+    "autoMax": null,
+    "over": "allow",
+    "risk": "write",
+    "tool": "outline.write"
+  },
+  {
+    "allowed": false,
+    "autoMax": null,
+    "over": "ask",
+    "risk": "write",
+    "tool": "outline.write"
+  },
+  {
+    "allowed": false,
+    "autoMax": "read",
+    "over": null,
+    "risk": "write",
+    "tool": "outline.write"
+  },
+  {
+    "allowed": true,
+    "autoMax": "read",
+    "over": "allow",
+    "risk": "write",
+    "tool": "outline.write"
+  },
+  {
+    "allowed": false,
+    "autoMax": "read",
+    "over": "ask",
+    "risk": "write",
+    "tool": "outline.write"
+  },
+  {
+    "allowed": true,
+    "autoMax": "write",
+    "over": null,
+    "risk": "write",
+    "tool": "outline.write"
+  },
+  {
+    "allowed": true,
+    "autoMax": "write",
+    "over": "allow",
+    "risk": "write",
+    "tool": "outline.write"
+  },
+  {
+    "allowed": false,
+    "autoMax": "write",
+    "over": "ask",
+    "risk": "write",
+    "tool": "outline.write"
+  },
+  {
+    "allowed": true,
+    "autoMax": "spend",
+    "over": null,
+    "risk": "write",
+    "tool": "outline.write"
+  },
+  {
+    "allowed": true,
+    "autoMax": "spend",
+    "over": "allow",
+    "risk": "write",
+    "tool": "outline.write"
+  },
+  {
+    "allowed": false,
+    "autoMax": "spend",
+    "over": "ask",
+    "risk": "write",
+    "tool": "outline.write"
+  },
+  {
+    "allowed": true,
+    "autoMax": "egress",
+    "over": null,
+    "risk": "write",
+    "tool": "outline.write"
+  },
+  {
+    "allowed": true,
+    "autoMax": "egress",
+    "over": "allow",
+    "risk": "write",
+    "tool": "outline.write"
+  },
+  {
+    "allowed": false,
+    "autoMax": "egress",
+    "over": "ask",
+    "risk": "write",
+    "tool": "outline.write"
+  },
+  {
+    "allowed": true,
+    "autoMax": null,
+    "over": null,
+    "risk": "write",
+    "tool": "script.write"
+  },
+  {
+    "allowed": true,
+    "autoMax": null,
+    "over": "allow",
+    "risk": "write",
+    "tool": "script.write"
+  },
+  {
+    "allowed": false,
+    "autoMax": null,
+    "over": "ask",
+    "risk": "write",
+    "tool": "script.write"
+  },
+  {
+    "allowed": false,
+    "autoMax": "read",
+    "over": null,
+    "risk": "write",
+    "tool": "script.write"
+  },
+  {
+    "allowed": true,
+    "autoMax": "read",
+    "over": "allow",
+    "risk": "write",
+    "tool": "script.write"
+  },
+  {
+    "allowed": false,
+    "autoMax": "read",
+    "over": "ask",
+    "risk": "write",
+    "tool": "script.write"
+  },
+  {
+    "allowed": true,
+    "autoMax": "write",
+    "over": null,
+    "risk": "write",
+    "tool": "script.write"
+  },
+  {
+    "allowed": true,
+    "autoMax": "write",
+    "over": "allow",
+    "risk": "write",
+    "tool": "script.write"
+  },
+  {
+    "allowed": false,
+    "autoMax": "write",
+    "over": "ask",
+    "risk": "write",
+    "tool": "script.write"
+  },
+  {
+    "allowed": true,
+    "autoMax": "spend",
+    "over": null,
+    "risk": "write",
+    "tool": "script.write"
+  },
+  {
+    "allowed": true,
+    "autoMax": "spend",
+    "over": "allow",
+    "risk": "write",
+    "tool": "script.write"
+  },
+  {
+    "allowed": false,
+    "autoMax": "spend",
+    "over": "ask",
+    "risk": "write",
+    "tool": "script.write"
+  },
+  {
+    "allowed": true,
+    "autoMax": "egress",
+    "over": null,
+    "risk": "write",
+    "tool": "script.write"
+  },
+  {
+    "allowed": true,
+    "autoMax": "egress",
+    "over": "allow",
+    "risk": "write",
+    "tool": "script.write"
+  },
+  {
+    "allowed": false,
+    "autoMax": "egress",
+    "over": "ask",
+    "risk": "write",
+    "tool": "script.write"
+  },
+  {
+    "allowed": true,
+    "autoMax": null,
+    "over": null,
+    "risk": "write",
+    "tool": "asset.write"
+  },
+  {
+    "allowed": true,
+    "autoMax": null,
+    "over": "allow",
+    "risk": "write",
+    "tool": "asset.write"
+  },
+  {
+    "allowed": false,
+    "autoMax": null,
+    "over": "ask",
+    "risk": "write",
+    "tool": "asset.write"
+  },
+  {
+    "allowed": false,
+    "autoMax": "read",
+    "over": null,
+    "risk": "write",
+    "tool": "asset.write"
+  },
+  {
+    "allowed": true,
+    "autoMax": "read",
+    "over": "allow",
+    "risk": "write",
+    "tool": "asset.write"
+  },
+  {
+    "allowed": false,
+    "autoMax": "read",
+    "over": "ask",
+    "risk": "write",
+    "tool": "asset.write"
+  },
+  {
+    "allowed": true,
+    "autoMax": "write",
+    "over": null,
+    "risk": "write",
+    "tool": "asset.write"
+  },
+  {
+    "allowed": true,
+    "autoMax": "write",
+    "over": "allow",
+    "risk": "write",
+    "tool": "asset.write"
+  },
+  {
+    "allowed": false,
+    "autoMax": "write",
+    "over": "ask",
+    "risk": "write",
+    "tool": "asset.write"
+  },
+  {
+    "allowed": true,
+    "autoMax": "spend",
+    "over": null,
+    "risk": "write",
+    "tool": "asset.write"
+  },
+  {
+    "allowed": true,
+    "autoMax": "spend",
+    "over": "allow",
+    "risk": "write",
+    "tool": "asset.write"
+  },
+  {
+    "allowed": false,
+    "autoMax": "spend",
+    "over": "ask",
+    "risk": "write",
+    "tool": "asset.write"
+  },
+  {
+    "allowed": true,
+    "autoMax": "egress",
+    "over": null,
+    "risk": "write",
+    "tool": "asset.write"
+  },
+  {
+    "allowed": true,
+    "autoMax": "egress",
+    "over": "allow",
+    "risk": "write",
+    "tool": "asset.write"
+  },
+  {
+    "allowed": false,
+    "autoMax": "egress",
+    "over": "ask",
+    "risk": "write",
+    "tool": "asset.write"
+  },
+  {
+    "allowed": true,
+    "autoMax": null,
+    "over": null,
+    "risk": "write",
+    "tool": "asset.lock"
+  },
+  {
+    "allowed": true,
+    "autoMax": null,
+    "over": "allow",
+    "risk": "write",
+    "tool": "asset.lock"
+  },
+  {
+    "allowed": false,
+    "autoMax": null,
+    "over": "ask",
+    "risk": "write",
+    "tool": "asset.lock"
+  },
+  {
+    "allowed": false,
+    "autoMax": "read",
+    "over": null,
+    "risk": "write",
+    "tool": "asset.lock"
+  },
+  {
+    "allowed": true,
+    "autoMax": "read",
+    "over": "allow",
+    "risk": "write",
+    "tool": "asset.lock"
+  },
+  {
+    "allowed": false,
+    "autoMax": "read",
+    "over": "ask",
+    "risk": "write",
+    "tool": "asset.lock"
+  },
+  {
+    "allowed": true,
+    "autoMax": "write",
+    "over": null,
+    "risk": "write",
+    "tool": "asset.lock"
+  },
+  {
+    "allowed": true,
+    "autoMax": "write",
+    "over": "allow",
+    "risk": "write",
+    "tool": "asset.lock"
+  },
+  {
+    "allowed": false,
+    "autoMax": "write",
+    "over": "ask",
+    "risk": "write",
+    "tool": "asset.lock"
+  },
+  {
+    "allowed": true,
+    "autoMax": "spend",
+    "over": null,
+    "risk": "write",
+    "tool": "asset.lock"
+  },
+  {
+    "allowed": true,
+    "autoMax": "spend",
+    "over": "allow",
+    "risk": "write",
+    "tool": "asset.lock"
+  },
+  {
+    "allowed": false,
+    "autoMax": "spend",
+    "over": "ask",
+    "risk": "write",
+    "tool": "asset.lock"
+  },
+  {
+    "allowed": true,
+    "autoMax": "egress",
+    "over": null,
+    "risk": "write",
+    "tool": "asset.lock"
+  },
+  {
+    "allowed": true,
+    "autoMax": "egress",
+    "over": "allow",
+    "risk": "write",
+    "tool": "asset.lock"
+  },
+  {
+    "allowed": false,
+    "autoMax": "egress",
+    "over": "ask",
+    "risk": "write",
+    "tool": "asset.lock"
+  },
+  {
+    "allowed": true,
+    "autoMax": null,
+    "over": null,
+    "risk": "write",
+    "tool": "shot.write"
+  },
+  {
+    "allowed": true,
+    "autoMax": null,
+    "over": "allow",
+    "risk": "write",
+    "tool": "shot.write"
+  },
+  {
+    "allowed": false,
+    "autoMax": null,
+    "over": "ask",
+    "risk": "write",
+    "tool": "shot.write"
+  },
+  {
+    "allowed": false,
+    "autoMax": "read",
+    "over": null,
+    "risk": "write",
+    "tool": "shot.write"
+  },
+  {
+    "allowed": true,
+    "autoMax": "read",
+    "over": "allow",
+    "risk": "write",
+    "tool": "shot.write"
+  },
+  {
+    "allowed": false,
+    "autoMax": "read",
+    "over": "ask",
+    "risk": "write",
+    "tool": "shot.write"
+  },
+  {
+    "allowed": true,
+    "autoMax": "write",
+    "over": null,
+    "risk": "write",
+    "tool": "shot.write"
+  },
+  {
+    "allowed": true,
+    "autoMax": "write",
+    "over": "allow",
+    "risk": "write",
+    "tool": "shot.write"
+  },
+  {
+    "allowed": false,
+    "autoMax": "write",
+    "over": "ask",
+    "risk": "write",
+    "tool": "shot.write"
+  },
+  {
+    "allowed": true,
+    "autoMax": "spend",
+    "over": null,
+    "risk": "write",
+    "tool": "shot.write"
+  },
+  {
+    "allowed": true,
+    "autoMax": "spend",
+    "over": "allow",
+    "risk": "write",
+    "tool": "shot.write"
+  },
+  {
+    "allowed": false,
+    "autoMax": "spend",
+    "over": "ask",
+    "risk": "write",
+    "tool": "shot.write"
+  },
+  {
+    "allowed": true,
+    "autoMax": "egress",
+    "over": null,
+    "risk": "write",
+    "tool": "shot.write"
+  },
+  {
+    "allowed": true,
+    "autoMax": "egress",
+    "over": "allow",
+    "risk": "write",
+    "tool": "shot.write"
+  },
+  {
+    "allowed": false,
+    "autoMax": "egress",
+    "over": "ask",
+    "risk": "write",
+    "tool": "shot.write"
+  },
+  {
+    "allowed": true,
+    "autoMax": null,
+    "over": null,
+    "risk": "read",
+    "tool": "prompt.compile"
+  },
+  {
+    "allowed": true,
+    "autoMax": null,
+    "over": "allow",
+    "risk": "read",
+    "tool": "prompt.compile"
+  },
+  {
+    "allowed": false,
+    "autoMax": null,
+    "over": "ask",
+    "risk": "read",
+    "tool": "prompt.compile"
+  },
+  {
+    "allowed": true,
+    "autoMax": "read",
+    "over": null,
+    "risk": "read",
+    "tool": "prompt.compile"
+  },
+  {
+    "allowed": true,
+    "autoMax": "read",
+    "over": "allow",
+    "risk": "read",
+    "tool": "prompt.compile"
+  },
+  {
+    "allowed": false,
+    "autoMax": "read",
+    "over": "ask",
+    "risk": "read",
+    "tool": "prompt.compile"
+  },
+  {
+    "allowed": true,
+    "autoMax": "write",
+    "over": null,
+    "risk": "read",
+    "tool": "prompt.compile"
+  },
+  {
+    "allowed": true,
+    "autoMax": "write",
+    "over": "allow",
+    "risk": "read",
+    "tool": "prompt.compile"
+  },
+  {
+    "allowed": false,
+    "autoMax": "write",
+    "over": "ask",
+    "risk": "read",
+    "tool": "prompt.compile"
+  },
+  {
+    "allowed": true,
+    "autoMax": "spend",
+    "over": null,
+    "risk": "read",
+    "tool": "prompt.compile"
+  },
+  {
+    "allowed": true,
+    "autoMax": "spend",
+    "over": "allow",
+    "risk": "read",
+    "tool": "prompt.compile"
+  },
+  {
+    "allowed": false,
+    "autoMax": "spend",
+    "over": "ask",
+    "risk": "read",
+    "tool": "prompt.compile"
+  },
+  {
+    "allowed": true,
+    "autoMax": "egress",
+    "over": null,
+    "risk": "read",
+    "tool": "prompt.compile"
+  },
+  {
+    "allowed": true,
+    "autoMax": "egress",
+    "over": "allow",
+    "risk": "read",
+    "tool": "prompt.compile"
+  },
+  {
+    "allowed": false,
+    "autoMax": "egress",
+    "over": "ask",
+    "risk": "read",
+    "tool": "prompt.compile"
+  },
+  {
+    "allowed": true,
+    "autoMax": null,
+    "over": null,
+    "risk": "read",
+    "tool": "prompt.translate"
+  },
+  {
+    "allowed": true,
+    "autoMax": null,
+    "over": "allow",
+    "risk": "read",
+    "tool": "prompt.translate"
+  },
+  {
+    "allowed": false,
+    "autoMax": null,
+    "over": "ask",
+    "risk": "read",
+    "tool": "prompt.translate"
+  },
+  {
+    "allowed": true,
+    "autoMax": "read",
+    "over": null,
+    "risk": "read",
+    "tool": "prompt.translate"
+  },
+  {
+    "allowed": true,
+    "autoMax": "read",
+    "over": "allow",
+    "risk": "read",
+    "tool": "prompt.translate"
+  },
+  {
+    "allowed": false,
+    "autoMax": "read",
+    "over": "ask",
+    "risk": "read",
+    "tool": "prompt.translate"
+  },
+  {
+    "allowed": true,
+    "autoMax": "write",
+    "over": null,
+    "risk": "read",
+    "tool": "prompt.translate"
+  },
+  {
+    "allowed": true,
+    "autoMax": "write",
+    "over": "allow",
+    "risk": "read",
+    "tool": "prompt.translate"
+  },
+  {
+    "allowed": false,
+    "autoMax": "write",
+    "over": "ask",
+    "risk": "read",
+    "tool": "prompt.translate"
+  },
+  {
+    "allowed": true,
+    "autoMax": "spend",
+    "over": null,
+    "risk": "read",
+    "tool": "prompt.translate"
+  },
+  {
+    "allowed": true,
+    "autoMax": "spend",
+    "over": "allow",
+    "risk": "read",
+    "tool": "prompt.translate"
+  },
+  {
+    "allowed": false,
+    "autoMax": "spend",
+    "over": "ask",
+    "risk": "read",
+    "tool": "prompt.translate"
+  },
+  {
+    "allowed": true,
+    "autoMax": "egress",
+    "over": null,
+    "risk": "read",
+    "tool": "prompt.translate"
+  },
+  {
+    "allowed": true,
+    "autoMax": "egress",
+    "over": "allow",
+    "risk": "read",
+    "tool": "prompt.translate"
+  },
+  {
+    "allowed": false,
+    "autoMax": "egress",
+    "over": "ask",
+    "risk": "read",
+    "tool": "prompt.translate"
+  },
+  {
+    "allowed": true,
+    "autoMax": null,
+    "over": null,
+    "risk": "write",
+    "tool": "style.apply"
+  },
+  {
+    "allowed": true,
+    "autoMax": null,
+    "over": "allow",
+    "risk": "write",
+    "tool": "style.apply"
+  },
+  {
+    "allowed": false,
+    "autoMax": null,
+    "over": "ask",
+    "risk": "write",
+    "tool": "style.apply"
+  },
+  {
+    "allowed": false,
+    "autoMax": "read",
+    "over": null,
+    "risk": "write",
+    "tool": "style.apply"
+  },
+  {
+    "allowed": true,
+    "autoMax": "read",
+    "over": "allow",
+    "risk": "write",
+    "tool": "style.apply"
+  },
+  {
+    "allowed": false,
+    "autoMax": "read",
+    "over": "ask",
+    "risk": "write",
+    "tool": "style.apply"
+  },
+  {
+    "allowed": true,
+    "autoMax": "write",
+    "over": null,
+    "risk": "write",
+    "tool": "style.apply"
+  },
+  {
+    "allowed": true,
+    "autoMax": "write",
+    "over": "allow",
+    "risk": "write",
+    "tool": "style.apply"
+  },
+  {
+    "allowed": false,
+    "autoMax": "write",
+    "over": "ask",
+    "risk": "write",
+    "tool": "style.apply"
+  },
+  {
+    "allowed": true,
+    "autoMax": "spend",
+    "over": null,
+    "risk": "write",
+    "tool": "style.apply"
+  },
+  {
+    "allowed": true,
+    "autoMax": "spend",
+    "over": "allow",
+    "risk": "write",
+    "tool": "style.apply"
+  },
+  {
+    "allowed": false,
+    "autoMax": "spend",
+    "over": "ask",
+    "risk": "write",
+    "tool": "style.apply"
+  },
+  {
+    "allowed": true,
+    "autoMax": "egress",
+    "over": null,
+    "risk": "write",
+    "tool": "style.apply"
+  },
+  {
+    "allowed": true,
+    "autoMax": "egress",
+    "over": "allow",
+    "risk": "write",
+    "tool": "style.apply"
+  },
+  {
+    "allowed": false,
+    "autoMax": "egress",
+    "over": "ask",
+    "risk": "write",
+    "tool": "style.apply"
+  },
+  {
+    "allowed": false,
+    "autoMax": null,
+    "over": null,
+    "risk": "spend",
+    "tool": "image.generate"
+  },
+  {
+    "allowed": true,
+    "autoMax": null,
+    "over": "allow",
+    "risk": "spend",
+    "tool": "image.generate"
+  },
+  {
+    "allowed": false,
+    "autoMax": null,
+    "over": "ask",
+    "risk": "spend",
+    "tool": "image.generate"
+  },
+  {
+    "allowed": false,
+    "autoMax": "read",
+    "over": null,
+    "risk": "spend",
+    "tool": "image.generate"
+  },
+  {
+    "allowed": true,
+    "autoMax": "read",
+    "over": "allow",
+    "risk": "spend",
+    "tool": "image.generate"
+  },
+  {
+    "allowed": false,
+    "autoMax": "read",
+    "over": "ask",
+    "risk": "spend",
+    "tool": "image.generate"
+  },
+  {
+    "allowed": false,
+    "autoMax": "write",
+    "over": null,
+    "risk": "spend",
+    "tool": "image.generate"
+  },
+  {
+    "allowed": true,
+    "autoMax": "write",
+    "over": "allow",
+    "risk": "spend",
+    "tool": "image.generate"
+  },
+  {
+    "allowed": false,
+    "autoMax": "write",
+    "over": "ask",
+    "risk": "spend",
+    "tool": "image.generate"
+  },
+  {
+    "allowed": true,
+    "autoMax": "spend",
+    "over": null,
+    "risk": "spend",
+    "tool": "image.generate"
+  },
+  {
+    "allowed": true,
+    "autoMax": "spend",
+    "over": "allow",
+    "risk": "spend",
+    "tool": "image.generate"
+  },
+  {
+    "allowed": false,
+    "autoMax": "spend",
+    "over": "ask",
+    "risk": "spend",
+    "tool": "image.generate"
+  },
+  {
+    "allowed": true,
+    "autoMax": "egress",
+    "over": null,
+    "risk": "spend",
+    "tool": "image.generate"
+  },
+  {
+    "allowed": true,
+    "autoMax": "egress",
+    "over": "allow",
+    "risk": "spend",
+    "tool": "image.generate"
+  },
+  {
+    "allowed": false,
+    "autoMax": "egress",
+    "over": "ask",
+    "risk": "spend",
+    "tool": "image.generate"
+  },
+  {
+    "allowed": false,
+    "autoMax": null,
+    "over": null,
+    "risk": "spend",
+    "tool": "image.edit"
+  },
+  {
+    "allowed": true,
+    "autoMax": null,
+    "over": "allow",
+    "risk": "spend",
+    "tool": "image.edit"
+  },
+  {
+    "allowed": false,
+    "autoMax": null,
+    "over": "ask",
+    "risk": "spend",
+    "tool": "image.edit"
+  },
+  {
+    "allowed": false,
+    "autoMax": "read",
+    "over": null,
+    "risk": "spend",
+    "tool": "image.edit"
+  },
+  {
+    "allowed": true,
+    "autoMax": "read",
+    "over": "allow",
+    "risk": "spend",
+    "tool": "image.edit"
+  },
+  {
+    "allowed": false,
+    "autoMax": "read",
+    "over": "ask",
+    "risk": "spend",
+    "tool": "image.edit"
+  },
+  {
+    "allowed": false,
+    "autoMax": "write",
+    "over": null,
+    "risk": "spend",
+    "tool": "image.edit"
+  },
+  {
+    "allowed": true,
+    "autoMax": "write",
+    "over": "allow",
+    "risk": "spend",
+    "tool": "image.edit"
+  },
+  {
+    "allowed": false,
+    "autoMax": "write",
+    "over": "ask",
+    "risk": "spend",
+    "tool": "image.edit"
+  },
+  {
+    "allowed": true,
+    "autoMax": "spend",
+    "over": null,
+    "risk": "spend",
+    "tool": "image.edit"
+  },
+  {
+    "allowed": true,
+    "autoMax": "spend",
+    "over": "allow",
+    "risk": "spend",
+    "tool": "image.edit"
+  },
+  {
+    "allowed": false,
+    "autoMax": "spend",
+    "over": "ask",
+    "risk": "spend",
+    "tool": "image.edit"
+  },
+  {
+    "allowed": true,
+    "autoMax": "egress",
+    "over": null,
+    "risk": "spend",
+    "tool": "image.edit"
+  },
+  {
+    "allowed": true,
+    "autoMax": "egress",
+    "over": "allow",
+    "risk": "spend",
+    "tool": "image.edit"
+  },
+  {
+    "allowed": false,
+    "autoMax": "egress",
+    "over": "ask",
+    "risk": "spend",
+    "tool": "image.edit"
+  },
+  {
+    "allowed": false,
+    "autoMax": null,
+    "over": null,
+    "risk": "spend",
+    "tool": "image.upscale"
+  },
+  {
+    "allowed": true,
+    "autoMax": null,
+    "over": "allow",
+    "risk": "spend",
+    "tool": "image.upscale"
+  },
+  {
+    "allowed": false,
+    "autoMax": null,
+    "over": "ask",
+    "risk": "spend",
+    "tool": "image.upscale"
+  },
+  {
+    "allowed": false,
+    "autoMax": "read",
+    "over": null,
+    "risk": "spend",
+    "tool": "image.upscale"
+  },
+  {
+    "allowed": true,
+    "autoMax": "read",
+    "over": "allow",
+    "risk": "spend",
+    "tool": "image.upscale"
+  },
+  {
+    "allowed": false,
+    "autoMax": "read",
+    "over": "ask",
+    "risk": "spend",
+    "tool": "image.upscale"
+  },
+  {
+    "allowed": false,
+    "autoMax": "write",
+    "over": null,
+    "risk": "spend",
+    "tool": "image.upscale"
+  },
+  {
+    "allowed": true,
+    "autoMax": "write",
+    "over": "allow",
+    "risk": "spend",
+    "tool": "image.upscale"
+  },
+  {
+    "allowed": false,
+    "autoMax": "write",
+    "over": "ask",
+    "risk": "spend",
+    "tool": "image.upscale"
+  },
+  {
+    "allowed": true,
+    "autoMax": "spend",
+    "over": null,
+    "risk": "spend",
+    "tool": "image.upscale"
+  },
+  {
+    "allowed": true,
+    "autoMax": "spend",
+    "over": "allow",
+    "risk": "spend",
+    "tool": "image.upscale"
+  },
+  {
+    "allowed": false,
+    "autoMax": "spend",
+    "over": "ask",
+    "risk": "spend",
+    "tool": "image.upscale"
+  },
+  {
+    "allowed": true,
+    "autoMax": "egress",
+    "over": null,
+    "risk": "spend",
+    "tool": "image.upscale"
+  },
+  {
+    "allowed": true,
+    "autoMax": "egress",
+    "over": "allow",
+    "risk": "spend",
+    "tool": "image.upscale"
+  },
+  {
+    "allowed": false,
+    "autoMax": "egress",
+    "over": "ask",
+    "risk": "spend",
+    "tool": "image.upscale"
+  },
+  {
+    "allowed": false,
+    "autoMax": null,
+    "over": null,
+    "risk": "spend",
+    "tool": "video.generate"
+  },
+  {
+    "allowed": true,
+    "autoMax": null,
+    "over": "allow",
+    "risk": "spend",
+    "tool": "video.generate"
+  },
+  {
+    "allowed": false,
+    "autoMax": null,
+    "over": "ask",
+    "risk": "spend",
+    "tool": "video.generate"
+  },
+  {
+    "allowed": false,
+    "autoMax": "read",
+    "over": null,
+    "risk": "spend",
+    "tool": "video.generate"
+  },
+  {
+    "allowed": true,
+    "autoMax": "read",
+    "over": "allow",
+    "risk": "spend",
+    "tool": "video.generate"
+  },
+  {
+    "allowed": false,
+    "autoMax": "read",
+    "over": "ask",
+    "risk": "spend",
+    "tool": "video.generate"
+  },
+  {
+    "allowed": false,
+    "autoMax": "write",
+    "over": null,
+    "risk": "spend",
+    "tool": "video.generate"
+  },
+  {
+    "allowed": true,
+    "autoMax": "write",
+    "over": "allow",
+    "risk": "spend",
+    "tool": "video.generate"
+  },
+  {
+    "allowed": false,
+    "autoMax": "write",
+    "over": "ask",
+    "risk": "spend",
+    "tool": "video.generate"
+  },
+  {
+    "allowed": true,
+    "autoMax": "spend",
+    "over": null,
+    "risk": "spend",
+    "tool": "video.generate"
+  },
+  {
+    "allowed": true,
+    "autoMax": "spend",
+    "over": "allow",
+    "risk": "spend",
+    "tool": "video.generate"
+  },
+  {
+    "allowed": false,
+    "autoMax": "spend",
+    "over": "ask",
+    "risk": "spend",
+    "tool": "video.generate"
+  },
+  {
+    "allowed": true,
+    "autoMax": "egress",
+    "over": null,
+    "risk": "spend",
+    "tool": "video.generate"
+  },
+  {
+    "allowed": true,
+    "autoMax": "egress",
+    "over": "allow",
+    "risk": "spend",
+    "tool": "video.generate"
+  },
+  {
+    "allowed": false,
+    "autoMax": "egress",
+    "over": "ask",
+    "risk": "spend",
+    "tool": "video.generate"
+  },
+  {
+    "allowed": false,
+    "autoMax": null,
+    "over": null,
+    "risk": "spend",
+    "tool": "video.extend"
+  },
+  {
+    "allowed": true,
+    "autoMax": null,
+    "over": "allow",
+    "risk": "spend",
+    "tool": "video.extend"
+  },
+  {
+    "allowed": false,
+    "autoMax": null,
+    "over": "ask",
+    "risk": "spend",
+    "tool": "video.extend"
+  },
+  {
+    "allowed": false,
+    "autoMax": "read",
+    "over": null,
+    "risk": "spend",
+    "tool": "video.extend"
+  },
+  {
+    "allowed": true,
+    "autoMax": "read",
+    "over": "allow",
+    "risk": "spend",
+    "tool": "video.extend"
+  },
+  {
+    "allowed": false,
+    "autoMax": "read",
+    "over": "ask",
+    "risk": "spend",
+    "tool": "video.extend"
+  },
+  {
+    "allowed": false,
+    "autoMax": "write",
+    "over": null,
+    "risk": "spend",
+    "tool": "video.extend"
+  },
+  {
+    "allowed": true,
+    "autoMax": "write",
+    "over": "allow",
+    "risk": "spend",
+    "tool": "video.extend"
+  },
+  {
+    "allowed": false,
+    "autoMax": "write",
+    "over": "ask",
+    "risk": "spend",
+    "tool": "video.extend"
+  },
+  {
+    "allowed": true,
+    "autoMax": "spend",
+    "over": null,
+    "risk": "spend",
+    "tool": "video.extend"
+  },
+  {
+    "allowed": true,
+    "autoMax": "spend",
+    "over": "allow",
+    "risk": "spend",
+    "tool": "video.extend"
+  },
+  {
+    "allowed": false,
+    "autoMax": "spend",
+    "over": "ask",
+    "risk": "spend",
+    "tool": "video.extend"
+  },
+  {
+    "allowed": true,
+    "autoMax": "egress",
+    "over": null,
+    "risk": "spend",
+    "tool": "video.extend"
+  },
+  {
+    "allowed": true,
+    "autoMax": "egress",
+    "over": "allow",
+    "risk": "spend",
+    "tool": "video.extend"
+  },
+  {
+    "allowed": false,
+    "autoMax": "egress",
+    "over": "ask",
+    "risk": "spend",
+    "tool": "video.extend"
+  },
+  {
+    "allowed": false,
+    "autoMax": null,
+    "over": null,
+    "risk": "spend",
+    "tool": "audio.tts"
+  },
+  {
+    "allowed": true,
+    "autoMax": null,
+    "over": "allow",
+    "risk": "spend",
+    "tool": "audio.tts"
+  },
+  {
+    "allowed": false,
+    "autoMax": null,
+    "over": "ask",
+    "risk": "spend",
+    "tool": "audio.tts"
+  },
+  {
+    "allowed": false,
+    "autoMax": "read",
+    "over": null,
+    "risk": "spend",
+    "tool": "audio.tts"
+  },
+  {
+    "allowed": true,
+    "autoMax": "read",
+    "over": "allow",
+    "risk": "spend",
+    "tool": "audio.tts"
+  },
+  {
+    "allowed": false,
+    "autoMax": "read",
+    "over": "ask",
+    "risk": "spend",
+    "tool": "audio.tts"
+  },
+  {
+    "allowed": false,
+    "autoMax": "write",
+    "over": null,
+    "risk": "spend",
+    "tool": "audio.tts"
+  },
+  {
+    "allowed": true,
+    "autoMax": "write",
+    "over": "allow",
+    "risk": "spend",
+    "tool": "audio.tts"
+  },
+  {
+    "allowed": false,
+    "autoMax": "write",
+    "over": "ask",
+    "risk": "spend",
+    "tool": "audio.tts"
+  },
+  {
+    "allowed": true,
+    "autoMax": "spend",
+    "over": null,
+    "risk": "spend",
+    "tool": "audio.tts"
+  },
+  {
+    "allowed": true,
+    "autoMax": "spend",
+    "over": "allow",
+    "risk": "spend",
+    "tool": "audio.tts"
+  },
+  {
+    "allowed": false,
+    "autoMax": "spend",
+    "over": "ask",
+    "risk": "spend",
+    "tool": "audio.tts"
+  },
+  {
+    "allowed": true,
+    "autoMax": "egress",
+    "over": null,
+    "risk": "spend",
+    "tool": "audio.tts"
+  },
+  {
+    "allowed": true,
+    "autoMax": "egress",
+    "over": "allow",
+    "risk": "spend",
+    "tool": "audio.tts"
+  },
+  {
+    "allowed": false,
+    "autoMax": "egress",
+    "over": "ask",
+    "risk": "spend",
+    "tool": "audio.tts"
+  },
+  {
+    "allowed": false,
+    "autoMax": null,
+    "over": null,
+    "risk": "spend",
+    "tool": "audio.music"
+  },
+  {
+    "allowed": true,
+    "autoMax": null,
+    "over": "allow",
+    "risk": "spend",
+    "tool": "audio.music"
+  },
+  {
+    "allowed": false,
+    "autoMax": null,
+    "over": "ask",
+    "risk": "spend",
+    "tool": "audio.music"
+  },
+  {
+    "allowed": false,
+    "autoMax": "read",
+    "over": null,
+    "risk": "spend",
+    "tool": "audio.music"
+  },
+  {
+    "allowed": true,
+    "autoMax": "read",
+    "over": "allow",
+    "risk": "spend",
+    "tool": "audio.music"
+  },
+  {
+    "allowed": false,
+    "autoMax": "read",
+    "over": "ask",
+    "risk": "spend",
+    "tool": "audio.music"
+  },
+  {
+    "allowed": false,
+    "autoMax": "write",
+    "over": null,
+    "risk": "spend",
+    "tool": "audio.music"
+  },
+  {
+    "allowed": true,
+    "autoMax": "write",
+    "over": "allow",
+    "risk": "spend",
+    "tool": "audio.music"
+  },
+  {
+    "allowed": false,
+    "autoMax": "write",
+    "over": "ask",
+    "risk": "spend",
+    "tool": "audio.music"
+  },
+  {
+    "allowed": true,
+    "autoMax": "spend",
+    "over": null,
+    "risk": "spend",
+    "tool": "audio.music"
+  },
+  {
+    "allowed": true,
+    "autoMax": "spend",
+    "over": "allow",
+    "risk": "spend",
+    "tool": "audio.music"
+  },
+  {
+    "allowed": false,
+    "autoMax": "spend",
+    "over": "ask",
+    "risk": "spend",
+    "tool": "audio.music"
+  },
+  {
+    "allowed": true,
+    "autoMax": "egress",
+    "over": null,
+    "risk": "spend",
+    "tool": "audio.music"
+  },
+  {
+    "allowed": true,
+    "autoMax": "egress",
+    "over": "allow",
+    "risk": "spend",
+    "tool": "audio.music"
+  },
+  {
+    "allowed": false,
+    "autoMax": "egress",
+    "over": "ask",
+    "risk": "spend",
+    "tool": "audio.music"
+  },
+  {
+    "allowed": false,
+    "autoMax": null,
+    "over": null,
+    "risk": "spend",
+    "tool": "audio.sfx"
+  },
+  {
+    "allowed": true,
+    "autoMax": null,
+    "over": "allow",
+    "risk": "spend",
+    "tool": "audio.sfx"
+  },
+  {
+    "allowed": false,
+    "autoMax": null,
+    "over": "ask",
+    "risk": "spend",
+    "tool": "audio.sfx"
+  },
+  {
+    "allowed": false,
+    "autoMax": "read",
+    "over": null,
+    "risk": "spend",
+    "tool": "audio.sfx"
+  },
+  {
+    "allowed": true,
+    "autoMax": "read",
+    "over": "allow",
+    "risk": "spend",
+    "tool": "audio.sfx"
+  },
+  {
+    "allowed": false,
+    "autoMax": "read",
+    "over": "ask",
+    "risk": "spend",
+    "tool": "audio.sfx"
+  },
+  {
+    "allowed": false,
+    "autoMax": "write",
+    "over": null,
+    "risk": "spend",
+    "tool": "audio.sfx"
+  },
+  {
+    "allowed": true,
+    "autoMax": "write",
+    "over": "allow",
+    "risk": "spend",
+    "tool": "audio.sfx"
+  },
+  {
+    "allowed": false,
+    "autoMax": "write",
+    "over": "ask",
+    "risk": "spend",
+    "tool": "audio.sfx"
+  },
+  {
+    "allowed": true,
+    "autoMax": "spend",
+    "over": null,
+    "risk": "spend",
+    "tool": "audio.sfx"
+  },
+  {
+    "allowed": true,
+    "autoMax": "spend",
+    "over": "allow",
+    "risk": "spend",
+    "tool": "audio.sfx"
+  },
+  {
+    "allowed": false,
+    "autoMax": "spend",
+    "over": "ask",
+    "risk": "spend",
+    "tool": "audio.sfx"
+  },
+  {
+    "allowed": true,
+    "autoMax": "egress",
+    "over": null,
+    "risk": "spend",
+    "tool": "audio.sfx"
+  },
+  {
+    "allowed": true,
+    "autoMax": "egress",
+    "over": "allow",
+    "risk": "spend",
+    "tool": "audio.sfx"
+  },
+  {
+    "allowed": false,
+    "autoMax": "egress",
+    "over": "ask",
+    "risk": "spend",
+    "tool": "audio.sfx"
+  },
+  {
+    "allowed": true,
+    "autoMax": null,
+    "over": null,
+    "risk": "read",
+    "tool": "stage.render"
+  },
+  {
+    "allowed": true,
+    "autoMax": null,
+    "over": "allow",
+    "risk": "read",
+    "tool": "stage.render"
+  },
+  {
+    "allowed": false,
+    "autoMax": null,
+    "over": "ask",
+    "risk": "read",
+    "tool": "stage.render"
+  },
+  {
+    "allowed": true,
+    "autoMax": "read",
+    "over": null,
+    "risk": "read",
+    "tool": "stage.render"
+  },
+  {
+    "allowed": true,
+    "autoMax": "read",
+    "over": "allow",
+    "risk": "read",
+    "tool": "stage.render"
+  },
+  {
+    "allowed": false,
+    "autoMax": "read",
+    "over": "ask",
+    "risk": "read",
+    "tool": "stage.render"
+  },
+  {
+    "allowed": true,
+    "autoMax": "write",
+    "over": null,
+    "risk": "read",
+    "tool": "stage.render"
+  },
+  {
+    "allowed": true,
+    "autoMax": "write",
+    "over": "allow",
+    "risk": "read",
+    "tool": "stage.render"
+  },
+  {
+    "allowed": false,
+    "autoMax": "write",
+    "over": "ask",
+    "risk": "read",
+    "tool": "stage.render"
+  },
+  {
+    "allowed": true,
+    "autoMax": "spend",
+    "over": null,
+    "risk": "read",
+    "tool": "stage.render"
+  },
+  {
+    "allowed": true,
+    "autoMax": "spend",
+    "over": "allow",
+    "risk": "read",
+    "tool": "stage.render"
+  },
+  {
+    "allowed": false,
+    "autoMax": "spend",
+    "over": "ask",
+    "risk": "read",
+    "tool": "stage.render"
+  },
+  {
+    "allowed": true,
+    "autoMax": "egress",
+    "over": null,
+    "risk": "read",
+    "tool": "stage.render"
+  },
+  {
+    "allowed": true,
+    "autoMax": "egress",
+    "over": "allow",
+    "risk": "read",
+    "tool": "stage.render"
+  },
+  {
+    "allowed": false,
+    "autoMax": "egress",
+    "over": "ask",
+    "risk": "read",
+    "tool": "stage.render"
+  },
+  {
+    "allowed": true,
+    "autoMax": null,
+    "over": null,
+    "risk": "write",
+    "tool": "shot.rig"
+  },
+  {
+    "allowed": true,
+    "autoMax": null,
+    "over": "allow",
+    "risk": "write",
+    "tool": "shot.rig"
+  },
+  {
+    "allowed": false,
+    "autoMax": null,
+    "over": "ask",
+    "risk": "write",
+    "tool": "shot.rig"
+  },
+  {
+    "allowed": false,
+    "autoMax": "read",
+    "over": null,
+    "risk": "write",
+    "tool": "shot.rig"
+  },
+  {
+    "allowed": true,
+    "autoMax": "read",
+    "over": "allow",
+    "risk": "write",
+    "tool": "shot.rig"
+  },
+  {
+    "allowed": false,
+    "autoMax": "read",
+    "over": "ask",
+    "risk": "write",
+    "tool": "shot.rig"
+  },
+  {
+    "allowed": true,
+    "autoMax": "write",
+    "over": null,
+    "risk": "write",
+    "tool": "shot.rig"
+  },
+  {
+    "allowed": true,
+    "autoMax": "write",
+    "over": "allow",
+    "risk": "write",
+    "tool": "shot.rig"
+  },
+  {
+    "allowed": false,
+    "autoMax": "write",
+    "over": "ask",
+    "risk": "write",
+    "tool": "shot.rig"
+  },
+  {
+    "allowed": true,
+    "autoMax": "spend",
+    "over": null,
+    "risk": "write",
+    "tool": "shot.rig"
+  },
+  {
+    "allowed": true,
+    "autoMax": "spend",
+    "over": "allow",
+    "risk": "write",
+    "tool": "shot.rig"
+  },
+  {
+    "allowed": false,
+    "autoMax": "spend",
+    "over": "ask",
+    "risk": "write",
+    "tool": "shot.rig"
+  },
+  {
+    "allowed": true,
+    "autoMax": "egress",
+    "over": null,
+    "risk": "write",
+    "tool": "shot.rig"
+  },
+  {
+    "allowed": true,
+    "autoMax": "egress",
+    "over": "allow",
+    "risk": "write",
+    "tool": "shot.rig"
+  },
+  {
+    "allowed": false,
+    "autoMax": "egress",
+    "over": "ask",
+    "risk": "write",
+    "tool": "shot.rig"
+  },
+  {
+    "allowed": true,
+    "autoMax": null,
+    "over": null,
+    "risk": "write",
+    "tool": "edit.timeline"
+  },
+  {
+    "allowed": true,
+    "autoMax": null,
+    "over": "allow",
+    "risk": "write",
+    "tool": "edit.timeline"
+  },
+  {
+    "allowed": false,
+    "autoMax": null,
+    "over": "ask",
+    "risk": "write",
+    "tool": "edit.timeline"
+  },
+  {
+    "allowed": false,
+    "autoMax": "read",
+    "over": null,
+    "risk": "write",
+    "tool": "edit.timeline"
+  },
+  {
+    "allowed": true,
+    "autoMax": "read",
+    "over": "allow",
+    "risk": "write",
+    "tool": "edit.timeline"
+  },
+  {
+    "allowed": false,
+    "autoMax": "read",
+    "over": "ask",
+    "risk": "write",
+    "tool": "edit.timeline"
+  },
+  {
+    "allowed": true,
+    "autoMax": "write",
+    "over": null,
+    "risk": "write",
+    "tool": "edit.timeline"
+  },
+  {
+    "allowed": true,
+    "autoMax": "write",
+    "over": "allow",
+    "risk": "write",
+    "tool": "edit.timeline"
+  },
+  {
+    "allowed": false,
+    "autoMax": "write",
+    "over": "ask",
+    "risk": "write",
+    "tool": "edit.timeline"
+  },
+  {
+    "allowed": true,
+    "autoMax": "spend",
+    "over": null,
+    "risk": "write",
+    "tool": "edit.timeline"
+  },
+  {
+    "allowed": true,
+    "autoMax": "spend",
+    "over": "allow",
+    "risk": "write",
+    "tool": "edit.timeline"
+  },
+  {
+    "allowed": false,
+    "autoMax": "spend",
+    "over": "ask",
+    "risk": "write",
+    "tool": "edit.timeline"
+  },
+  {
+    "allowed": true,
+    "autoMax": "egress",
+    "over": null,
+    "risk": "write",
+    "tool": "edit.timeline"
+  },
+  {
+    "allowed": true,
+    "autoMax": "egress",
+    "over": "allow",
+    "risk": "write",
+    "tool": "edit.timeline"
+  },
+  {
+    "allowed": false,
+    "autoMax": "egress",
+    "over": "ask",
+    "risk": "write",
+    "tool": "edit.timeline"
+  },
+  {
+    "allowed": true,
+    "autoMax": null,
+    "over": null,
+    "risk": "write",
+    "tool": "edit.subtitle"
+  },
+  {
+    "allowed": true,
+    "autoMax": null,
+    "over": "allow",
+    "risk": "write",
+    "tool": "edit.subtitle"
+  },
+  {
+    "allowed": false,
+    "autoMax": null,
+    "over": "ask",
+    "risk": "write",
+    "tool": "edit.subtitle"
+  },
+  {
+    "allowed": false,
+    "autoMax": "read",
+    "over": null,
+    "risk": "write",
+    "tool": "edit.subtitle"
+  },
+  {
+    "allowed": true,
+    "autoMax": "read",
+    "over": "allow",
+    "risk": "write",
+    "tool": "edit.subtitle"
+  },
+  {
+    "allowed": false,
+    "autoMax": "read",
+    "over": "ask",
+    "risk": "write",
+    "tool": "edit.subtitle"
+  },
+  {
+    "allowed": true,
+    "autoMax": "write",
+    "over": null,
+    "risk": "write",
+    "tool": "edit.subtitle"
+  },
+  {
+    "allowed": true,
+    "autoMax": "write",
+    "over": "allow",
+    "risk": "write",
+    "tool": "edit.subtitle"
+  },
+  {
+    "allowed": false,
+    "autoMax": "write",
+    "over": "ask",
+    "risk": "write",
+    "tool": "edit.subtitle"
+  },
+  {
+    "allowed": true,
+    "autoMax": "spend",
+    "over": null,
+    "risk": "write",
+    "tool": "edit.subtitle"
+  },
+  {
+    "allowed": true,
+    "autoMax": "spend",
+    "over": "allow",
+    "risk": "write",
+    "tool": "edit.subtitle"
+  },
+  {
+    "allowed": false,
+    "autoMax": "spend",
+    "over": "ask",
+    "risk": "write",
+    "tool": "edit.subtitle"
+  },
+  {
+    "allowed": true,
+    "autoMax": "egress",
+    "over": null,
+    "risk": "write",
+    "tool": "edit.subtitle"
+  },
+  {
+    "allowed": true,
+    "autoMax": "egress",
+    "over": "allow",
+    "risk": "write",
+    "tool": "edit.subtitle"
+  },
+  {
+    "allowed": false,
+    "autoMax": "egress",
+    "over": "ask",
+    "risk": "write",
+    "tool": "edit.subtitle"
+  },
+  {
+    "allowed": false,
+    "autoMax": null,
+    "over": null,
+    "risk": "egress",
+    "tool": "file.export"
+  },
+  {
+    "allowed": false,
+    "autoMax": null,
+    "over": "allow",
+    "risk": "egress",
+    "tool": "file.export"
+  },
+  {
+    "allowed": false,
+    "autoMax": null,
+    "over": "ask",
+    "risk": "egress",
+    "tool": "file.export"
+  },
+  {
+    "allowed": false,
+    "autoMax": "read",
+    "over": null,
+    "risk": "egress",
+    "tool": "file.export"
+  },
+  {
+    "allowed": false,
+    "autoMax": "read",
+    "over": "allow",
+    "risk": "egress",
+    "tool": "file.export"
+  },
+  {
+    "allowed": false,
+    "autoMax": "read",
+    "over": "ask",
+    "risk": "egress",
+    "tool": "file.export"
+  },
+  {
+    "allowed": false,
+    "autoMax": "write",
+    "over": null,
+    "risk": "egress",
+    "tool": "file.export"
+  },
+  {
+    "allowed": false,
+    "autoMax": "write",
+    "over": "allow",
+    "risk": "egress",
+    "tool": "file.export"
+  },
+  {
+    "allowed": false,
+    "autoMax": "write",
+    "over": "ask",
+    "risk": "egress",
+    "tool": "file.export"
+  },
+  {
+    "allowed": false,
+    "autoMax": "spend",
+    "over": null,
+    "risk": "egress",
+    "tool": "file.export"
+  },
+  {
+    "allowed": false,
+    "autoMax": "spend",
+    "over": "allow",
+    "risk": "egress",
+    "tool": "file.export"
+  },
+  {
+    "allowed": false,
+    "autoMax": "spend",
+    "over": "ask",
+    "risk": "egress",
+    "tool": "file.export"
+  },
+  {
+    "allowed": false,
+    "autoMax": "egress",
+    "over": null,
+    "risk": "egress",
+    "tool": "file.export"
+  },
+  {
+    "allowed": false,
+    "autoMax": "egress",
+    "over": "allow",
+    "risk": "egress",
+    "tool": "file.export"
+  },
+  {
+    "allowed": false,
+    "autoMax": "egress",
+    "over": "ask",
+    "risk": "egress",
+    "tool": "file.export"
+  },
+  {
+    "allowed": false,
+    "autoMax": null,
+    "over": null,
+    "risk": "egress",
+    "tool": "web.search"
+  },
+  {
+    "allowed": false,
+    "autoMax": null,
+    "over": "allow",
+    "risk": "egress",
+    "tool": "web.search"
+  },
+  {
+    "allowed": false,
+    "autoMax": null,
+    "over": "ask",
+    "risk": "egress",
+    "tool": "web.search"
+  },
+  {
+    "allowed": false,
+    "autoMax": "read",
+    "over": null,
+    "risk": "egress",
+    "tool": "web.search"
+  },
+  {
+    "allowed": false,
+    "autoMax": "read",
+    "over": "allow",
+    "risk": "egress",
+    "tool": "web.search"
+  },
+  {
+    "allowed": false,
+    "autoMax": "read",
+    "over": "ask",
+    "risk": "egress",
+    "tool": "web.search"
+  },
+  {
+    "allowed": false,
+    "autoMax": "write",
+    "over": null,
+    "risk": "egress",
+    "tool": "web.search"
+  },
+  {
+    "allowed": false,
+    "autoMax": "write",
+    "over": "allow",
+    "risk": "egress",
+    "tool": "web.search"
+  },
+  {
+    "allowed": false,
+    "autoMax": "write",
+    "over": "ask",
+    "risk": "egress",
+    "tool": "web.search"
+  },
+  {
+    "allowed": false,
+    "autoMax": "spend",
+    "over": null,
+    "risk": "egress",
+    "tool": "web.search"
+  },
+  {
+    "allowed": false,
+    "autoMax": "spend",
+    "over": "allow",
+    "risk": "egress",
+    "tool": "web.search"
+  },
+  {
+    "allowed": false,
+    "autoMax": "spend",
+    "over": "ask",
+    "risk": "egress",
+    "tool": "web.search"
+  },
+  {
+    "allowed": false,
+    "autoMax": "egress",
+    "over": null,
+    "risk": "egress",
+    "tool": "web.search"
+  },
+  {
+    "allowed": false,
+    "autoMax": "egress",
+    "over": "allow",
+    "risk": "egress",
+    "tool": "web.search"
+  },
+  {
+    "allowed": false,
+    "autoMax": "egress",
+    "over": "ask",
+    "risk": "egress",
+    "tool": "web.search"
+  },
+  {
+    "allowed": false,
+    "autoMax": null,
+    "over": null,
+    "risk": "egress",
+    "tool": "web.fetch"
+  },
+  {
+    "allowed": false,
+    "autoMax": null,
+    "over": "allow",
+    "risk": "egress",
+    "tool": "web.fetch"
+  },
+  {
+    "allowed": false,
+    "autoMax": null,
+    "over": "ask",
+    "risk": "egress",
+    "tool": "web.fetch"
+  },
+  {
+    "allowed": false,
+    "autoMax": "read",
+    "over": null,
+    "risk": "egress",
+    "tool": "web.fetch"
+  },
+  {
+    "allowed": false,
+    "autoMax": "read",
+    "over": "allow",
+    "risk": "egress",
+    "tool": "web.fetch"
+  },
+  {
+    "allowed": false,
+    "autoMax": "read",
+    "over": "ask",
+    "risk": "egress",
+    "tool": "web.fetch"
+  },
+  {
+    "allowed": false,
+    "autoMax": "write",
+    "over": null,
+    "risk": "egress",
+    "tool": "web.fetch"
+  },
+  {
+    "allowed": false,
+    "autoMax": "write",
+    "over": "allow",
+    "risk": "egress",
+    "tool": "web.fetch"
+  },
+  {
+    "allowed": false,
+    "autoMax": "write",
+    "over": "ask",
+    "risk": "egress",
+    "tool": "web.fetch"
+  },
+  {
+    "allowed": false,
+    "autoMax": "spend",
+    "over": null,
+    "risk": "egress",
+    "tool": "web.fetch"
+  },
+  {
+    "allowed": false,
+    "autoMax": "spend",
+    "over": "allow",
+    "risk": "egress",
+    "tool": "web.fetch"
+  },
+  {
+    "allowed": false,
+    "autoMax": "spend",
+    "over": "ask",
+    "risk": "egress",
+    "tool": "web.fetch"
+  },
+  {
+    "allowed": false,
+    "autoMax": "egress",
+    "over": null,
+    "risk": "egress",
+    "tool": "web.fetch"
+  },
+  {
+    "allowed": false,
+    "autoMax": "egress",
+    "over": "allow",
+    "risk": "egress",
+    "tool": "web.fetch"
+  },
+  {
+    "allowed": false,
+    "autoMax": "egress",
+    "over": "ask",
+    "risk": "egress",
+    "tool": "web.fetch"
+  },
+  {
+    "allowed": false,
+    "autoMax": null,
+    "over": null,
+    "risk": "egress",
+    "tool": "某个还没登记的工具"
+  },
+  {
+    "allowed": false,
+    "autoMax": null,
+    "over": "allow",
+    "risk": "egress",
+    "tool": "某个还没登记的工具"
+  },
+  {
+    "allowed": false,
+    "autoMax": null,
+    "over": "ask",
+    "risk": "egress",
+    "tool": "某个还没登记的工具"
+  },
+  {
+    "allowed": false,
+    "autoMax": "read",
+    "over": null,
+    "risk": "egress",
+    "tool": "某个还没登记的工具"
+  },
+  {
+    "allowed": false,
+    "autoMax": "read",
+    "over": "allow",
+    "risk": "egress",
+    "tool": "某个还没登记的工具"
+  },
+  {
+    "allowed": false,
+    "autoMax": "read",
+    "over": "ask",
+    "risk": "egress",
+    "tool": "某个还没登记的工具"
+  },
+  {
+    "allowed": false,
+    "autoMax": "write",
+    "over": null,
+    "risk": "egress",
+    "tool": "某个还没登记的工具"
+  },
+  {
+    "allowed": false,
+    "autoMax": "write",
+    "over": "allow",
+    "risk": "egress",
+    "tool": "某个还没登记的工具"
+  },
+  {
+    "allowed": false,
+    "autoMax": "write",
+    "over": "ask",
+    "risk": "egress",
+    "tool": "某个还没登记的工具"
+  },
+  {
+    "allowed": false,
+    "autoMax": "spend",
+    "over": null,
+    "risk": "egress",
+    "tool": "某个还没登记的工具"
+  },
+  {
+    "allowed": false,
+    "autoMax": "spend",
+    "over": "allow",
+    "risk": "egress",
+    "tool": "某个还没登记的工具"
+  },
+  {
+    "allowed": false,
+    "autoMax": "spend",
+    "over": "ask",
+    "risk": "egress",
+    "tool": "某个还没登记的工具"
+  },
+  {
+    "allowed": false,
+    "autoMax": "egress",
+    "over": null,
+    "risk": "egress",
+    "tool": "某个还没登记的工具"
+  },
+  {
+    "allowed": false,
+    "autoMax": "egress",
+    "over": "allow",
+    "risk": "egress",
+    "tool": "某个还没登记的工具"
+  },
+  {
+    "allowed": false,
+    "autoMax": "egress",
+    "over": "ask",
+    "risk": "egress",
+    "tool": "某个还没登记的工具"
+  }
+]

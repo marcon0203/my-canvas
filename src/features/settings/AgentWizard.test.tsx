@@ -1,0 +1,187 @@
+// @vitest-environment jsdom
+import { beforeEach, describe, expect, it } from 'vitest';
+import { act } from 'react';
+import { createRoot } from 'react-dom/client';
+import { AgentWizard, NewAgentModal } from './AgentWizard';
+import { customPersonas, personaById } from '@/domain/agent/roster';
+import { useSettings } from '@/store/settings';
+
+/**
+ * 配置向导。
+ *
+ * 原来是一屏四张卡摊开，问题是这些东西有依赖顺序（配哪些模型取决于给了
+ * 哪些工具），人得来回跳。分步之后要盯两件事：**一次只显示一步**，
+ * 以及**出本机的工具没有「总是允许」这个选项**。
+ */
+function mount(ui: React.ReactElement) {
+  const host = document.createElement('div');
+  document.body.appendChild(host);
+  const root = createRoot(host);
+  act(() => { root.render(ui); });
+  return {
+    host,
+    click: (el: Element) => act(() => {
+      el.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    }),
+  };
+}
+
+const steps = (host: HTMLElement) => [...host.querySelectorAll('.wstep__t')].map((e) => e.textContent);
+const stepBtn = (host: HTMLElement, name: string) =>
+  [...host.querySelectorAll('.wstep__hit')].find((b) => b.textContent?.includes(name))!;
+const text = (host: HTMLElement) => host.textContent ?? '';
+
+/**
+ * 往受控输入框里打字。
+ *
+ * 不能直接 `el.value = x` 再派发 input：React 会看到 value 没「变过」而忽略这次
+ * 事件（它记着上一次的值）。要走原生 setter，绕过 React 装在实例上的那层。
+ */
+function type(el: HTMLInputElement, v: string) {
+  const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!;
+  act(() => {
+    setter.call(el, v);
+    el.dispatchEvent(new Event('input', { bubbles: true }));
+  });
+}
+
+describe('编辑向导：一次只走一步', () => {
+  beforeEach(() => { useSettings.getState().resetAgent('dp'); });
+
+  it('五步都列出来，默认停在第一步', () => {
+    const { host } = mount(<AgentWizard id="dp" />);
+    expect(steps(host)).toEqual(['身份', '侧重方向', '能干什么', '模型', '放手到哪一档']);
+    expect(host.querySelector('.wstep--on .wstep__t')?.textContent).toBe('身份');
+    host.remove();
+  });
+
+  it('当前这一步之外的内容不在页面上 —— 那正是不摊开的意义', () => {
+    const { host, click } = mount(<AgentWizard id="dp" />);
+    expect(text(host)).toContain('描述');
+    expect(text(host)).not.toContain('系统提示词');
+
+    click(stepBtn(host, '侧重方向'));
+    expect(text(host)).toContain('系统提示词');
+    expect(text(host)).not.toContain('接的活儿');
+
+    click(stepBtn(host, '能干什么'));
+    expect(text(host)).toContain('接的活儿');
+    expect(text(host)).not.toContain('系统提示词');
+    host.remove();
+  });
+
+  it('内置那位的名字改不了，也没有删除按钮', () => {
+    const { host } = mount(<AgentWizard id="dp" />);
+    expect(host.querySelector('input')).toBe(null);
+    expect(text(host)).toContain('内置的五位删不掉');
+    expect([...host.querySelectorAll('button')].some((b) => b.textContent?.includes('删掉这位')))
+      .toBe(false);
+    host.remove();
+  });
+});
+
+describe('逐个工具的审批策略', () => {
+  const ID = 'custom-trust';
+  beforeEach(() => {
+    for (const p of customPersonas()) useSettings.getState().removeAgent(p.id);
+    const id = useSettings.getState().addAgent({
+      name: '交付', tagline: '', icon: 'bolt', preamble: '', owns: [],
+    });
+    useSettings.getState().patchAgent(id, {
+      autonomy: 'auto', autoMax: 'spend',
+      tools: ['project.read', 'image.generate', 'file.export'],
+    });
+    void ID;
+  });
+
+  const open = () => {
+    const id = customPersonas()[0]!.id;
+    const m = mount(<AgentWizard id={id} />);
+    m.click(stepBtn(m.host, '放手到哪一档'));
+    return { ...m, id };
+  };
+
+  it('只列这位手上有的工具，不是全部 27 个', () => {
+    const { host } = open();
+    const rows = [...host.querySelectorAll('.apol__row')];
+    expect(rows.map((r) => r.querySelector('.apol__n')?.textContent))
+      .toEqual(['读项目', '出图', '导出文件']);
+    host.remove();
+  });
+
+  it('出本机的那个没有下拉框，只有一句「永远问你」', () => {
+    const { host } = open();
+    const rows = [...host.querySelectorAll('.apol__row')];
+    const exportRow = rows.find((r) => r.textContent?.includes('导出文件'))!;
+    expect(exportRow.querySelector('select'), '出本机的工具不该给出「总是允许」这个选项').toBe(null);
+    expect(exportRow.textContent).toContain('永远问你');
+
+    // 同一份表格里，花钱那档是可以改的 —— 说明「没有下拉框」不是整表都没有
+    const imgRow = rows.find((r) => r.textContent?.includes('出图'))!;
+    expect(imgRow.querySelector('select')).not.toBe(null);
+    host.remove();
+  });
+
+  it('改一个工具的策略会落到配置里', () => {
+    const { host, id } = open();
+    const sel = [...host.querySelectorAll('.apol__row')]
+      .find((r) => r.textContent?.includes('出图'))!
+      .querySelector('select')!;
+    act(() => {
+      const setter = Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'value')!.set!;
+      setter.call(sel, 'allow');
+      sel.dispatchEvent(new Event('change', { bubbles: true }));
+    });
+    expect(useSettings.getState().agents[id]!.toolPolicy?.['image.generate']).toBe('allow');
+    host.remove();
+  });
+
+  it('先出方案时不显示这张表 —— 没有自主执行就没有「要不要问」这回事', () => {
+    const id = customPersonas()[0]!.id;
+    useSettings.getState().patchAgent(id, { autonomy: 'propose' });
+    const { host, click } = mount(<AgentWizard id={id} />);
+    click(stepBtn(host, '放手到哪一档'));
+    expect(host.querySelectorAll('.apol__row')).toHaveLength(0);
+    expect(text(host)).toContain('自主度');
+    host.remove();
+  });
+});
+
+describe('新建向导', () => {
+  beforeEach(() => {
+    for (const p of customPersonas()) useSettings.getState().removeAgent(p.id);
+  });
+
+  // 弹窗是直接渲染在 host 里的（没有 portal），所以在 host 里找就够了
+  const btn = (host: HTMLElement, label: string) =>
+    [...host.querySelectorAll('.mo button')]
+      .find((b) => b.textContent?.includes(label)) as HTMLButtonElement;
+
+  it('没填名字之前走不到下一步，也存不下来', () => {
+    const { host } = mount(
+      <NewAgentModal open onClose={() => {}} onCreated={() => {}} />,
+    );
+    expect(btn(host, '下一步').disabled).toBe(true);
+    expect(btn(host, '先保存').disabled).toBe(true);
+    // 后面几步也点不动
+    expect((stepBtn(host, '能干什么') as HTMLButtonElement).disabled).toBe(true);
+    host.remove();
+  });
+
+  it('填了名字就能存 —— 不必走完五步，剩下的以后配', () => {
+    let created = '';
+    const { host } = mount(
+      <NewAgentModal open onClose={() => {}} onCreated={(id) => { created = id; }} />,
+    );
+    type(host.querySelector('.mo input') as HTMLInputElement, '广告片编剧');
+    expect(btn(host, '先保存').disabled).toBe(false);
+
+    act(() => { btn(host, '先保存').click(); });
+    expect(created).toBeTruthy();
+    expect(personaById(created).name).toBe('广告片编剧');
+    // 没填的字段不替人编内容
+    expect(personaById(created).tagline).toBe('');
+    expect(personaById(created).preamble).toBe('');
+    host.remove();
+  });
+});

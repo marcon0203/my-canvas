@@ -6,7 +6,7 @@ import {
 } from '@/api/desktop';
 import { SKILL_FOR_INTENT } from '@/api/agent';
 import type { SkillMeta } from '@/domain/skills/loader';
-import { INTENT_META, PERSONAS, personaById } from '@/domain/agent/roster';
+import { INTENT_META, roster, personaById } from '@/domain/agent/roster';
 import type { AgentId } from '@/domain/agent/roster';
 import { TOOLS_FOR_INTENT, toolOf } from '@/domain/agent/tools';
 import { defaultConfig, ownerOfConfigured } from '@/domain/agent/config';
@@ -25,7 +25,7 @@ function useReassign() {
   const toast = useUi((s) => s.toast);
 
   return (kind: SkillId, to: AgentId | '') => {
-    for (const p of PERSONAS) {
+    for (const p of roster()) {
       const cur = agents[p.id] ?? defaultConfig(p);
       const has = cur.skills.includes(kind);
       if (p.id === to && !has) {
@@ -51,7 +51,7 @@ function OwnerSelect({ kind }: { kind: SkillId }) {
       value={ownerOfConfigured(kind, agents) ?? ''}
       options={[
         { value: '', label: '无人负责' },
-        ...PERSONAS.map((p) => ({ value: p.id, label: p.name })),
+        ...roster().map((p) => ({ value: p.id, label: p.name })),
       ]}
       onChange={(v) => reassign(kind, v as AgentId | '')} />
   );

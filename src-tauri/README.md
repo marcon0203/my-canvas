@@ -78,7 +78,7 @@ serde 的 derive 本来就找不到，报假阳性一两次就没人看了。
 | `doc` | `timeline` | 成片顺序与字幕 |
 | `doc` | `workspace` | 工作空间解析：`~/.hitv` 或用户指定的目录，用户数据的唯一落脚点 |
 | `conf` | `config` | 与前端 `domain/agent/config.ts` 同形的契约。前端 JSON 直接反序列化，字段名用 camelCase 省掉映射层 |
-| `conf` | `policy` | 自主执行的权限边界，与前端 policy.ts 同一套规则 |
+| `conf` | `policy` | 自主执行的权限边界（风险档 + 单个工具的审批覆盖），与前端 policy.ts 同一套规则；判定表由 `tools::gate_table` 落成 fixture 给前端逐行对 |
 | `conf` | `providers` | 端点解析：用户改过的优先，内置目录只是种子 |
 | `net` | `generate` | 异步任务协议：出图/出视频/配音都走这套 |
 | `net` | `web` | 读网页：剥掉脚本样式、限长、如实标截断 |

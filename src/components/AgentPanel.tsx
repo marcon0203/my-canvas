@@ -2,7 +2,8 @@ import { useEffect, useRef, useState } from 'react';
 import { Icon } from '@/ui/Icon';
 import { useUi } from '@/store/ui';
 import { useAgent } from '@/store/agent';
-import { personaById, skillsOf } from '@/domain/agent/roster';
+import { useSettings } from '@/store/settings';
+import { faceClass, personaById, skillsOfKinds } from '@/domain/agent/roster';
 import type { Persona } from '@/domain/agent/roster';
 import type { AgentMessage, Proposal, ToolRun } from '@/domain/agent/types';
 import { useNavigate } from 'react-router';
@@ -23,6 +24,8 @@ export function AgentPanel() {
   const syncStep = useAgent((s) => s.syncStep);
   const agentId = useAgent((s) => s.agentId);
   const persona = personaById(agentId);
+  // 这位实际接哪些活儿看配置，不看出厂的 owns
+  const cfg = useSettings((s) => s.agents[agentId]);
   const [draft, setDraft] = useState('');
   const logRef = useRef<HTMLDivElement>(null);
 
@@ -46,7 +49,7 @@ export function AgentPanel() {
   return (
     <aside className="agent">
       <div className="agent__h">
-        <span className={`aface aface--${persona.id}`} aria-hidden><Icon name={persona.icon} /></span>
+        <span className={`aface ${faceClass(persona.id)}`} aria-hidden><Icon name={persona.icon} /></span>
         <span className="agent__who">
           <span className="agent__name">{persona.name}</span>
           <span className="agent__role">{persona.en}</span>
@@ -62,9 +65,12 @@ export function AgentPanel() {
           ? messages.map((m) => <MessageView key={m.id} msg={m} />)
           : (
             <>
-              <div className="agent__hi">{persona.tagline}</div>
-              <div className="agent__lead">{persona.greeting}</div>
-              {skillsOf(persona).map((sk) => (
+              {/* 自己建的 Agent 可能没写描述和开场话 —— 空着就别占一行 */}
+              {persona.tagline && <div className="agent__hi">{persona.tagline}</div>}
+              {persona.greeting && <div className="agent__lead">{persona.greeting}</div>}
+              {/* 按**配置**列，不按出厂的 owns：用户在设置里挪走或加上的活儿，
+                  这儿要跟着变，否则点了一个它其实已经不接的技能 */}
+              {skillsOfKinds(cfg?.skills ?? persona.owns).map((sk) => (
                 <button key={sk.kind} className="skill" onClick={() => send(sk.name, sk.kind)}>
                   <Icon name={sk.icon} />{sk.name}
                 </button>
@@ -178,7 +184,7 @@ function ToolCard({ msgId, t }: { msgId: number; t: ToolRun }) {
 function SpeakerTag({ p }: { p: Persona }) {
   return (
     <div className="aspeak">
-      <span className={`aface aface--${p.id}`} aria-hidden><Icon name={p.icon} /></span>
+      <span className={`aface ${faceClass(p.id)}`} aria-hidden><Icon name={p.icon} /></span>
       <span className="aspeak__n">{p.name}</span>
       <span className="aspeak__r">{p.tagline}</span>
     </div>
@@ -190,7 +196,7 @@ function HandoffCard({ to }: { to: Persona }) {
   return (
     <div className="ahand">
       <Icon name="right" />
-      <span className={`aface aface--${to.id}`} aria-hidden><Icon name={to.icon} /></span>
+      <span className={`aface ${faceClass(to.id)}`} aria-hidden><Icon name={to.icon} /></span>
       <span className="ahand__t">转交给 <strong>{to.name}</strong> · {to.tagline}</span>
     </div>
   );

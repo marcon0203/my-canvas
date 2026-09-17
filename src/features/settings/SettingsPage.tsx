@@ -6,7 +6,7 @@ import { AgentDetail, AgentList } from './AgentSettings';
 import { SkillDetail, SkillFileDetail, SkillList } from './SkillSettings';
 import { WorkspaceSettings } from './WorkspaceSettings';
 import { SETTINGS_SUB } from '@/domain/nav';
-import { personaById, type AgentId } from '@/domain/agent/roster';
+import { faceClass, personaById, type AgentId } from '@/domain/agent/roster';
 import { providerOf } from '@/domain/providers/catalog';
 import type { ProviderId } from '@/domain/providers/model';
 import { isSkillId, skillOf } from '@/domain/agent/skills';
@@ -53,7 +53,7 @@ export function SettingsPage({ section, detail, onOpen, onBack }: {
         <StageBar
           title={
             <span className="crumb">
-              <span className={`aface aface--${p.id}`} aria-hidden><Icon name={p.icon} /></span>
+              <span className={`aface ${faceClass(p.id)}`} aria-hidden><Icon name={p.icon} /></span>
               {p.name}
               <span className="crumb__en">{p.en}</span>
             </span>

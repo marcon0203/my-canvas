@@ -1,7 +1,8 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { TOOLS, type ToolId, type ToolStatus } from './tools';
-import { riskOfTool, type Risk } from './policy';
+import { autoAllowedTool, riskOfTool, type Risk, type ToolApproval } from './policy';
+import GATE from './__fixtures__/rust-gate.json';
 
 /**
  * 两侧注册表的一致性测试。
@@ -93,3 +94,50 @@ describe('工具注册表：前端与 Rust 两侧一致', () => {
 /** 类型层面的哑断言：ToolId 拼错时这里先报 */
 const _ids: ToolId[] = TOOLS.map((t) => t.id);
 void _ids;
+
+/* ---------------- 闸门判定 ---------------- */
+
+/**
+ * 「能不能不问就干」的判断，两边各写了一份。判得不一样的后果是
+ * **一边的把关是假的**：前端放行、Rust 挡住只是白跑一趟；反过来是真漏。
+ *
+ * 所以不手写用例，拿 Rust 写下来的判定表逐行对 —— 420 行覆盖
+ * 每个工具 × 每档上限 × 每种覆盖，还带一个没登记风险的假工具。
+ * 表过期时 Rust 那边的 `判定表文件与当前实现一致` 会先失败。
+ */
+describe('闸门判定：前端与 Rust 逐行一致', () => {
+  interface Row {
+    tool: string;
+    autoMax: Risk | null;
+    over: ToolApproval | null;
+    risk: Risk;
+    allowed: boolean;
+  }
+  const rows = GATE as Row[];
+
+  it('表不是空的 —— 空表会让下面每条都「通过」', () => {
+    expect(rows.length).toBeGreaterThan(300);
+  });
+
+  it('每一行的放行结论都相同', () => {
+    for (const r of rows) {
+      const got = autoAllowedTool(
+        r.tool as ToolId,
+        r.autoMax ?? undefined,
+        r.over ?? undefined,
+      );
+      expect(got, `${r.tool} · 上限 ${r.autoMax ?? '默认'} · 覆盖 ${r.over ?? '无'}`)
+        .toBe(r.allowed);
+    }
+  });
+
+  it('风险档也逐行对上 —— 包括没登记的那个兜底成出本机', () => {
+    for (const r of rows) {
+      expect(riskOfTool(r.tool as ToolId), r.tool).toBe(r.risk);
+    }
+    const ghost = rows.find((r) => r.tool === '某个还没登记的工具')!;
+    expect(ghost.risk).toBe('egress');
+    // 兜底那条要真的兜住：漏登记 + 手一抖设成「总是允许」，仍然拦得住
+    expect(rows.filter((r) => r.tool === ghost.tool).every((r) => !r.allowed)).toBe(true);
+  });
+});

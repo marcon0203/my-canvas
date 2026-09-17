@@ -1,11 +1,14 @@
 import { useMemo } from 'react';
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import type { AgentConfig } from '@/domain/agent/config';
+import type { AgentConfig, AgentConfigs } from '@/domain/agent/config';
 import { defaultConfig, defaultConfigs } from '@/domain/agent/config';
 import { missingTools, type ToolId } from '@/domain/agent/tools';
-import type { AgentId } from '@/domain/agent/roster';
-import { personaById } from '@/domain/agent/roster';
+import type { AgentId, Persona } from '@/domain/agent/roster';
+import {
+  BUILTIN_PERSONAS, copyOfPersona, makeCustomPersona, nextAgentId, personaById,
+  setCustomPersonas, type NewAgent,
+} from '@/domain/agent/roster';
 import type { Modality, ModelRef, ModelSpec, ProviderId } from '@/domain/providers/model';
 import { PROVIDERS, defaultModel, providerOf } from '@/domain/providers/catalog';
 import { maskHint, vault } from '@/api/desktop';
@@ -42,7 +45,14 @@ export interface SettingsState {
    * 其他设置一起持久化在前端，每次调用桌面端命令时传下去。
    */
   workspace: string;
-  agents: Record<AgentId, AgentConfig>;
+  agents: AgentConfigs;
+  /**
+   * 用户自己建的 Agent。内置五位不在这里 —— 它们是常量，删不掉也不用存。
+   *
+   * 存的是整份 Persona（名字、图标、提示词、出厂认领的活儿），不是一个引用：
+   * 这位 Agent 的「出厂默认」就是用户当时填的那份，「恢复默认」要能回到它。
+   */
+  customAgents: readonly Persona[];
 
   setBaseUrl: (id: ProviderId, url: string) => void;
   /** 桌面端写系统钥匙串；浏览器只记状态。两种情况都不在 store 里存明文 */
@@ -65,6 +75,14 @@ export interface SettingsState {
   setWorkspace: (path: string) => void;
   patchAgent: (id: AgentId, patch: Partial<AgentConfig>) => void;
   resetAgent: (id: AgentId) => void;
+  /** 新建一位。返回新的 id，界面拿它跳到详情 */
+  addAgent: (a: NewAgent) => AgentId;
+  /** 从某位复制一份（提示词、活儿、工具照搬）。返回新的 id */
+  copyAgent: (from: AgentId, name?: string) => AgentId;
+  /** 改自定义 Agent 的身份信息（名字、描述、图标）。内置的改不了 */
+  patchPersona: (id: AgentId, patch: Partial<Pick<Persona, 'name' | 'tagline' | 'icon'>>) => void;
+  /** 删一位自定义的。连它的配置一起删；它认领的活儿会变成没人接 */
+  removeAgent: (id: AgentId) => void;
 }
 
 // 与 Rust 侧 vault::hint_of 同一规则，见 api/desktop.ts
@@ -76,6 +94,7 @@ export const useSettings = create<SettingsState>()(
       providers: {},
       globalModels: {},
       workspace: '',
+      customAgents: [],
       agents: defaultConfigs(),
 
       setBaseUrl: (id, url) => set((s) => ({
@@ -161,6 +180,41 @@ export const useSettings = create<SettingsState>()(
       resetAgent: (id) => set((s) => ({
         agents: { ...s.agents, [id]: defaultConfig(personaById(id)) },
       })),
+
+      addAgent: (a) => {
+        const id = nextAgentId(useSettings.getState().customAgents.map((p) => p.id));
+        const p = makeCustomPersona(id, a);
+        set((s) => ({
+          customAgents: [...s.customAgents, p],
+          agents: { ...s.agents, [id]: defaultConfig(p) },
+        }));
+        return id;
+      },
+
+      copyAgent: (from, name) => {
+        const src = personaById(from);
+        const id = nextAgentId(useSettings.getState().customAgents.map((p) => p.id));
+        const p = copyOfPersona(src, id, name);
+        set((s) => ({
+          customAgents: [...s.customAgents, p],
+          // 工具与模型也照搬：复制一份出来通常是为了「差不多这样，但改两句提示词」，
+          // 让人把工具重勾一遍等于没复制
+          agents: { ...s.agents, [id]: { ...(s.agents[from] ?? defaultConfig(src)), agentId: id } },
+        }));
+        return id;
+      },
+
+      patchPersona: (id, patch) => set((s) => ({
+        customAgents: s.customAgents.map((p) => (p.id === id ? { ...p, ...patch } : p)),
+      })),
+
+      removeAgent: (id) => set((s) => {
+        // 内置五位删不掉：它们对应环节，删了那个环节就没人当班
+        if (BUILTIN_PERSONAS.some((p) => p.id === id)) return s;
+        const agents = { ...s.agents };
+        delete agents[id];
+        return { customAgents: s.customAgents.filter((p) => p.id !== id), agents };
+      }),
     }),
     {
       name: 'studio.settings',
@@ -179,6 +233,9 @@ export const useSettings = create<SettingsState>()(
        */
       merge: (persisted, current) => {
         const p = (persisted ?? {}) as Partial<SettingsState>;
+        // 先把存过的自定义 Agent 登记进班底，**再**算默认配置 ——
+        // defaultConfigs 是按班底铺的，顺序反了的话新建的那几位第一次打开没有配置
+        setCustomPersonas(p.customAgents ?? []);
         const agents = { ...defaultConfigs(), ...(p.agents ?? {}) };
         for (const [id, cfg] of Object.entries(agents) as [AgentId, AgentConfig][]) {
           const need = new Set<ToolId>(cfg.tools);
@@ -190,6 +247,24 @@ export const useSettings = create<SettingsState>()(
     },
   ),
 );
+
+/**
+ * 把自定义 Agent 推给 roster。
+ *
+ * 方向是单向的：**store → roster**。反过来让 roster 去 import store 会成环
+ * （store 本来就 import roster），而且会把一个纯数据模块变成要有运行时状态
+ * 才能用的东西 —— domain 层的测试就得先造一个 store。
+ *
+ * 只在那份数组换了身份时才重建索引：subscribe 每次 set 都会调，
+ * 而改一个端点不该顺带重建班底索引。
+ */
+let lastCustom = useSettings.getState().customAgents;
+setCustomPersonas(lastCustom);
+useSettings.subscribe((s) => {
+  if (s.customAgents === lastCustom) return;
+  lastCustom = s.customAgents;
+  setCustomPersonas(lastCustom);
+});
 
 /**
  * 未配置时返回**同一个**常量，不能每次新建对象 ——

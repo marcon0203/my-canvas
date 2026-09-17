@@ -1,4 +1,8 @@
-//! 生成 `src/store/__fixtures__/rust-patches.json`：每个写类工具算出的真补丁。
+//! 生成前端要拿来对答案的几份 fixture：
+//!
+//! - `src/store/__fixtures__/rust-patches.json` —— 每个写类工具算出的真补丁
+//! - `src/domain/prompt/__fixtures__/rust-prompts.json` —— 提示词合成结果
+//! - `src/domain/agent/__fixtures__/rust-gate.json` —— 闸门判定表
 //!
 //! 为什么要有这个：补丁的形状两侧各有一份定义（Rust 的 json! 与 TS 的
 //! `ProposalPatch`）。对不上的那天，界面会「采纳成功」但项目里什么都没变 ——
@@ -15,13 +19,14 @@
 //!
 //! 只读一个临时项目，不碰用户数据。
 
-use studio_core::{patch, prompt};
+use studio_core::{patch, prompt, tools};
 
 fn main() {
     let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
     for (rel, v) in [
         (patch::SAMPLES_PATH, patch::samples()),
         (prompt::SAMPLES_PATH, prompt::samples()),
+        (tools::GATE_TABLE_PATH, tools::gate_table()),
     ] {
         let path = dir.join(rel);
         std::fs::write(&path, studio_core::store::pretty_json(&v)).expect("写 fixture");

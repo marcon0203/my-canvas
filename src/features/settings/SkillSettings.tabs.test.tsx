@@ -4,7 +4,7 @@ import { act } from 'react';
 import { createRoot } from 'react-dom/client';
 import { SkillList } from './SkillSettings';
 import { SKILLS } from '@/domain/agent/skills';
-import { PERSONAS } from '@/domain/agent/roster';
+import { roster } from '@/domain/agent/roster';
 import { useSettings } from '@/store/settings';
 
 /**
@@ -63,7 +63,7 @@ describe('Skill 管理：已安装与功能清单分页', () => {
     // 造一个真的没人负责的场景：把所有智能体身上的 outline.draft 摘掉
     const before = useSettings.getState().agents;
     act(() => {
-      for (const p of PERSONAS) {
+      for (const p of roster()) {
         const cur = useSettings.getState().agents[p.id]!;
         useSettings.getState().patchAgent(p.id, {
           skills: cur.skills.filter((k) => k !== 'outline.draft'),
