@@ -9,9 +9,9 @@ import { baseUrlOf, providerSetting, useAddedProviders, useSettings } from '@/st
 import { Field, Fields } from './Field';
 import { useUi } from '@/store/ui';
 
-const MODALITIES: Modality[] = ['text', 'image', 'video'];
+const MODALITIES: Modality[] = ['text', 'image', 'video', 'audio'];
 
-const TONE: Record<Modality, 'a' | 'ok' | 'warn'> = { text: 'a', image: 'ok', video: 'warn' };
+const TONE: Record<Modality, 'a' | 'ok' | 'warn'> = { text: 'a', image: 'ok', video: 'warn', audio: 'a' };
 
 /**
  * 模型设置 · 供应商列表。

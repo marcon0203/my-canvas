@@ -53,6 +53,17 @@ describe('agent/config · 默认配置自洽', () => {
     expect(neededModalities(flipped)).toEqual(['text', 'image', 'video']);
   });
 
+  it('要什么模型从工具的 needs 推 —— 不在 config 里再写一份对应关系', () => {
+    const editor = defaultConfig(personaById('editor'));
+    // 原来这里只认 image.generate 与 video.generate：勾了改图/放大/配乐的
+    // Agent 检查时一路绿灯，真跑起来才发现没有对应模型
+    const withEdit = { ...editor, tools: [...editor.tools, 'image.edit' as const] };
+    expect(neededModalities(withEdit)).toContain('image');
+    const withMusic = { ...editor, tools: [...editor.tools, 'audio.music' as const] };
+    expect(neededModalities(withMusic)).toContain('audio');
+    expect(checkConfig(withMusic, { text: TEXT }, MODELS).some((i) => i.text.includes('音频'))).toBe(true);
+  });
+
   it('摄影指导要视频模型 —— 没配就报错，不静默跑不动', () => {
     const dp = defaultConfig(personaById('dp'));
     expect(neededModalities(dp)).toContain('video');

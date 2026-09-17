@@ -217,7 +217,7 @@ export function effectiveGlobals(s: SettingsState): Partial<Record<Modality, Mod
   const ready = readyProviders(s);
   const extra = extraModels(s);
   const out: Partial<Record<Modality, ModelRef>> = {};
-  for (const m of ['text', 'image', 'video'] as Modality[]) {
+  for (const m of ['text', 'image', 'video', 'audio'] as Modality[]) {
     out[m] = s.globalModels[m] ?? defaultModel(m, ready, extra);
   }
   return out;

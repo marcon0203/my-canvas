@@ -230,12 +230,39 @@ pub mod adapters {
         }
     }
 
-    pub fn of(provider: &str, modality: &str) -> Option<TaskApi> {
-        match (provider, modality) {
-            ("volcengine", "image") | ("volcengine", "video") => Some(volcengine_image()),
-            ("zhipu", "image") | ("zhipu", "video") => Some(zhipu_image()),
-            _ => None,
-        }
+    /// 同一家的其它操作：**只有提交路径不一样**，轮询与字段位置跟着基础那份走。
+    ///
+    /// 这么做不是偷懒：各家的改图/放大/续接都挂在同一套任务系统下，
+    /// 轮询接口是同一个。真要是哪家不是这样，改的也只是这里一行。
+    fn with_path(base: TaskApi, path: &str) -> TaskApi {
+        TaskApi { submit_path: s(path), ..base }
+    }
+
+    /// 工具 → 该家的接口。**按工具查而不是按模态**：改图和出图是同一个模态，
+    /// 但提交路径不同 —— 按模态查会把改图发到出图的接口上。
+    ///
+    /// 返回 None = 这家这个操作还没适配。调用方要如实说「这家还不支持」，
+    /// 不要退回成一个「差不多的」接口：那会把请求发到错的地方。
+    pub fn of(provider: &str, tool: &str) -> Option<TaskApi> {
+        let base = match provider {
+            "volcengine" => volcengine_image(),
+            "zhipu" => zhipu_image(),
+            _ => return None,
+        };
+        // ⚠️ 这些路径同样没对过真实文档，与上面那两份一起改
+        Some(match tool {
+            "image.generate" => base,
+            "image.edit" => with_path(base, "/images/edits"),
+            "image.upscale" => with_path(base, "/images/upscale"),
+            "video.generate" => with_path(base, "/videos/generations"),
+            "video.extend" => with_path(base, "/videos/extend"),
+            // 音乐与音效也是「提交 → 轮询 → 拿 URL」那一套，能共用这套协议。
+            // 配音（audio.tts）**不在这里** —— 它多数是同步返回音频字节，
+            // 不是异步任务，硬套这套协议只会拿到一个永远轮询不到的任务号。
+            "audio.music" => with_path(base, "/audio/music"),
+            "audio.sfx" => with_path(base, "/audio/sfx"),
+            _ => return None,
+        })
     }
 }
 
@@ -351,9 +378,35 @@ mod tests {
 
     #[test]
     fn 适配表认得出已登记的厂商() {
-        assert!(adapters::of("volcengine", "image").is_some());
-        assert!(adapters::of("zhipu", "video").is_some());
-        assert!(adapters::of("deepseek", "image").is_none(), "DeepSeek 没有图片模型");
+        assert!(adapters::of("volcengine", "image.generate").is_some());
+        assert!(adapters::of("zhipu", "video.generate").is_some());
+        assert!(adapters::of("deepseek", "image.generate").is_none(), "DeepSeek 没有图片模型");
+    }
+
+    #[test]
+    fn 按工具查而不是按模态_改图和出图不能发到同一个路径() {
+        // 按模态查的话，改图会被发到出图的接口上 —— 参数对不上，白花一次
+        let g = adapters::of("volcengine", "image.generate").unwrap();
+        let e = adapters::of("volcengine", "image.edit").unwrap();
+        assert_ne!(g.submit_path, e.submit_path);
+        // 轮询走同一套任务系统，所以字段位置应当一致
+        assert_eq!(g.poll_path, e.poll_path);
+        assert_eq!(g.id_at, e.id_at);
+    }
+
+    #[test]
+    fn 配音不走异步任务协议_适配表里就不该有它() {
+        // TTS 多数是同步返回音频字节。硬套这套协议只会拿到一个
+        // 永远轮询不到的任务号 —— 宁可如实说「这家还没适配」
+        assert!(adapters::of("volcengine", "audio.tts").is_none());
+        assert!(adapters::of("volcengine", "audio.music").is_some());
+        assert!(adapters::of("volcengine", "audio.sfx").is_some());
+    }
+
+    #[test]
+    fn 没适配的操作返回_none_而不是退回成一个差不多的接口() {
+        assert!(adapters::of("volcengine", "web.search").is_none());
+        assert!(adapters::of("volcengine", "").is_none());
     }
 }
 

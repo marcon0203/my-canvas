@@ -1,8 +1,9 @@
 import type { Modality, ModelRef, ModelSpec } from '@/domain/providers/model';
+import { MODALITY_LABEL } from '@/domain/providers/model';
 import { findModel } from '@/domain/providers/catalog';
 import type { AgentId, Persona } from './roster';
 import { PERSONAS, personaById } from './roster';
-import { EXTRA_TOOLS, canRun, defaultTools, missingTools, type ToolId } from './tools';
+import { EXTRA_TOOLS, TOOLS, canRun, defaultTools, missingTools, type ToolId } from './tools';
 import type { IntentKind } from './types';
 import type { Risk } from './policy';
 
@@ -76,7 +77,7 @@ export const defaultConfigs = (): Record<AgentId, AgentConfig> =>
   Object.fromEntries(PERSONAS.map((p) => [p.id, defaultConfig(p)])) as Record<AgentId, AgentConfig>;
 
 /** 模态的规范顺序。界面各处都按它排，免得同一个 Agent 换个页面顺序就变 */
-export const MODALITY_ORDER: readonly Modality[] = ['text', 'image', 'video'];
+export const MODALITY_ORDER: readonly Modality[] = ['text', 'image', 'video', 'audio'];
 
 /**
  * 这个 Agent 实际会用到哪些模态 —— 界面只让它配这几个，别给剪辑配文生图。
@@ -85,9 +86,12 @@ export const MODALITY_ORDER: readonly Modality[] = ['text', 'image', 'video'];
  */
 export function neededModalities(cfg: AgentConfig): Modality[] {
   const out = new Set<Modality>(['text']);   // 对话本身就要文本模型
+  // 从工具清单的 needs 推，**不要在这儿再写一份「哪个工具要什么模型」** ——
+  // 原来这里只认 image.generate 与 video.generate 两个，于是勾了改图、放大、
+  // 配乐的 Agent 检查时一路绿灯，真跑起来才发现没有对应模型
   for (const t of cfg.tools) {
-    if (t === 'image.generate') out.add('image');
-    if (t === 'video.generate') out.add('video');
+    const needs = TOOLS.find((x) => x.id === t)?.needs;
+    if (needs) out.add(needs);
   }
   return MODALITY_ORDER.filter((m) => out.has(m));
 }
@@ -134,7 +138,7 @@ export function checkConfig(
   for (const m of neededModalities(cfg)) {
     const ref = modelFor(cfg, m, globals);
     if (!ref) {
-      out.push({ level: 'error', text: `需要${m === 'text' ? '文本' : m === 'image' ? '图片' : '视频'}模型，但没配也没有全局默认` });
+      out.push({ level: 'error', text: `需要${MODALITY_LABEL[m]}模型，但没配也没有全局默认` });
       continue;
     }
     const spec = findModel(ref, extraModels);

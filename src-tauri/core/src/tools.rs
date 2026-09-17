@@ -131,6 +131,11 @@ pub fn all() -> Vec<ToolSpec> {
     // 原来这儿写的是「写类工具与前端 store 的同步」—— 那个问题已经由
     // Outcome::Patch 解决了（只有一个写入者）。剩下这两个卡的是别的东西：
     // 项目里根本还没有「时间线」和「字幕」这两份数据，剪辑页那三条轨是写死的占位。
+    // 配音卡的不是「还没写」，是协议对不上：TTS 多数同步返回音频字节，
+    // 不是「提交 → 轮询 → 拿 URL」。硬套那套协议只会拿到一个永远轮询不到的
+    // 任务号。要先把「同步拿字节 + 存进项目目录」那条机制做出来。
+    const TTS: &str = "配音不走异步任务协议 —— 多数厂商是同步返回音频字节。\
+                       要先做「同步取字节 + 落进项目目录」那条机制，再接具体厂商";
     const NO_TL: &str = "项目里还没有时间线/字幕的数据模型 —— 剪辑页的轨道现在是写死的占位，\
                          得先把这两份数据落进项目（store + 落盘 + 界面），工具才有东西可写";
     const ADAPTER: &str = "协议已实现并测过，但厂商字段映射（task_id 在哪个字段等）没对过真实文档 —— 接第一家时拿真 key 调一次，照报错改 generate::adapters 里那一两行";
@@ -225,16 +230,16 @@ pub fn all() -> Vec<ToolSpec> {
               &["prompt"])),
 
         t("image.edit", "改图", Generate,
-          "局部重绘或扩图。改一处不重出整张，比重跑一次省。",
-          Spend, Rust, Declared, Some(ADAPTER),
+          "局部重绘或扩图。改一处不重出整张，比重跑一次省。要说清改成什么样 —— 空指令只会重出一张随机图。",
+          Spend, Rust, Unverified, Some(ADAPTER),
           obj(json!({ "assetId": { "type": "string" }, "viewName": { "type": "string" },
               "instruction": { "type": "string", "description": "要改成什么样" },
               "mask": { "type": "string", "description": "可选，要改的区域" } }),
               &["assetId", "instruction"])),
 
         t("image.upscale", "放大", Generate,
-          "把选中的候选图放大到成片分辨率。定稿之后再放大，不要每版都放。",
-          Spend, Rust, Declared, Some(ADAPTER),
+          "把选中的候选图放大到成片分辨率。定稿之后再放大，不要每版都放。倍数只能是 2 或 4。",
+          Spend, Rust, Unverified, Some(ADAPTER),
           obj(json!({ "assetId": { "type": "string" }, "scale": { "type": "integer", "enum": [2, 4] } }),
               &["assetId"])),
 
@@ -245,26 +250,26 @@ pub fn all() -> Vec<ToolSpec> {
               "firstFrame": { "type": "string", "description": "首帧图，可选" } }), &["shotId"])),
 
         t("video.extend", "续接片段", Generate,
-          "把已有片段往后续几秒，尾帧接着长。比重出一条省。",
-          Spend, Rust, Declared, Some(ADAPTER),
+          "把已有片段往后续几秒，尾帧接着长。比重出一条省。一次最多 10 秒 —— 要更长就分几次接，每次都能先看一眼。",
+          Spend, Rust, Unverified, Some(ADAPTER),
           obj(json!({ "shotId": { "type": "string" }, "seconds": { "type": "number" } }),
               &["shotId", "seconds"])),
 
         t("audio.tts", "配音", Generate,
           "把台词读成语音。音色在资产里按角色配。",
-          Spend, Rust, Declared, Some("音频接口与图片视频不同家，适配器还没写"),
+          Spend, Rust, Declared, Some(TTS),
           obj(json!({ "text": { "type": "string" }, "voice": { "type": "string" },
               "speed": { "type": "number" } }), &["text"])),
 
         t("audio.music", "配乐", Generate,
           "按情绪与时长生成背景音乐。",
-          Spend, Rust, Declared, Some("音频接口与图片视频不同家，适配器还没写"),
+          Spend, Rust, Unverified, Some(ADAPTER),
           obj(json!({ "mood": { "type": "string" }, "seconds": { "type": "number" } }),
               &["mood", "seconds"])),
 
         t("audio.sfx", "音效", Generate,
           "生成单个音效，比如雨声、脚步、关门。",
-          Spend, Rust, Declared, Some("音频接口与图片视频不同家，适配器还没写"),
+          Spend, Rust, Unverified, Some(ADAPTER),
           obj(json!({ "desc": { "type": "string" }, "seconds": { "type": "number" } }), &["desc"])),
 
         /* ---------------- 镜头 ---------------- */
@@ -312,6 +317,14 @@ pub fn all() -> Vec<ToolSpec> {
           obj(json!({ "url": { "type": "string" } }), &["url"])),
     ]
 }
+
+/// 走异步任务协议的那几个。**配音不在里面** —— 它多数是同步返回音频字节，
+/// 见 `generate::adapters::of` 上的说明。
+pub const GENERATE_TOOLS: &[&str] = &[
+    "image.generate", "image.edit", "image.upscale",
+    "video.generate", "video.extend",
+    "audio.music", "audio.sfx",
+];
 
 pub fn spec(id: &str) -> Option<ToolSpec> {
     all().into_iter().find(|t| t.id == id)
@@ -411,13 +424,20 @@ pub async fn dispatch(
         return Ok(Outcome::Elsewhere { tool: t.id.into(), runs_in: t.runs_in });
     }
 
-    // 出图/出视频：有 GenCtx 才跑得起来。没有就说清缺什么，不要假装跑了
-    if t.id == "image.generate" || t.id == "video.generate" {
+    // 生成类：有 GenCtx 才跑得起来。没有就说清缺什么，不要假装跑了
+    if GENERATE_TOOLS.contains(&t.id) {
         let Some(g) = ctx.task else {
             return Ok(Outcome::NeedsSetup {
                 tool: t.id.into(),
-                missing: format!("{}要一个{}模型和它的密钥 —— 去「模型设置」接入一家、加上模型，再在这位 Agent 的配置里选上",
-                    t.name, if t.id == "image.generate" { "图片" } else { "视频" }),
+                missing: format!(
+                    "{}要一个{}模型和它的密钥，还要这家的接口适配 —— 去「模型设置」接入一家、加上模型，再在这位 Agent 的配置里选上",
+                    t.name,
+                    match t.id.split('.').next().unwrap_or("") {
+                        "image" => "图片",
+                        "video" => "视频",
+                        _ => "音频",
+                    }
+                ),
             });
         };
         let urls = run_generate(t.id, &g, &args).await?;
@@ -489,31 +509,7 @@ fn read_project(root: &Path, id: &str, args: &Value) -> Result<Value> {
 /// body 的形状按各家来，与 `generate::adapters` 里的字段路径成对 ——
 /// 那张表还没对过真实文档，接第一家时一起改。
 async fn run_generate(tool: &str, ctx: &GenCtx<'_>, args: &Value) -> Result<Vec<String>> {
-    let mut body = json!({ "model": ctx.model.model });
-    let o = body.as_object_mut().unwrap();
-    if tool == "image.generate" {
-        let prompt = args.get("prompt").and_then(Value::as_str).unwrap_or("").trim();
-        if prompt.is_empty() {
-            return Err(Error::Generate("提示词是空的 —— 不拿空提示词去花钱".into()));
-        }
-        o.insert("prompt".into(), json!(prompt));
-        if let Some(r) = args.get("ratio") {
-            o.insert("size".into(), r.clone());
-        }
-        // batch 封顶 4：这是花钱的东西，别让一个笔误变成四十张图
-        let n = args.get("batch").and_then(Value::as_u64).unwrap_or(1).clamp(1, 4);
-        o.insert("n".into(), json!(n));
-    } else {
-        let shot = args.get("shotId").and_then(Value::as_str).unwrap_or("").trim();
-        if shot.is_empty() {
-            return Err(Error::Generate("没说给哪一镜出视频".into()));
-        }
-        o.insert("shot_id".into(), json!(shot));
-        if let Some(d) = args.get("dur") {
-            o.insert("duration".into(), d.clone());
-        }
-    }
-
+    let body = gen_body(tool, &ctx.model.model, args)?;
     generate::run(
         Job {
             api: &ctx.api,
@@ -525,6 +521,120 @@ async fn run_generate(tool: &str, ctx: &GenCtx<'_>, args: &Value) -> Result<Vec<
         || false,
     )
     .await
+}
+
+/// 每个生成类工具的请求体。**纯函数**，所以每条参数校验都能单测 ——
+/// 这些校验拦的是「白花一次钱」，最该被测到。
+///
+/// 字段名按各家的 OpenAI 风格拼（prompt / n / size…），与 `generate::adapters`
+/// 那张表成对 —— 那张表没对过真实文档，接第一家时一起改。
+fn gen_body(tool: &str, model: &str, args: &Value) -> Result<Value> {
+    let text = |k: &str| args.get(k).and_then(Value::as_str).unwrap_or("").trim().to_string();
+    let mut body = json!({ "model": model });
+    let o = body.as_object_mut().unwrap();
+
+    match tool {
+        "image.generate" => {
+            let prompt = text("prompt");
+            if prompt.is_empty() {
+                return Err(Error::Generate("提示词是空的 —— 不拿空提示词去花钱".into()));
+            }
+            o.insert("prompt".into(), json!(prompt));
+            if let Some(r) = args.get("ratio") {
+                o.insert("size".into(), r.clone());
+            }
+            // batch 封顶 4：这是花钱的东西，别让一个笔误变成四十张图
+            let n = args.get("batch").and_then(Value::as_u64).unwrap_or(1).clamp(1, 4);
+            o.insert("n".into(), json!(n));
+        }
+
+        "image.edit" => {
+            // 改哪张、改成什么样 —— 两样缺一样，这次调用就是在烧钱换一张随机图
+            let asset = text("assetId");
+            let instruction = text("instruction");
+            if asset.is_empty() {
+                return Err(Error::Generate("没说改哪个资产的图".into()));
+            }
+            if instruction.is_empty() {
+                return Err(Error::Generate("没说要改成什么样 —— 空指令只会重出一张随机图".into()));
+            }
+            o.insert("asset_id".into(), json!(asset));
+            o.insert("prompt".into(), json!(instruction));
+            let view = text("viewName");
+            if !view.is_empty() {
+                o.insert("view".into(), json!(view));
+            }
+            if let Some(m) = args.get("mask").filter(|x| !x.is_null()) {
+                o.insert("mask".into(), m.clone());
+            }
+            o.insert("n".into(), json!(1));
+        }
+
+        "image.upscale" => {
+            let asset = text("assetId");
+            if asset.is_empty() {
+                return Err(Error::Generate("没说放大哪个资产的图".into()));
+            }
+            // 只有 2 和 4 —— 别的倍数各家都不收，发过去是白跑一次
+            let scale = args.get("scale").and_then(Value::as_u64).unwrap_or(2);
+            if scale != 2 && scale != 4 {
+                return Err(Error::Generate(format!("放大倍数只能是 2 或 4，给的是 {scale}")));
+            }
+            o.insert("asset_id".into(), json!(asset));
+            o.insert("scale".into(), json!(scale));
+        }
+
+        "video.generate" => {
+            let shot = text("shotId");
+            if shot.is_empty() {
+                return Err(Error::Generate("没说给哪一镜出视频".into()));
+            }
+            o.insert("shot_id".into(), json!(shot));
+            if let Some(d) = args.get("dur") {
+                o.insert("duration".into(), d.clone());
+            }
+            let first = text("firstFrame");
+            if !first.is_empty() {
+                o.insert("first_frame".into(), json!(first));
+            }
+        }
+
+        "video.extend" => {
+            let shot = text("shotId");
+            if shot.is_empty() {
+                return Err(Error::Generate("没说续接哪一镜".into()));
+            }
+            // 续接是按秒计费的东西。上限 10 秒是刻意的：要更长就分几次接，
+            // 每次都能看一眼 —— 一次续 60 秒，不满意就是 60 秒的钱
+            let sec = args.get("seconds").and_then(Value::as_f64).unwrap_or(0.0);
+            if !(0.5..=10.0).contains(&sec) {
+                return Err(Error::Generate(format!(
+                    "续接时长要在 0.5–10 秒之间，给的是 {sec} —— 要更长就分几次接，每次都能先看一眼"
+                )));
+            }
+            o.insert("shot_id".into(), json!(shot));
+            o.insert("seconds".into(), json!(sec));
+        }
+
+        "audio.music" | "audio.sfx" => {
+            let key = if tool == "audio.music" { "mood" } else { "desc" };
+            let what = text(key);
+            if what.is_empty() {
+                return Err(Error::Generate(
+                    if tool == "audio.music" { "没说要什么情绪的音乐" } else { "没说要什么音效" }.into(),
+                ));
+            }
+            let sec = args.get("seconds").and_then(Value::as_f64).unwrap_or(0.0);
+            if !(0.5..=300.0).contains(&sec) {
+                return Err(Error::Generate(format!("时长要在 0.5–300 秒之间，给的是 {sec}")));
+            }
+            o.insert("prompt".into(), json!(what));
+            o.insert("seconds".into(), json!(sec));
+        }
+
+        other => return Err(Error::Generate(format!("{other} 不是生成类工具"))),
+    }
+    Ok(body)
 }
 
 /// 在项目里找关键词。返回**命中在哪儿**而不是整段内容 —— 让模型自己决定要不要细读
@@ -939,6 +1049,71 @@ mod tests {
             json!({ "acts": [{ "id": "", "t": "x", "span": "", "beats": [] }] }),
             Some(Risk::Read), By::Agent, Ctx::default()).await.unwrap();
         assert!(matches!(o, Outcome::NeedsApproval { .. }));
+    }
+
+    /* ---- 生成类请求体：这些校验拦的是「白花一次钱」 ---- */
+
+    #[test]
+    fn 改图必须说清改成什么样() {
+        assert!(gen_body("image.edit", "m", &json!({ "assetId": "c1" })).is_err());
+        let e = gen_body("image.edit", "m", &json!({ "assetId": "c1", "instruction": " " })).unwrap_err();
+        assert!(e.to_string().contains("随机图"), "{e}");
+        let b = gen_body("image.edit", "m", &json!({
+            "assetId": "c1", "viewName": "正面", "instruction": "把外套换成红色"
+        })).unwrap();
+        assert_eq!(b["asset_id"], "c1");
+        assert_eq!(b["prompt"], "把外套换成红色");
+        assert_eq!(b["view"], "正面");
+        assert_eq!(b["n"], 1, "改图一次就一张，不该批量");
+    }
+
+    #[test]
+    fn 放大倍数只收_2_和_4() {
+        for bad in [1, 3, 8] {
+            let e = gen_body("image.upscale", "m", &json!({ "assetId": "c1", "scale": bad })).unwrap_err();
+            assert!(e.to_string().contains("2 或 4"), "{e}");
+        }
+        assert_eq!(gen_body("image.upscale", "m", &json!({ "assetId": "c1", "scale": 4 })).unwrap()["scale"], 4);
+        // 不给就按 2 —— 放大这件事有个安全的默认值
+        assert_eq!(gen_body("image.upscale", "m", &json!({ "assetId": "c1" })).unwrap()["scale"], 2);
+    }
+
+    #[test]
+    fn 续接时长封顶_10_秒_要更长就分几次接() {
+        for bad in [0.0, 0.2, 11.0, 60.0] {
+            let e = gen_body("video.extend", "m", &json!({ "shotId": "s1-1", "seconds": bad })).unwrap_err();
+            assert!(e.to_string().contains("0.5–10"), "{bad}: {e}");
+        }
+        let b = gen_body("video.extend", "m", &json!({ "shotId": "s1-1", "seconds": 3 })).unwrap();
+        assert_eq!(b["seconds"], 3.0);
+    }
+
+    #[test]
+    fn 音乐音效要说清要什么_还要给时长() {
+        assert!(gen_body("audio.music", "m", &json!({ "seconds": 30 })).is_err());
+        assert!(gen_body("audio.music", "m", &json!({ "mood": "温暖" })).is_err(), "没给时长");
+        let b = gen_body("audio.music", "m", &json!({ "mood": "温暖", "seconds": 30 })).unwrap();
+        assert_eq!(b["prompt"], "温暖");
+        let b = gen_body("audio.sfx", "m", &json!({ "desc": "雨声", "seconds": 4 })).unwrap();
+        assert_eq!(b["prompt"], "雨声");
+    }
+
+    #[test]
+    fn 配音不在异步任务那组里() {
+        assert!(!GENERATE_TOOLS.contains(&"audio.tts"));
+        assert!(gen_body("audio.tts", "m", &json!({ "text": "你好" })).is_err());
+    }
+
+    #[test]
+    fn 异步任务那组里的每个都拼得出请求体() {
+        for t in GENERATE_TOOLS {
+            // 给一份「什么都有」的参数，每个工具挑自己要的
+            let args = json!({
+                "prompt": "a cat", "assetId": "c1", "instruction": "换颜色", "scale": 2,
+                "shotId": "s1-1", "seconds": 3, "mood": "温暖", "desc": "雨声", "dur": 2,
+            });
+            gen_body(t, "m", &args).unwrap_or_else(|e| panic!("{t}: {e}"));
+        }
     }
 
     #[test]

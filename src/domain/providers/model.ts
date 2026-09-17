@@ -3,10 +3,10 @@
  */
 
 /** 模态：一个模型只干一件事，别指望一个 id 同时出文本和视频 */
-export type Modality = 'text' | 'image' | 'video';
+export type Modality = 'text' | 'image' | 'video' | 'audio';
 
 export const MODALITY_LABEL: Record<Modality, string> = {
-  text: '文本', image: '图片', video: '视频',
+  text: '文本', image: '图片', video: '视频', audio: '音频',
 };
 
 /** 协议族：决定 Rust 侧用哪个适配器 */
@@ -27,6 +27,8 @@ export interface ModelCaps {
   readonly tools?: boolean;
   /** 读图 */
   readonly vision?: boolean;
+  /** 能吃参考音（音色样本、旋律） */
+  readonly refAudio?: boolean;
   /** 显式推理过程 */
   readonly reasoning?: boolean;
   /** 出图/出视频时能吃参考图 */
@@ -90,11 +92,15 @@ export const CAPS_OF: Record<Modality, readonly { k: keyof ModelCaps; n: string;
   ],
   image: [{ k: 'refImage', n: '参考图', hint: '能吃参考图保持角色一致' }],
   video: [{ k: 'refImage', n: '参考图', hint: '能吃首帧或参考图' }],
+  // 配音/配乐/音效。参考音（音色克隆、旋律续写）是这一类里唯一会影响协议的能力
+  audio: [{ k: 'refAudio', n: '参考音', hint: '能吃音色样本或一段旋律' }],
 };
 
 /** 换类型时的出厂勾选 */
 export const defaultCaps = (m: Modality): Record<string, boolean> =>
-  m === 'text' ? { stream: true, tools: true } : { refImage: true };
+  m === 'text' ? { stream: true, tools: true }
+    : m === 'audio' ? {}
+      : { refImage: true };
 
 /**
  * 表单 → ModelSpec。**类型决定协议族**：文本走 OpenAI 兼容的 /chat/completions，

@@ -92,13 +92,13 @@ export const TOOLS: readonly ToolSpec[] = [
 
   /* 生成 */
   { id: 'image.generate', group: 'generate', name: '出图', desc: '生成形状照与关键帧', needs: 'image', writes: true, status: 'unverified', blockedBy: '协议已实现并测过，厂商字段映射还没对过真实文档 —— 接第一家时拿真 key 调一次就知道要不要改' },
-  { id: 'image.edit', group: 'generate', name: '改图', desc: '局部重绘或扩图，比重出整张省', needs: 'image', writes: true, status: 'declared', blockedBy: '音频接口与图片视频不同家，适配器还没写' },
-  { id: 'image.upscale', group: 'generate', name: '放大', desc: '定稿后放大到成片分辨率', needs: 'image', writes: true, status: 'declared', blockedBy: '音频接口与图片视频不同家，适配器还没写' },
+  { id: 'image.edit', group: 'generate', name: '改图', desc: '局部重绘或扩图，比重出整张省；要说清改成什么样', needs: 'image', writes: true, status: 'unverified', blockedBy: '协议已实现并测过，厂商字段映射还没对过真实文档 —— 接第一家时拿真 key 调一次就知道要不要改' },
+  { id: 'image.upscale', group: 'generate', name: '放大', desc: '定稿后放大到成片分辨率；倍数只能 2 或 4', needs: 'image', writes: true, status: 'unverified', blockedBy: '协议已实现并测过，厂商字段映射还没对过真实文档 —— 接第一家时拿真 key 调一次就知道要不要改' },
   { id: 'video.generate', group: 'generate', name: '出视频', desc: '关键帧 → 片段', needs: 'video', writes: true, status: 'unverified', blockedBy: '同出图，共用一套异步任务协议' },
-  { id: 'video.extend', group: 'generate', name: '续接片段', desc: '把已有片段往后续几秒', needs: 'video', writes: true, status: 'declared', blockedBy: '音频接口与图片视频不同家，适配器还没写' },
-  { id: 'audio.tts', group: 'generate', name: '配音', desc: '台词 → 语音，音色按角色配', writes: true, status: 'declared', blockedBy: '音频接口与图片视频不同家，适配器还没写' },
-  { id: 'audio.music', group: 'generate', name: '配乐', desc: '按情绪与时长生成背景音乐', writes: true, status: 'declared', blockedBy: '音频接口与图片视频不同家，适配器还没写' },
-  { id: 'audio.sfx', group: 'generate', name: '音效', desc: '雨声、脚步、关门这类单个音效', writes: true, status: 'declared', blockedBy: '音频接口与图片视频不同家，适配器还没写' },
+  { id: 'video.extend', group: 'generate', name: '续接片段', desc: '把已有片段往后续几秒；一次最多 10 秒，分几次接每次都能先看一眼', needs: 'video', writes: true, status: 'unverified', blockedBy: '协议已实现并测过，厂商字段映射还没对过真实文档 —— 接第一家时拿真 key 调一次就知道要不要改' },
+  { id: 'audio.tts', group: 'generate', name: '配音', desc: '台词 → 语音，音色按角色配', needs: 'audio', writes: true, status: 'declared', blockedBy: '配音不走异步任务协议 —— 多数厂商是同步返回音频字节。要先做「同步取字节 + 落进项目目录」那条机制，再接具体厂商' },
+  { id: 'audio.music', group: 'generate', name: '配乐', desc: '按情绪与时长生成背景音乐', needs: 'audio', writes: true, status: 'unverified', blockedBy: '协议已实现并测过，厂商字段映射还没对过真实文档 —— 接第一家时拿真 key 调一次就知道要不要改' },
+  { id: 'audio.sfx', group: 'generate', name: '音效', desc: '雨声、脚步、关门这类单个音效', needs: 'audio', writes: true, status: 'unverified', blockedBy: '协议已实现并测过，厂商字段映射还没对过真实文档 —— 接第一家时拿真 key 调一次就知道要不要改' },
 
   /* 镜头 */
   { id: 'stage.render', group: 'camera', name: '渲参考图', desc: '布光台白模离屏渲染，本地不花钱', status: 'ready' },

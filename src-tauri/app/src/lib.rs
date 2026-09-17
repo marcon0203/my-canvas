@@ -143,7 +143,7 @@ async fn tool_call(
             if let (Ok(base), Ok(key)) = (base, studio_core::vault_key(&m.provider)) {
                 if modality == "text" {
                     chat_owned = Some((m.clone(), base, key));
-                } else if let Some(api) = studio_core::generate::adapters::of(&m.provider, modality) {
+                } else if let Some(api) = studio_core::generate::adapters::of(&m.provider, &tool) {
                     owned = Some((m.clone(), base, key, api));
                 }
             }
