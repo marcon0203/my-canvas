@@ -989,6 +989,17 @@ body { background: var(--color-bg-canvas); overflow: hidden; }
 .ahand__t { font-size: 12px; color: var(--color-text-secondary); overflow-wrap: anywhere; }
 .ahand__t strong { color: var(--color-text-primary); }
 
+/* ---- 单镜失败条：摆在镜号下面，带原因和重试 ----
+   不做成 toast：toast 会飘走，而失败是要人回头处理的东西 */
+.shotfail {
+  display: flex; align-items: center; gap: var(--space-2);
+  margin-bottom: var(--space-4); padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--color-warning); border-radius: var(--radius-card);
+  background: var(--color-warning-bg);
+}
+.shotfail > svg { width: 13px; height: 13px; color: var(--color-warning); flex: 0 0 auto; }
+.shotfail__t { font-size: 12px; line-height: 1.6; overflow-wrap: anywhere; }
+
 /* ---- 工具卡：一次工具调用的状态 ----
    跑出补丁的那种不画卡（结果由产物卡承担），这里只画「还没跑成」的三种：
    要点头、缺配置、跑不起来。 */

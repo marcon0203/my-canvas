@@ -66,6 +66,8 @@ export interface ProjectState {
   toggleShotRef: (shotId: string, aid: string) => void;
   setShotRefImg: (shotId: string, ref: string) => void;
   commitRun: (shotId: string) => void;
+  /** 这一镜没跑出来。连续失败计数 +1，原因原话留着给人看 */
+  failRun: (shotId: string, why: string) => void;
   setVerdict: (shotId: string, v: Verdict, extraTakes?: number) => void;
   genKey: (shotId: string) => void;
   genAllKeys: () => void;
@@ -211,6 +213,14 @@ export const useProject = create<ProjectState>()(
         const shot = s.shots.find((x) => x.id === shotId)!;
         shot.takes += 2;
         shot.key = true;
+        delete shot.fail;          // 跑成了就清掉，否则那个红字会一直挂着
+      }),
+      failRun: (shotId, why) => set((s) => {
+        const shot = s.shots.find((x) => x.id === shotId);
+        if (!shot) return;
+        // 失败不加 takes：takes 是记账口径（真出了几版图），没出图就不该计入
+        shot.fail = { n: (shot.fail?.n ?? 0) + 1, why };
+        if (shot.vid === 'run') shot.vid = 'none';
       }),
       setVerdict: (shotId, v, extraTakes = 0) => set((s) => {
         const shot = s.shots.find((x) => x.id === shotId)!;

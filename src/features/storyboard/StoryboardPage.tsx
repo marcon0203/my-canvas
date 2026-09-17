@@ -40,11 +40,35 @@ export function StoryboardPage() {
 
   const run = (s: Shot) => {
     const st = useProject.getState();
+
+    // 引用了没定稿的资产就不发请求。
+    //
+    // 这条规则产品里早就有（列表上那个黄点就是它），但只是提示，运行照跑 ——
+    // 跑出来的画面里角色长什么样是随机的，钱花了还得重摇。美术那位的提示词里
+    // 写着「定稿之后才能被分镜引用，这条规矩任何情况下都不绕过」，这里让它真生效。
+    const unlocked = unlockedRefs(s, (aid) => assets.find((a) => a.aid === aid));
+    if (unlocked.length) {
+      const names = unlocked.map((aid) => assets.find((a) => a.aid === aid)?.name ?? aid);
+      st.failRun(s.id, `引用的资产还没定稿：${names.join('、')}。去资产页定稿，或把这个引用去掉。`);
+      toast(`「${s.id}」没发出去：${names.join('、')} 还没定稿`);
+      return;
+    }
+
     const segs = compileShot(s, { globalStylePrompt: stylePrompt, assetDescOf: (aid) => assets.find((a) => a.aid === aid)?.desc });
-    const task = submitGen({
-      model: s.model, prompt: segmentsText(segs), ratio: (s.ratio ?? '9:16') as GenTask['params']['ratio'],
-      batch: s.batch, refs: s.refs,
-    });
+    const task = submitGen(
+      {
+        model: s.model, prompt: segmentsText(segs), ratio: (s.ratio ?? '9:16') as GenTask['params']['ratio'],
+        batch: s.batch, refs: s.refs,
+      },
+      undefined,
+      (t) => {
+        // 提交就被拒：没扣分，也别让它挂在「生成中」
+        markRunning(s.id, false);
+        useProject.getState().failRun(s.id, t.error ?? '没说原因');
+        toast(`「${s.id}」没跑起来：${t.error ?? ''}`);
+      },
+    );
+    if (task.status === 'failed') return;
     markRunning(s.id, true);
     st.spend(3);
     toast(`「${s.id}」生成任务已提交 · ${s.model}`);
@@ -54,6 +78,11 @@ export function StoryboardPage() {
         st.commitRun(s.id);
         markRunning(s.id, false);
         toast(`「${s.id}」完成 · 出 ${task.params.batch} 版候选`);
+      } else if (task.status === 'failed') {
+        clearInterval(poll);
+        markRunning(s.id, false);
+        useProject.getState().failRun(s.id, task.error ?? '没说原因');
+        toast(`「${s.id}」生成失败：${task.error ?? ''}`);
       } else if (task.status === 'cancelled') {
         clearInterval(poll);
         markRunning(s.id, false);
@@ -103,8 +132,10 @@ export function StoryboardPage() {
                   {list.map((s) => {
                     const warn = unlockedRefs(s, byAid).length > 0 || driftedRefs(s, byAid).length > 0;
                     const running = runningIds.has(s.id);
+                    // 失败排在最前：它是唯一需要人立刻做点什么的状态
                     const st = running
                       ? { text: '生成中', color: 'var(--color-accent)' }
+                      : s.fail ? { text: s.fail.n > 1 ? `失败 ×${s.fail.n}` : '失败', color: 'var(--color-warning)' }
                       : s.verdict === 'ok' ? { text: '可用', color: 'var(--color-success)' }
                       : s.verdict === 'redo' ? { text: '重摇', color: 'var(--color-warning)' }
                       : s.vid === 'run' ? { text: '生成中', color: 'var(--color-accent)' }
@@ -112,7 +143,7 @@ export function StoryboardPage() {
                     return (
                       <TreeItem key={s.id} asset selected={s.id === cur?.id}
                         onClick={() => selectShot(s.id)}
-                        title={s.desc}
+                        title={s.fail ? `${s.desc}\n失败：${s.fail.why}` : s.desc}
                         thumb={s.key
                           ? <img className="ph" src={imgUrlFor(s.id + (s.refImg ? '|' + s.refImg : ''), 'tall')} alt="" />
                           : <Icon name="image" />}
@@ -171,15 +202,28 @@ function ShotInspector({ shot, running, onRun }: { shot: Shot; running: boolean;
         <Chip>{shot.dur}s</Chip>
         {running
           ? <Chip tone="a"><Icon name="refresh" className="spin" />生成中</Chip>
+          : shot.fail ? <Chip tone="warn">{shot.fail.n > 1 ? `失败 ×${shot.fail.n}` : '失败'}</Chip>
           : shot.verdict === 'ok' ? <Chip tone="ok">可用</Chip>
           : shot.verdict === 'redo' ? <Chip tone="warn">重摇</Chip>
           : <Chip>未判定</Chip>}
         <div className="spacer" />
         <span className="t-cap dim">{shot.takes ? `摇了 ${shot.takes} 次` : '未跑'} · {shot.model}</span>
       </div>
-      <div className="t-cap dim" style={{ marginBottom: 20 }}>
+      <div className="t-cap dim" style={{ marginBottom: shot.fail ? 12 : 20 }}>
         {shot.sceneKey}{beat ? ' · ' + beat.t : ''} — 第 {grp.findIndex((s) => s.id === shot.id) + 1} / {grp.length} 镜
       </div>
+
+      {shot.fail && (
+        <div className="shotfail">
+          <Icon name="x" />
+          <span className="shotfail__t">
+            {shot.fail.why}
+            {shot.fail.n > 1 && <span className="t-cap dim"> · 连续第 {shot.fail.n} 次</span>}
+          </span>
+          <div className="spacer" />
+          <Button onClick={onRun} disabled={running}><Icon name="refresh" />重试</Button>
+        </div>
+      )}
 
       <div style={{ display: 'flex', gap: 28, alignItems: 'flex-start' }}>
         <div style={{ flex: '0 0 248px' }}>

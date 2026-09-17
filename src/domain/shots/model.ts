@@ -23,6 +23,13 @@ export interface Shot {
   key: boolean;               // 有关键帧
   keyIdx?: number;            // 选中的候选序号（TakeGrid）
   vid: VidState;
+  /**
+   * 连续失败。跑成一次就清掉。
+   *
+   * 记次数而不只记「失败了」：同一镜连着失败三次和失败一次，下一步要做的事
+   * 不一样（前者多半是提示词或引用有问题，后者可能只是厂商抖了一下）。
+   */
+  fail?: { n: number; why: string };
   takes: number;              // 累计生成次数，记账口径
   verdict: Verdict;
   ejected: boolean;           // 手改提示词后脱管

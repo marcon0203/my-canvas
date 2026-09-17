@@ -8,6 +8,7 @@ import { AppShell, ProjectEntryRedirect, ProjectRoute } from '@/App';
 import { MOCK_PROJECTS } from '@/mock/project';
 import { MOCK_CONFIG } from '@/mock/config';
 import { useProject } from '@/store/project';
+import { useUi } from '@/store/ui';
 import { HomePage } from '@/features/home/HomePage';
 import { OutlinePage } from '@/features/outline/OutlinePage';
 import { ScriptPage } from '@/features/script/ScriptPage';
@@ -103,6 +104,25 @@ describe('页面渲染烟雾测试', () => {
     expect(html).toContain('已定稿');
     expect(html).toContain('CHAR-001');
     expect(html).toContain('形状照');
+  });
+
+  it('StoryboardPage：引用没定稿就不发请求，失败留在这一镜上', () => {
+    // s1-3 引用了还没定稿的「年糕」。产品规则是定稿之后才能被分镜引用，
+    // 之前这条只有一个黄点提示，运行照跑 —— 跑出来的角色长相是随机的，钱白花
+    const st = useProject.getState();
+    const before = st.credits;
+    st.failRun('s1-3', '引用的资产还没定稿：年糕 (Nian Gao)。去资产页定稿，或把这个引用去掉。');
+    useUi.getState().selectShot('s1-3');
+
+    const html = renderPage(<StoryboardPage />);
+    expect(html).toContain('引用的资产还没定稿');
+    expect(html).toContain('重试');
+    expect(html).toContain('失败');
+    expect(useProject.getState().credits).toBe(before);   // 没发请求就不该扣分
+
+    // 收拾干净，后面的用例还用这份 store
+    useProject.getState().commitRun('s1-3');
+    useUi.getState().selectShot('s1-1');
   });
 
   it('StoryboardPage：分镜树 + 提示词三段式 + RunBar', () => {
