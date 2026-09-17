@@ -10,7 +10,10 @@ export interface Toast {
 
 /** UI 态：选中、弹窗、折叠、画布相机 —— 全部不进撤销历史 */
 export interface UiState {
-  route: 'home' | 'project' | 'settings' | 'resources';
+  /**
+   * 当前项目 id。**「在哪个大区」不在这儿** —— 那个由 URL 说，
+   * 存第二份迟早和地址栏对不上（曾经就是：地址栏 `/` 而画面是项目详情）。
+   */
   projectId: string;
   step: Step;
   nodeSel: string;
@@ -29,7 +32,6 @@ export interface UiState {
   toasts: Toast[];
   cv: { tx: number; ty: number; zoom: number; sel: string | null; confirmDel: string | null };
   /* ---- 动作 ---- */
-  setRoute: (r: UiState['route']) => void;
   setStep: (s: Step) => void;
   set: <K extends keyof UiState>(k: K, v: UiState[K]) => void;
   selectNode: (id: string) => void;
@@ -42,7 +44,6 @@ export interface UiState {
 let toastSeq = 1;
 
 export const useUi = create<UiState>((set) => ({
-  route: 'home',
   projectId: '',
   step: 'outline',
   nodeSel: 'b3',
@@ -61,7 +62,6 @@ export const useUi = create<UiState>((set) => ({
   toasts: [],
   cv: { tx: 20, ty: 10, zoom: 0.85, sel: null, confirmDel: null },
 
-  setRoute: (route) => set({ route }),
   setStep: (step) => set({ step }),
   set: (k, v) => set({ [k]: v } as Partial<UiState>),
   selectNode: (id) => set({ nodeSel: id }),

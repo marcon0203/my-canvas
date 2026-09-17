@@ -52,7 +52,7 @@ const router = createBrowserRouter([
   { path: '/resources', element: <ResourcesRoute /> },
   { path: '/project', element: <ProjectEntryRedirect /> },
   { path: '/project/:projectId/:step?', element: <ProjectRoute /> },
-  { path: '/', element: <AppShell /> },
+  { path: '/', element: <AppShell view="home" /> },
   { path: '*', element: <Navigate to="/" replace /> },
 ]);
 
@@ -119,9 +119,6 @@ function Shell({ section, sub, onSub, top = false, children, aside }: {
 export function SettingsRoute() {
   const { section, detail } = useParams();
   const navigate = useNavigate();
-  const setRoute = useUi((s) => s.setRoute);
-  useEffect(() => { setRoute('settings'); }, [setRoute]);
-
   const active = (isValidSub('settings', section ?? '') ? section! : defaultSub('settings')) as SettingsSection;
   // 详情段只有模型与智能体两个分区有；乱填的名字当没填，回列表而不是白屏
   const valid = active === 'agents' ? isAgentId(detail)
@@ -143,8 +140,6 @@ export function SettingsRoute() {
 
 /** 资源管理：入口先放着，点进来说明白还没实现 —— 比灰掉一个按钮诚实 */
 export function ResourcesRoute() {
-  const setRoute = useUi((s) => s.setRoute);
-  useEffect(() => { setRoute('resources'); }, [setRoute]);
   return (
     <Shell section="resources">
       <div className="stage"><div className="stage__body"><div className="pad">
@@ -155,14 +150,23 @@ export function ResourcesRoute() {
   );
 }
 
-/** 应用外壳：与原型同构（.app > header.top + .work + aside.agent）。home 与项目两种形态 */
-export function AppShell() {
+/**
+ * 应用外壳：与原型同构（.app > header.top + .work + aside.agent）。home 与项目两种形态。
+ *
+ * **画哪套由 `view` 决定，而 `view` 来自路由。** 原来它读的是 ui store 里的
+ * `route` 字段 —— 那是同一件事的第二份真相，于是出现过这个 bug：从设置点
+ * 一级栏的「工作台」，地址栏是 `/` 而画面是项目详情。因为那条分支写的是
+ * 「route === 'home' 才画首页，否则画项目」，而从设置过来 route 是 'settings'。
+ * 「返回工作台」那个按钮碰巧是对的，只因为它多调了一次 setRoute('home')。
+ *
+ * 所以 `route` 整个删掉了：URL 已经说清在哪儿，再存一份就迟早对不上。
+ */
+export function AppShell({ view }: { view: 'home' | 'project' }) {
   const navigate = useNavigate();
-  const route = useUi((s) => s.route);
   const projectId = useUi((s) => s.projectId);
   const step = useUi((s) => s.step);
   const hydratedFor = useProject((s) => s.hydratedFor);
-  const q = useProjectData(route === 'project' ? projectId : '');
+  const q = useProjectData(view === 'project' ? projectId : '');
 
   // 项目内容注入 store：不入撤销历史（pause → hydrate → clear → resume）
   useEffect(() => {
@@ -175,7 +179,7 @@ export function AppShell() {
   }, [q.data]);
 
   // 项目态必须等当前项目内容就位；首页不需要项目内容
-  const booting = route === 'project' && (hydratedFor !== projectId || q.isFetching);
+  const booting = view === 'project' && (hydratedFor !== projectId || q.isFetching);
   if (booting) {
     return (
       <div className="app">
@@ -190,15 +194,15 @@ export function AppShell() {
     );
   }
 
-  const Page = PAGES[STEPS.includes(step) ? step : 'outline']!;
-  if (route === 'home') {
+  if (view === 'home') {
     return <Shell section="workbench"><HomePage /></Shell>;
   }
+  const Page = PAGES[STEPS.includes(step) ? step : 'outline']!;
   return (
     <Shell top
       sub={{
         title: '创作流程',
-        back: { label: '返回工作台', onClick: () => { useUi.getState().setRoute('home'); navigate('/'); } },
+        back: { label: '返回工作台', onClick: () => navigate('/') },
         items: WORKBENCH_SUB,
         active: step,
       }}
@@ -216,8 +220,6 @@ export function AppShell() {
 export function ProjectRoute() {
   const { projectId, step } = useParams();
   const navigate = useNavigate();
-  const route = useUi((s) => s.route);
-  const setRoute = useUi((s) => s.setRoute);
   const setUi = useUi((s) => s.set);
   const uiStep = useUi((s) => s.step);
   const uiProjectId = useUi((s) => s.projectId);
@@ -230,24 +232,23 @@ export function ProjectRoute() {
 
   // URL → store
   useEffect(() => {
-    setRoute('project');
     setUi('projectId', projectIdIsStep ? '' : (projectId ?? ''));
     if (validStep !== useUi.getState().step) useUi.getState().setStep(validStep);
-  }, [projectId, validStep, setRoute, setUi]);
+  }, [projectId, projectIdIsStep, validStep, setUi]);
 
   // store → URL：顶栏切页时写回地址栏（带项目 ID）
   useEffect(() => {
-    if (route === 'project' && uiProjectId && STEPS.includes(uiStep)) {
+    if (uiProjectId && STEPS.includes(uiStep)) {
       const target = `/project/${uiProjectId}/${uiStep}`;
       if (window.location.pathname !== target) navigate(target, { replace: true });
     }
-  }, [uiProjectId, uiStep, route, navigate]);
+  }, [uiProjectId, uiStep, navigate]);
 
-  if (route !== 'project' || !uiProjectId) {
+  if (!uiProjectId) {
     // 还没有项目 ID：回首页的项目列表里取默认项目
     return projectIdIsStep ? <ProjectEntryRedirect fallbackStep={validStep} /> : <Navigate to="/" replace />;
   }
-  return <AppShell />;
+  return <AppShell view="project" />;
 }
 
 /** /project（或 /project/outline 这类不带 ID 的旧形式）→ 跳到列表里的默认项目 */

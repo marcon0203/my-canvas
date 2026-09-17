@@ -171,7 +171,7 @@ describe('路由直达（防白屏回归）', () => {
         <QueryClientProvider client={new QueryClient()}>
           <MemoryRouter initialEntries={[path]}>
             <Routes>
-              <Route path="/" element={<AppShell />} />
+              <Route path="/" element={<AppShell view="home" />} />
               <Route path="/project" element={<ProjectEntryRedirect />} />
               <Route path="/project/:projectId/:step?" element={<ProjectRoute />} />
             </Routes>
@@ -203,6 +203,25 @@ describe('路由直达（防白屏回归）', () => {
   it('/project/outline 旧形式 → 重定向到默认项目', async () => {
     const html = await renderAt('/project/outline', () => host.innerHTML.includes('Plot outline'));
     expect(html).toContain('Plot outline');
+  });
+
+  /**
+   * 「在哪个大区」只能由 URL 说。
+   *
+   * 这条守的是一个真出现过的 bug：从设置点一级栏的「工作台」，地址栏是 `/`
+   * 而画面是项目详情。原因是 AppShell 读 ui store 里的 `route` 字段来决定画
+   * 哪套外壳，而那条分支写的是「route === 'home' 才画首页，否则画项目」——
+   * 从设置过来 route 是 'settings'，于是掉进了项目那一支。
+   *
+   * 所以这里**先进一次项目**（让 store 里留下项目 id 与步骤），再直达 `/`：
+   * 不看 store 只看 URL 的话，必须是首页。
+   */
+  it('先进过项目，再直达 / → 还是首页（不被 store 里的残留带进项目）', async () => {
+    await renderAt('/project/p1/storyboard', () => host.innerHTML.includes('分镜列表'));
+    const html = await renderAt('/', () => host.innerHTML.includes('brief__in'));
+    expect(html).toContain('主导航');          // 首页才有一级图标栏
+    expect(html).not.toContain('返回工作台');   // 那是项目内的出口
+    expect(html).toContain('brief__in');       // 首页的需求输入框
   });
 
   it('/project/p2 直达加载第二个项目（无 step 默认大纲页）', async () => {
