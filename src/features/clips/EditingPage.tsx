@@ -4,6 +4,7 @@ import { StageBar } from '@/components/StageBar';
 import { imgUrlFor, vidUrl } from '@/lib/media';
 import { useProject } from '@/store/project';
 import { useUi } from '@/store/ui';
+import { useAgent } from '@/store/agent';
 import { secText, totalMs, type Cue } from '@/domain/clips/model';
 
 /** 剪辑页：原型 viewEdit 同构（.player + .tl 三轨 + 右侧 .blk） */
@@ -13,10 +14,10 @@ export function EditingPage() {
   const subtitles = useProject((s) => s.subtitles);
   const ratio = useProject((s) => s.ratio);
   const style = useProject((s) => s.style);
-  const spend = useProject((s) => s.spend);
+  const runTool = useAgent((s) => s.runTool);
+  const setStep = useUi((s) => s.setStep);
   const clipSel = useUi((s) => s.clipSel);
   const setUi = useUi((s) => s.set);
-  const toast = useUi((s) => s.toast);
 
   const cur = shots.find((s) => s.id === clipSel) ?? shots[0];
   if (!cur) {
@@ -40,12 +41,16 @@ export function EditingPage() {
           ? <Chip tone="ok">已排 {timeline.clips.length} 段 · {secText(filmMs)}{timeline.beatMs ? ` · 卡点 ${timeline.beatMs}ms` : ''}</Chip>
           : <Chip>{done.length} 段可用 · {okDur}s（还没排时间线）</Chip>}
         actions={<>
-          <Button onClick={() => toast('去对话里让剪辑说「排时间线」—— 工具会按判定可用的片段排，重摇没通过的不进片子')}>
-            <Icon name="scissors" />自动成片
+          <Button onClick={() => runTool('edit.timeline')}>
+            <Icon name="scissors" />排时间线
+          </Button>
+          <Button disabled={!planned} title={planned ? undefined : '先排时间线：字幕要挂在时间轴上'}
+            onClick={() => runTool('edit.subtitle', { lang: 'zh' })}>
+            <Icon name="text" />生成字幕
           </Button>
           <Button variant="primary" style={{ height: 34, fontSize: 13 }}
-            onClick={() => { spend(12); toast('导出 MP4 · 消耗 12 积分'); }}>
-            <Icon name="dl" />导出 MP4
+            onClick={() => runTool('file.export', { what: 'shots' })}>
+            <Icon name="dl" />导出分镜表
           </Button>
         </>}
       />
@@ -114,11 +119,10 @@ export function EditingPage() {
             </div>
             <p style={{ margin: '0 0 12px', fontSize: 13 }}>{cur.desc}</p>
             <div className="row wrap" style={{ gap: 6 }}>
-              {['转场', '变速', '配乐'].map((x) => (
-                <Button key={x} onClick={() => toast(`${x}：原型阶段提供占位，接真实剪辑 API 后生效`)}>{x}</Button>
-              ))}
-              <Button onClick={() => { spend(4); toast(`「${cur.id}」重新生成 · 消耗 4 积分`); }}>
-                <Icon name="refresh" />重生成
+              {/* 转场、变速、配乐都要改媒体本身，得先有渲染管线（拼片段、转码）。
+                  现在连一个占位按钮都不摆 —— 点了没反应比没有更糟 */}
+              <Button onClick={() => { setUi('shotSel', cur.id); setStep('storyboard'); }}>
+                <Icon name="refresh" />去分镜重生成
               </Button>
             </div>
           </div></div>

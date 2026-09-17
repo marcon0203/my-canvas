@@ -335,6 +335,29 @@ export const useProject = create<ProjectState>()(
   ),
 );
 
+/**
+ * 等某个项目的内容注入 store。
+ *
+ * 新建项目后要立刻让 Agent 开跑，但注入是 AppShell 那边的 query 回来才发生的。
+ * 原来这里等的是 `setTimeout(900)`：慢机器或大项目上，900ms 到了内容还没进来，
+ * Agent 就会在**上一个项目**上开跑 —— 而且看不出来，因为界面已经切过去了。
+ *
+ * 超时不静默：到点还没注入就 reject，调用方负责告诉人「项目建好了但没打开」。
+ */
+export function waitHydrated(id: string, timeoutMs = 8000): Promise<void> {
+  if (useProject.getState().hydratedFor === id) return Promise.resolve();
+  return new Promise((resolve, reject) => {
+    const done = (fn: () => void) => { clearTimeout(timer); unsub(); fn(); };
+    const timer = setTimeout(
+      () => done(() => reject(new Error(`等了 ${Math.round(timeoutMs / 1000)} 秒，项目 ${id} 的内容还没加载出来`))),
+      timeoutMs,
+    );
+    const unsub = useProject.subscribe((s) => {
+      if (s.hydratedFor === id) done(resolve);
+    });
+  });
+}
+
 /* ---- 内部查找 ---- */
 type Assets = Record<AssetGroup, Asset[]>;
 export const allAssets = (assets: Assets): Asset[] => [...assets.角色, ...assets.场景, ...assets.道具];

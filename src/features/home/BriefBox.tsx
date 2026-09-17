@@ -7,6 +7,7 @@ import { defaultMeta, newProjectId, projectList, projectSave } from '@/api/works
 import { isDesktop } from '@/api/desktop';
 import { useInvalidateProject } from '@/api/queries';
 import { useAgent } from '@/store/agent';
+import { waitHydrated } from '@/store/project';
 import { useSettings } from '@/store/settings';
 import { useUi } from '@/store/ui';
 
@@ -58,11 +59,22 @@ export function BriefBox() {
       }, workspace);
       invalidate();
       navigate(`/project/${id}/outline`);
-      // 等项目注入 store 再开跑，否则 Agent 看到的还是上一个项目
-      setTimeout(() => startPipeline(brief.trim(), kind), 900);
+
+      // 清掉输入框：项目已经建出来了，这一步不该因为后面开跑失败而回滚
+      const text = brief.trim();
       setBrief(''); setFiles([]); setPicked(null);
+
+      // 等内容真的注入再开跑。等时间（原来是 900ms）会让 Agent 跑在上一个项目上
+      try {
+        await waitHydrated(id);
+        startPipeline(text, kind);
+      } catch {
+        toast(`「${name}」建好了，但没打开。去首页的最近项目里点开它，再跟编剧说一句。`);
+      }
     } catch (e) {
-      toast(String((e as { message?: string })?.message ?? e));
+      // 建项目失败：多半是工作空间写不进去（路径不存在、没权限、磁盘满）
+      const msg = String((e as { message?: string })?.message ?? e);
+      toast(`建项目失败：${msg}。去设置 → 工作空间确认那个目录能写。`);
     } finally {
       setBusy(false);
     }

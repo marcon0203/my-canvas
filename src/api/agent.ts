@@ -3,7 +3,9 @@ import { plan } from '@/domain/agent/plans';
 import { route } from '@/domain/agent/router';
 import { personaById } from '@/domain/agent/roster';
 import { canHandleConfigured, ownerOfConfigured } from '@/domain/agent/config';
-import type { Handoff, IntentKind, Plan } from '@/domain/agent/types';
+import type { Handoff, IntentKind, Plan, Proposal, ProposalPatch } from '@/domain/agent/types';
+import { TOOLS, type ToolId } from '@/domain/agent/tools';
+import { secText } from '@/domain/clips/model';
 import { isDesktop, outlineDraft, shotsPrompt, type OutlineDraft, type PromptDraft, type RunEvent, type ShotBrief } from './desktop';
 import { allBeats } from '@/domain/story/model';
 import { useSettings } from '@/store/settings';
@@ -359,4 +361,81 @@ function outlineProposal(draft: OutlineDraft, fresh: boolean, ctx: AgentContext)
     cost: 2,
     goto: 'outline',
   };
+}
+
+/* ---------------- 工具调用 ---------------- */
+
+/**
+ * 工具的补丁 → 产物卡。
+ *
+ * 每个工具的补丁形状不同，摘要行也不同：时间线要看几段多长，字幕要看几条，
+ * 建资产要看建了谁。一律摆成 `{t: 'xxx'}` 这种原始 JSON 是没法审的 ——
+ * 产物卡的用处就是让人在写进项目**之前**看一眼。
+ */
+export function toolProposal(tool: ToolId, patch: ProposalPatch, value: unknown): Proposal {
+  const spec = TOOLS.find((t) => t.id === tool);
+  const title = spec?.name ?? tool;
+  const v = (value ?? {}) as Record<string, unknown>;
+
+  switch (patch.t) {
+    case 'timeline': {
+      const n = patch.timeline.clips.length;
+      const ms = Number(v['totalMs'] ?? 0);
+      return {
+        title: `${title} · ${n} 段`,
+        rows: [
+          { k: '片长', v: secText(ms) },
+          { k: '卡点', v: patch.timeline.beatMs ? `${patch.timeline.beatMs}ms 对齐` : '不对齐' },
+          ...patch.timeline.clips.slice(0, 6).map((c) => ({ k: c.shotId, v: `${secText(c.at)} 起 · ${secText(c.dur)}` })),
+        ],
+        patch, cost: 0, goto: 'editing',
+      };
+    }
+    case 'subtitles':
+      return {
+        title: `${title} · ${patch.subtitles.cues.length} 条`,
+        rows: patch.subtitles.cues.slice(0, 8).map((c) => ({ k: secText(c.at), v: c.text })),
+        patch, cost: 0, goto: 'editing',
+      };
+    case 'assetsDraft':
+      return {
+        title: `${title} · ${patch.add.length} 个`,
+        rows: patch.add.map((a) => ({ k: `${a.group} ${a.aid}`, v: a.name })),
+        patch, cost: 0, goto: 'assets',
+      };
+    case 'blocks':
+      return {
+        title: `${title} · ${patch.blocks.length} 块`,
+        rows: patch.blocks.map((b) => ({ k: b.label, v: `${b.body.slice(0, 40)}…` })),
+        patch, cost: 0, goto: 'script',
+      };
+    case 'style':
+      return {
+        title: `${title} · ${patch.style}`,
+        rows: [{ k: '英文片段', v: patch.stylePrompt }],
+        patch, cost: 0, goto: 'storyboard',
+      };
+    case 'shotRig':
+      return {
+        title: `${title} · ${patch.edits.length} 镜`,
+        rows: patch.edits.map((e) => ({ k: e.id, v: Object.entries(e.rig).map(([k, x]) => `${k}=${String(x)}`).join(' ') })),
+        patch, cost: 0, goto: 'storyboard',
+      };
+    default:
+      // 其余补丁形状（大纲、分镜、定稿…）已经有各自的入口，这里只兜个底
+      return { title, rows: [{ k: '补丁', v: patch.t }], patch, cost: 0 };
+  }
+}
+
+/** 工具跑完但没有补丁（只读类）→ 摘要文字。别把整份 JSON 甩给人看 */
+export function toolOkText(tool: ToolId, value: unknown): string {
+  const v = (value ?? {}) as Record<string, unknown>;
+  if (tool === 'file.export') {
+    return `已生成 ${String(v['filename'])}（${Math.round(Number(v['bytes'] ?? 0) / 1024)} KB）。存到哪儿由你在保存对话框里选。`;
+  }
+  if (tool === 'prompt.compile') {
+    const list = (v['prompts'] ?? []) as { id: string; text: string }[];
+    return list.slice(0, 6).map((x) => `${x.id}：${x.text}`).join('\n');
+  }
+  return JSON.stringify(v).slice(0, 300);
 }

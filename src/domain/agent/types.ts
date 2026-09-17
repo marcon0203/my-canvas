@@ -3,6 +3,8 @@ import type { Shot } from '@/domain/shots/model';
 import type { Act, DocBlock } from '@/domain/story/model';
 import type { Subtitles, Timeline } from '@/domain/clips/model';
 import type { AgentId } from './roster';
+import type { ToolId } from './tools';
+import type { Risk } from './policy';
 
 /**
  * Agent 的可执行意图。技能卡与自由输入都归一到这张表，
@@ -119,4 +121,26 @@ export interface AgentMessage {
   readonly verdict?: 'pending' | 'accepted' | 'discarded';
   /** 正在流式输出 */
   readonly streaming?: boolean;
+  /**
+   * 这一轮是一次工具调用。工具被闸门挡住或缺配置时，卡片要能让人接着往下走，
+   * 所以重试需要的东西（工具 id 与参数）留在这儿。
+   */
+  readonly tool?: ToolRun;
+}
+
+/** 一次工具调用在会话里的状态 */
+export interface ToolRun {
+  readonly id: ToolId;
+  readonly name: string;
+  readonly args: Record<string, unknown>;
+  /**
+   * `approval`：要人点头才能跑（超出自主上限，或本来就永远要问的那档）
+   * `setup`：实现有，但缺模型/密钥/厂商适配
+   * `blocked`：这个工具还没实现
+   * `done`：跑完了
+   */
+  readonly state: 'running' | 'approval' | 'setup' | 'blocked' | 'done' | 'failed';
+  /** approval/setup/blocked/failed 时说清是什么情况 */
+  readonly why?: string;
+  readonly risk?: Risk;
 }

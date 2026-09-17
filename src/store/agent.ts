@@ -1,5 +1,7 @@
 import { create } from 'zustand';
-import { runAgent } from '@/api/agent';
+import { runAgent, toolOkText, toolProposal } from '@/api/agent';
+import { toolCall } from '@/api/desktop';
+import { TOOLS, type ToolId } from '@/domain/agent/tools';
 import type { AgentContext } from '@/domain/agent/context';
 import type { AgentId } from '@/domain/agent/roster';
 import { personaById, personaForStep } from '@/domain/agent/roster';
@@ -42,6 +44,15 @@ export interface AgentState {
   stop: () => void;
   accept: (msgId: number) => void;
   discard: (msgId: number) => void;
+  /**
+   * 直接调一个工具（页面上的按钮走这条，不经过模型）。
+   *
+   * 为什么结果落在会话里：写项目统一走「产物卡 → 采纳 → 一条撤销」。
+   * 页面按钮自己写一遍会绕开撤销和权限那两道，迟早对不上。
+   */
+  runTool: (tool: ToolId, args?: Record<string, unknown>) => void;
+  /** 人点了「同意并执行」：拿同一份参数再调一次，这一次带上放行标记 */
+  approveTool: (msgId: number) => void;
   reset: () => void;
 }
 
@@ -223,6 +234,16 @@ export const useAgent = create<AgentState>((set, get) => ({
     get().send(brief, stages[0]!.kind);
   },
 
+  runTool: (tool, args = {}) => {
+    void dispatchTool(get, set, tool, args, false);
+  },
+
+  approveTool: (msgId) => {
+    const msg = get().messages.find((m) => m.id === msgId);
+    if (msg?.tool?.state !== 'approval') return;
+    void dispatchTool(get, set, msg.tool.id, msg.tool.args, true, msgId);
+  },
+
   reset: () => {
     get().stop();
     const step = useUi.getState().step;
@@ -288,3 +309,96 @@ function focusProduct(p: Proposal, beatsBefore: ReadonlySet<string>): void {
   }
 }
 
+
+/**
+ * 调一次工具，把结果落成会话里的一条消息。
+ *
+ * 六种结果各有各的下一步，所以不能合成一个「成功/失败」：
+ * - patch        → 产物卡，人采纳才写项目
+ * - ok           → 摘要文字（只读类工具，没有东西要写）
+ * - needsApproval→ 同意卡，点了再带 approved 调一次
+ * - needsSetup   → 去设置卡，缺的是模型/密钥/厂商适配
+ * - notImplemented → 如实说还没做，并说清缺什么
+ * - elsewhere    → 这个工具在浏览器里跑（布光台），交给 toolhost
+ *
+ * `msgId` 有值表示是「同意后重跑」，复用原来那条消息，不再冒一条新的。
+ */
+async function dispatchTool(
+  get: () => AgentState,
+  set: (p: Partial<AgentState> | ((s: AgentState) => Partial<AgentState>)) => void,
+  tool: ToolId,
+  args: Record<string, unknown>,
+  approved: boolean,
+  msgId?: number,
+): Promise<void> {
+  const spec = TOOLS.find((t) => t.id === tool);
+  const name = spec?.name ?? tool;
+  const agentId = get().agentId;
+  const id = msgId ?? seq++;
+  const base = { id, who: 'ai' as const, agentId, text: '' };
+
+  const patchMsg = (fn: (m: AgentMessage) => AgentMessage) =>
+    set((s) => ({ messages: s.messages.map((m) => (m.id === id ? fn(m) : m)) }));
+
+  if (msgId === undefined) {
+    set((s) => ({
+      messages: [...s.messages, { ...base, tool: { id: tool, name, args, state: 'running' } }],
+    }));
+  } else {
+    patchMsg((m) => ({ ...m, text: '', tool: { ...m.tool!, state: 'running' } }));
+  }
+
+  const projectId = useProject.getState().hydratedFor ?? '';
+  if (!projectId) {
+    patchMsg((m) => ({ ...m, tool: { ...m.tool!, state: 'failed', why: '没有打开的项目' } }));
+    return;
+  }
+
+  const cfg = useSettings.getState().agents[agentId];
+  try {
+    const out = await toolCall({
+      projectId, tool, args,
+      autoMax: cfg?.autoMax,
+      approved,
+      cfg, globals: effectiveGlobals(useSettings.getState()),
+      providers: useSettings.getState().providers,
+      workspace: useSettings.getState().workspace,
+    });
+
+    switch (out.t) {
+      case 'patch':
+        patchMsg((m) => ({
+          ...m,
+          tool: { ...m.tool!, state: 'done' },
+          proposal: toolProposal(tool, out.patch, undefined),
+          verdict: 'pending',
+        }));
+        break;
+      case 'ok':
+        patchMsg((m) => ({ ...m, tool: { ...m.tool!, state: 'done' }, text: toolOkText(tool, out.value) }));
+        break;
+      case 'needsApproval':
+        patchMsg((m) => ({ ...m, tool: { ...m.tool!, state: 'approval', why: out.why, risk: out.risk } }));
+        break;
+      case 'needsSetup':
+        patchMsg((m) => ({ ...m, tool: { ...m.tool!, state: 'setup', why: out.missing } }));
+        break;
+      case 'notImplemented':
+        patchMsg((m) => ({ ...m, tool: { ...m.tool!, state: 'blocked', why: out.blockedBy } }));
+        break;
+      case 'elsewhere':
+        patchMsg((m) => ({
+          ...m,
+          tool: { ...m.tool!, state: 'blocked', why: '这个工具在浏览器里跑，还没接到会话上' },
+        }));
+        break;
+    }
+  } catch (e) {
+    // 工具自己的校验错误（没有可用片段、镜头不存在…）也走这儿。
+    // 这些不是崩溃，是「这活现在做不了」，所以照原话摆出来
+    patchMsg((m) => ({
+      ...m,
+      tool: { ...m.tool!, state: 'failed', why: String((e as { message?: string })?.message ?? e) },
+    }));
+  }
+}

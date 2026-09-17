@@ -117,11 +117,16 @@ describe('页面渲染烟雾测试', () => {
   it('EditingPage：时间线三轨 + 导出', () => {
     const html = renderPage(<EditingPage />);
     expect(html).toContain('当前片段');
-    expect(html).toContain('自动成片');
-    expect(html).toContain('导出 MP4');
+    expect(html).toContain('排时间线');
+    expect(html).toContain('导出分镜表');
     // 还没排过时间线：如实说，而不是画一条看起来已经排好的轨
     expect(html).toContain('还没排时间线');
     expect(html).toContain('还没有配音');
+    // 生成字幕要先有时间线，按钮此时是禁用的，并说清为什么
+    expect(html).toContain('先排时间线：字幕要挂在时间轴上');
+    expect(html).toMatch(/disabled[\s\S]{0,400}?生成字幕/);
+    // 转场/变速/配乐那三个占位按钮撤掉了：点了没反应比没有更糟
+    expect(html).not.toContain('转场');
   });
 
   it('EditingPage：排过时间线之后画的是真数据，不是写死的占位', () => {

@@ -4,7 +4,8 @@ import { useUi } from '@/store/ui';
 import { useAgent } from '@/store/agent';
 import { personaById, skillsOf } from '@/domain/agent/roster';
 import type { Persona } from '@/domain/agent/roster';
-import type { AgentMessage, Proposal } from '@/domain/agent/types';
+import type { AgentMessage, Proposal, ToolRun } from '@/domain/agent/types';
+import { useNavigate } from 'react-router';
 
 /**
  * Agent 侧栏：流式对话驱动整条流水线。
@@ -109,8 +110,66 @@ function MessageView({ msg }: { msg: AgentMessage }) {
       {msg.text
         ? <div className="amsg__body">{renderRich(msg.text)}{msg.streaming && <span className="caret" />}</div>
         : msg.streaming && !msg.steps?.length ? <span className="caret" /> : null}
+      {msg.tool && <ToolCard msgId={msg.id} t={msg.tool} />}
       {msg.handoff && <HandoffCard to={personaById(msg.handoff.to)} />}
       {msg.proposal && <ProposalCard msgId={msg.id} p={msg.proposal} verdict={msg.verdict ?? 'pending'} hold={msg.hold} />}
+    </div>
+  );
+}
+
+/**
+ * 工具卡。六种结果各有各的下一步，所以不是一个「成功/失败」两态的东西：
+ * 要人点头的给一个按钮，缺配置的指到设置页，还没实现的如实说，
+ * 跑出补丁的交给下面的产物卡。
+ */
+function ToolCard({ msgId, t }: { msgId: number; t: ToolRun }) {
+  const approveTool = useAgent((s) => s.approveTool);
+  const navigate = useNavigate();
+
+  if (t.state === 'running') {
+    return (
+      <div className="atool atool--run">
+        <span className="astep__spin" />
+        <span className="atool__t">{t.name}</span>
+      </div>
+    );
+  }
+  if (t.state === 'done') return null;   // 结果由产物卡或正文承担
+
+  if (t.state === 'approval') {
+    return (
+      <div className="atool atool--ask">
+        <div className="atool__h"><Icon name="bolt" /><span className="atool__t">{t.name} 要你点头</span></div>
+        <p className="atool__why">{t.why}</p>
+        <div className="atool__act">
+          <button className="tbtn tbtn--pri" onClick={() => approveTool(msgId)}>
+            <Icon name="check" />同意并执行
+          </button>
+          <span className="t-cap dim">只放行这一次</span>
+        </div>
+      </div>
+    );
+  }
+
+  if (t.state === 'setup') {
+    return (
+      <div className="atool atool--ask">
+        <div className="atool__h"><Icon name="cube" /><span className="atool__t">{t.name} 还缺配置</span></div>
+        <p className="atool__why">{t.why}</p>
+        <div className="atool__act">
+          <button className="tbtn" onClick={() => navigate('/settings/models')}>
+            <Icon name="right" />去模型设置
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // blocked / failed
+  return (
+    <div className="atool atool--bad">
+      <div className="atool__h"><Icon name="x" /><span className="atool__t">{t.name} 没跑起来</span></div>
+      <p className="atool__why">{t.why}</p>
     </div>
   );
 }

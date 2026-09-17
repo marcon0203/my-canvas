@@ -989,6 +989,27 @@ body { background: var(--color-bg-canvas); overflow: hidden; }
 .ahand__t { font-size: 12px; color: var(--color-text-secondary); overflow-wrap: anywhere; }
 .ahand__t strong { color: var(--color-text-primary); }
 
+/* ---- 工具卡：一次工具调用的状态 ----
+   跑出补丁的那种不画卡（结果由产物卡承担），这里只画「还没跑成」的三种：
+   要点头、缺配置、跑不起来。 */
+.atool {
+  display: flex; align-items: center; gap: var(--space-2);
+  margin-top: var(--space-3); padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--color-border-default); border-radius: var(--radius-card);
+  background: var(--color-bg-surface);
+}
+.atool--ask, .atool--bad { display: block; }
+.atool--ask { border-color: var(--color-warning); background: var(--color-warning-bg); }
+.atool--bad { border-style: dashed; background: var(--color-bg-muted); }
+.atool__h { display: flex; align-items: center; gap: var(--space-2); }
+.atool__h > svg { width: 13px; height: 13px; flex: 0 0 auto; color: var(--color-text-secondary); }
+.atool__t { font-size: 12px; font-weight: 600; }
+.atool__why {
+  margin: var(--space-2) 0 0; font-size: 12px; line-height: 1.6;
+  color: var(--color-text-secondary); overflow-wrap: anywhere;
+}
+.atool__act { display: flex; align-items: center; gap: var(--space-2); margin-top: var(--space-3); }
+
 /* ---- 设置页：服务商卡片 / Agent 配置卡片 ---- */
 .setgrid { display: grid; gap: var(--space-4); }
 
