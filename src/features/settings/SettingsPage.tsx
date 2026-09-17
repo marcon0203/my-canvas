@@ -90,7 +90,7 @@ export function SettingsPage({ section, detail, onOpen, onBack }: {
       <div className="stage__body"><div className="pad" style={{ maxWidth: 1080 }}>
         {section === 'workspace' && <WorkspaceSettings />}
         {section === 'models' && (prov
-          ? <ProviderDetail id={prov.id} />
+          ? <ProviderDetail id={prov.id} onBack={onBack} />
           : <ProviderList onOpen={onOpen} />)}
         {section === 'skills' && (sk
           ? <SkillDetail id={sk.id} />
@@ -103,7 +103,7 @@ export function SettingsPage({ section, detail, onOpen, onBack }: {
         {!p && !prov && !sk && !file && (
           <p className="t-cap dim setnote">
             <Icon name="bolt" />
-            这是**应用级**设置，跨项目共用 —— 模型与 Agent 的配置不属于某一个项目。
+            这是应用级设置，跨项目共用 —— 模型与 Agent 的配置不属于某一个项目。
             {section === 'models' && (isDesktop()
               ? ' 密钥写入系统钥匙串，由 Rust 侧读写 —— 前端拿不到明文，请求也不经过前端。'
               : ' 当前是浏览器环境，没有系统钥匙串：密钥只记「配没配」，不会真正保存。装成桌面端后才会写入钥匙串。')}

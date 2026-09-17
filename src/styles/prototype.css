@@ -946,6 +946,9 @@ body { background: var(--color-bg-canvas); overflow: hidden; }
 .aprop--accepted .aprop__act--settled svg { color: var(--color-success); }
 .tbtn--pri { background: var(--color-accent); color: var(--color-on-accent); border-color: var(--color-accent); }
 .tbtn--pri:hover { background: var(--color-accent-hover); border-color: var(--color-accent-hover); }
+/* 破坏性操作：移除供应商、删模型这类。只在二次确认时出现，平时不摆一个红按钮吓人 */
+.tbtn--bad { color: var(--color-warning); border-color: var(--color-warning); }
+.tbtn--bad:hover { background: var(--color-warning-bg); }
 
 /* ---- Agent 班底：一个环节一位，各有专长 ---- */
 .aface {
@@ -1792,7 +1795,9 @@ details summary:hover { color: var(--color-accent); }
   display:flex; align-items:center; justify-content:center; padding:24px; }
 /* 弹窗高于视口时内部滚动，而不是把头部顶出屏幕 —— 布光台很高，
    原来关闭按钮会滚到可视区外，弹窗关不掉 */
-.mo__box { width:100%; background:var(--color-bg-surface); border:1px solid var(--color-border-default);
+/* 表单弹窗默认不铺满视口：1440 宽的屏上，一个只有三四行输入的框摊到 1390px
+   会让标签和输入框离得老远。要更宽的（布光台、器材滚筒）加 --wide */
+.mo__box { width:100%; max-width:560px; background:var(--color-bg-surface); border:1px solid var(--color-border-default);
   border-radius:var(--radius-card); box-shadow:var(--shadow-raised); overflow:hidden;
   max-height:100%; display:flex; flex-direction:column; min-height:0; }
 .mo__box > *:not(.mo__h) { min-height:0; }

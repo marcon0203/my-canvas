@@ -55,9 +55,11 @@ export interface ProviderSpec {
   /** 控制台地址，设置界面里给个「去拿 key」的入口 */
   readonly console?: string;
   readonly docs?: string;
-  /** 这家默认带哪些模型（种子，可增删） */
-  readonly models: readonly ModelSpec[];
-  /** 自定义端点：baseUrl 与模型全靠用户填 */
+  /**
+   * 自定义端点：baseUrl 与模型全靠用户填。
+   *
+   * 注意这里**没有 models 字段** —— 目录只说支持哪几家，一个模型都不预设。
+   */
   readonly userDefined?: boolean;
 }
 

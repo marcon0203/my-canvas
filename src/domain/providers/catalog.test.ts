@@ -1,6 +1,13 @@
 import { describe, expect, it } from 'vitest';
-import { BUILTIN_MODELS, PROVIDERS, defaultModel, findModel, modelsOfModality, providerOf } from './catalog';
-import { makeModel, modelKey, parseModelKey } from './model';
+import { PROVIDERS, defaultModel, findModel, modelsOfModality, providerOf } from './catalog';
+import { makeModel, modelKey, parseModelKey, type ModelSpec } from './model';
+
+/** 用户自己加的两个模型 —— 目录里一个模型都没有，所以测试得自带样本 */
+const MINE: ModelSpec[] = [
+  makeModel({ provider: 'deepseek', id: 'deepseek-chat', name: 'DS Chat', modality: 'text', caps: {} }),
+  makeModel({ provider: 'moonshot', id: 'kimi-k2', name: 'Kimi', modality: 'text', caps: {} }),
+  makeModel({ provider: 'volcengine', id: 'seedream-4', modality: 'image', caps: {} }),
+];
 
 describe('providers/catalog', () => {
   it('六家国内厂商 + 自定义端点都在', () => {
@@ -13,40 +20,44 @@ describe('providers/catalog', () => {
     for (const p of PROVIDERS) {
       if (p.userDefined) { expect(p.baseUrl).toBe(''); continue; }
       expect(p.baseUrl, p.name).toMatch(/^https:\/\//);
-      expect(p.models.length, p.name).toBeGreaterThan(0);
     }
   });
 
-  it('模型的 provider 字段与它所属的厂商一致 —— 否则查找会错位', () => {
+  it('**一个模型都不预设** —— 目录只答「支持哪几家」', () => {
     for (const p of PROVIDERS) {
-      for (const m of p.models) expect(m.provider, `${p.name}/${m.id}`).toBe(p.id);
+      // 连字段都不该有：留着它，迟早有人往里塞一份会过期的清单
+      expect('models' in p, p.name).toBe(false);
     }
-  });
-
-  it('文本走 OpenAI 兼容，图片视频走异步任务 —— 决定 Rust 侧用哪个适配器', () => {
-    for (const m of BUILTIN_MODELS) {
-      expect(m.protocol, m.id).toBe(m.modality === 'text' ? 'openai-chat' : 'async-task');
-    }
-  });
-
-  it('三个模态都有可选模型', () => {
     for (const m of ['text', 'image', 'video'] as const) {
-      expect(modelsOfModality(m).length, m).toBeGreaterThan(0);
+      expect(modelsOfModality(m), m).toEqual([]);
     }
   });
 
-  it('用户自加的模型压过内置同 id —— 目录跟不上时以用户填的为准', () => {
-    const custom = {
-      id: 'deepseek-chat', name: '我改过的', provider: 'deepseek' as const,
-      modality: 'text' as const, protocol: 'openai-chat' as const, caps: {},
-    };
-    expect(findModel({ provider: 'deepseek', model: 'deepseek-chat' })!.name).toBe('DeepSeek Chat');
-    expect(findModel({ provider: 'deepseek', model: 'deepseek-chat' }, [custom])!.name).toBe('我改过的');
+  it('没接入任何厂商时没有默认模型 —— 界面要说「还没有可用模型」，而不是编一个', () => {
+    for (const m of ['text', 'image', 'video'] as const) {
+      expect(defaultModel(m), m).toBeUndefined();
+      expect(defaultModel(m, ['deepseek']), m).toBeUndefined();
+    }
+  });
+
+  it('模型只从用户加的那份里查', () => {
+    expect(findModel({ provider: 'deepseek', model: 'deepseek-chat' })).toBeUndefined();
+    expect(findModel({ provider: 'deepseek', model: 'deepseek-chat' }, MINE)!.name).toBe('DS Chat');
+    // 厂商对不上就不算命中，否则同名 id 会跨厂串台
+    expect(findModel({ provider: 'zhipu', model: 'deepseek-chat' }, MINE)).toBeUndefined();
+  });
+
+  it('按模态过滤用户加的模型', () => {
+    expect(modelsOfModality('text', MINE).map((m) => m.id)).toEqual(['deepseek-chat', 'kimi-k2']);
+    expect(modelsOfModality('image', MINE).map((m) => m.id)).toEqual(['seedream-4']);
+    expect(modelsOfModality('video', MINE)).toEqual([]);
   });
 
   it('优先挑已接入厂商的模型', () => {
-    const ref = defaultModel('text', ['moonshot']);
-    expect(ref?.provider).toBe('moonshot');
+    expect(defaultModel('text', ['moonshot'], MINE)?.provider).toBe('moonshot');
+    expect(defaultModel('text', ['deepseek'], MINE)?.provider).toBe('deepseek');
+    // 已接入的一家都没有该模态的模型时，退回列表第一个，而不是返回空
+    expect(defaultModel('text', ['zhipu'], MINE)?.model).toBe('deepseek-chat');
   });
 
   it('modelKey 与 parseModelKey 可往返，模型 id 里带斜杠也不炸', () => {
@@ -55,7 +66,7 @@ describe('providers/catalog', () => {
   });
 
   it('查不到就是 undefined，不给假数据', () => {
-    expect(findModel({ provider: 'deepseek', model: '不存在' })).toBeUndefined();
+    expect(findModel(undefined, MINE)).toBeUndefined();
     expect(parseModelKey('没有斜杠')).toBeUndefined();
     expect(providerOf('custom')!.userDefined).toBe(true);
   });
@@ -110,9 +121,9 @@ describe('providers · 新增模型：表单 → ModelSpec', () => {
     expect(m.name).toBe('deepseek-chat');
   });
 
-  it('自加的模型能被 findModel 查到，且盖过同 id 的内置项', () => {
-    const mine = makeModel({ provider: 'deepseek', id: 'deepseek-chat', name: '我改的名', modality: 'text', caps: {} });
+  it('自加的模型能被 findModel 查到', () => {
+    const mine = makeModel({ provider: 'deepseek', id: 'deepseek-chat', name: '我起的名', modality: 'text', caps: {} });
     const hit = findModel({ provider: 'deepseek', model: 'deepseek-chat' }, [mine]);
-    expect(hit?.name).toBe('我改的名');
+    expect(hit?.name).toBe('我起的名');
   });
 });

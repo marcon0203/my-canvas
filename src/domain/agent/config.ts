@@ -139,7 +139,7 @@ export function checkConfig(
     }
     const spec = findModel(ref, extraModels);
     if (!spec) {
-      out.push({ level: 'error', text: `配的模型 ${ref.provider}/${ref.model} 在目录里找不到 —— 厂商删了或 id 变了` });
+      out.push({ level: 'error', text: `配的模型 ${ref.provider}/${ref.model} 找不到 —— 不在已添加的模型里，可能是被移除了或 id 填错了` });
     } else if (spec.modality !== m) {
       out.push({ level: 'error', text: `${spec.name} 是${spec.modality}模型，配到${m}上用不了` });
     }

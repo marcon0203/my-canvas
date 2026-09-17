@@ -1,97 +1,59 @@
 import type { Modality, ModelRef, ModelSpec, ProviderId, ProviderSpec } from './model';
 
 /**
- * 内置厂商目录。
+ * **支持哪些厂商**的清单 —— 不是模型清单。
  *
- * ⚠️ 这是**种子，不是权威清单**。模型 id 和端点在国内变得很快，
- * 所以 baseUrl 与模型清单在设置里都可改、可增删。
- * 代码里任何地方都不要假设某个 id 一定存在 —— 一律经 findModel 查。
+ * 这里只登记「这个应用认得哪几家、默认端点是什么、去哪儿拿 key」。
+ * **一个模型都不预设**：模型 id 在国内变得太快，预设一份只会过期，
+ * 而过期的默认值比没有默认值更糟 —— 用户会以为它能用，直到真跑起来才报错。
  *
- * 文本接口六家都是 OpenAI 兼容（protocol: 'openai-chat'），共用一个适配器；
- * 图片/视频各家是自有的异步任务接口（'async-task'），按家适配。
+ * 所以模型全部由用户在「新增供应商」之后自己加。`findModel` 只查用户加的那些。
+ *
+ * 文本接口这几家都是 OpenAI 兼容，共用一个适配器；
+ * 图片/视频是各家自有的异步任务接口，见 Rust 侧 generate::adapters。
  */
-
-const text = (
-  id: string, name: string, provider: ProviderId,
-  caps: ModelSpec['caps'], context?: number, note?: string,
-): ModelSpec => ({ id, name, provider, modality: 'text', protocol: 'openai-chat', caps, context, note });
-
-const visual = (
-  id: string, name: string, provider: ProviderId, modality: Modality,
-  caps: ModelSpec['caps'] = { refImage: true }, note?: string,
-): ModelSpec => ({ id, name, provider, modality, protocol: 'async-task', caps, note });
-
 export const PROVIDERS: readonly ProviderSpec[] = [
   {
     id: 'volcengine', name: '火山方舟', en: 'Volcengine Ark',
     baseUrl: 'https://ark.cn-beijing.volces.com/api/v3',
     console: 'https://console.volcengine.com/ark',
-    docs: 'https://docs.volcengine.com/docs/82379/1928261',
-    models: [
-      text('doubao-pro-32k', '豆包 Pro 32K', 'volcengine', { stream: true, tools: true }, 32_768),
-      text('doubao-vision-pro', '豆包 Vision Pro', 'volcengine', { stream: true, tools: true, vision: true }, 32_768),
-      visual('doubao-seedream', 'Seedream 文生图', 'volcengine', 'image'),
-      visual('doubao-seedance', 'Seedance 视频', 'volcengine', 'video', { refImage: true },
-        '分镜页默认用的就是它'),
-    ],
+    docs: 'https://www.volcengine.com/docs/82379',
   },
   {
     id: 'deepseek', name: 'DeepSeek', en: 'DeepSeek',
     baseUrl: 'https://api.deepseek.com',
-    console: 'https://platform.deepseek.com',
-    models: [
-      text('deepseek-chat', 'DeepSeek Chat', 'deepseek', { stream: true, tools: true }, 65_536),
-      text('deepseek-reasoner', 'DeepSeek Reasoner', 'deepseek', { stream: true, reasoning: true }, 65_536,
-        '推理型：拆结构、算成本这类活儿更稳，但慢'),
-    ],
+    console: 'https://platform.deepseek.com/api_keys',
+    docs: 'https://api-docs.deepseek.com',
   },
   {
     id: 'zhipu', name: '智谱 GLM', en: 'Zhipu BigModel',
     baseUrl: 'https://open.bigmodel.cn/api/paas/v4',
-    console: 'https://bigmodel.cn',
-    models: [
-      text('glm-4-plus', 'GLM-4 Plus', 'zhipu', { stream: true, tools: true }, 128_000),
-      text('glm-4v-plus', 'GLM-4V Plus', 'zhipu', { stream: true, vision: true }, 8_192),
-      visual('cogview-3-plus', 'CogView 文生图', 'zhipu', 'image', {}),
-      visual('cogvideox', 'CogVideoX 视频', 'zhipu', 'video'),
-    ],
+    console: 'https://open.bigmodel.cn/usercenter/apikeys',
+    docs: 'https://open.bigmodel.cn/dev/api',
   },
   {
     id: 'bailian', name: '阿里百炼', en: 'Alibaba Model Studio',
     baseUrl: 'https://dashscope.aliyuncs.com/compatible-mode/v1',
     console: 'https://bailian.console.aliyun.com',
-    docs: 'https://help.aliyun.com/zh/model-studio/compatibility-of-openai-with-dashscope',
-    models: [
-      text('qwen-max', '通义千问 Max', 'bailian', { stream: true, tools: true }, 32_768),
-      text('qwen-vl-max', '通义千问 VL Max', 'bailian', { stream: true, vision: true }, 32_768),
-      visual('wanx-v1', '万相 文生图', 'bailian', 'image'),
-      visual('wanx-video', '万相 视频', 'bailian', 'video'),
-    ],
+    docs: 'https://help.aliyun.com/zh/model-studio',
   },
   {
     id: 'hunyuan', name: '腾讯混元', en: 'Tencent Hunyuan',
     baseUrl: 'https://api.hunyuan.cloud.tencent.com/v1',
     console: 'https://console.cloud.tencent.com/hunyuan',
-    docs: 'https://cloud.tencent.com/document/product/1729/111007',
-    models: [
-      text('hunyuan-turbo', '混元 Turbo', 'hunyuan', { stream: true, tools: true }, 32_768),
-      visual('hunyuan-image', '混元 文生图', 'hunyuan', 'image'),
-    ],
+    docs: 'https://cloud.tencent.com/document/product/1729',
   },
   {
     id: 'moonshot', name: '月之暗面', en: 'Moonshot Kimi',
     baseUrl: 'https://api.moonshot.cn/v1',
-    console: 'https://platform.moonshot.cn',
-    models: [
-      text('moonshot-v1-128k', 'Kimi 128K', 'moonshot', { stream: true, tools: true }, 131_072,
-        '长上下文：整本剧本喂进去做全局改写'),
-    ],
+    console: 'https://platform.moonshot.cn/console/api-keys',
+    docs: 'https://platform.moonshot.cn/docs',
   },
   {
     id: 'custom', name: '自定义端点', en: 'OpenAI-compatible',
+    // 端点与模型全靠用户填 —— 自建网关、Ollama、公司内网代理都走这条
     baseUrl: '',
     userDefined: true,
-    models: [],
   },
 ];
 
@@ -99,31 +61,27 @@ const BY_ID = new Map(PROVIDERS.map((p) => [p.id, p]));
 
 export const providerOf = (id: ProviderId): ProviderSpec | undefined => BY_ID.get(id);
 
-/** 内置目录里的全部模型 */
-export const BUILTIN_MODELS: readonly ModelSpec[] = PROVIDERS.flatMap((p) => p.models);
-
 /**
- * 查一个模型。extra 是用户在设置里自己加的（自定义端点、内置目录没跟上的新模型），
- * 优先级高于内置 —— 同 id 以用户填的为准。
+ * 查一个模型。**只查用户自己加的** —— 没有内置模型可查。
+ *
+ * 查不到返回 undefined，调用方要如实说「这个模型不在列表里」，
+ * 不要回落到某个「差不多的」：那会让人以为配好了，跑起来才发现不是那个模型。
  */
 export function findModel(
   ref: ModelRef | undefined,
-  extra: readonly ModelSpec[] = [],
+  models: readonly ModelSpec[] = [],
 ): ModelSpec | undefined {
   if (!ref) return undefined;
-  const hit = (list: readonly ModelSpec[]) =>
-    list.find((m) => m.provider === ref.provider && m.id === ref.model);
-  return hit(extra) ?? hit(BUILTIN_MODELS);
+  return models.find((m) => m.provider === ref.provider && m.id === ref.model);
 }
 
-/** 某个模态下可选的模型（内置 + 用户自加） */
+/** 某个模态下可选的模型。全部来自用户添加 */
 export function modelsOfModality(
   modality: Modality,
-  extra: readonly ModelSpec[] = [],
+  models: readonly ModelSpec[] = [],
 ): ModelSpec[] {
-  const all = [...extra, ...BUILTIN_MODELS];
   const seen = new Set<string>();
-  return all.filter((m) => {
+  return models.filter((m) => {
     if (m.modality !== modality) return false;
     const k = `${m.provider}/${m.id}`;
     if (seen.has(k)) return false;
@@ -132,13 +90,18 @@ export function modelsOfModality(
   });
 }
 
-/** 默认挑一个：优先已配置的厂商，其次内置顺序 */
+/**
+ * 不指定时用哪个模型：在**已接入厂商**里挑第一个能用的。
+ *
+ * 一个都没有就返回 undefined —— 界面要说「还没有可用模型」，
+ * 而不是编一个出来。这是整个改动的要点：**没配过的东西不该有默认值**。
+ */
 export function defaultModel(
   modality: Modality,
-  configured: readonly ProviderId[] = [],
-  extra: readonly ModelSpec[] = [],
+  ready: readonly ProviderId[] = [],
+  models: readonly ModelSpec[] = [],
 ): ModelRef | undefined {
-  const list = modelsOfModality(modality, extra);
-  const preferred = list.find((m) => configured.includes(m.provider)) ?? list[0];
-  return preferred ? { provider: preferred.provider, model: preferred.id } : undefined;
+  const list = modelsOfModality(modality, models);
+  const hit = list.find((m) => ready.includes(m.provider)) ?? list[0];
+  return hit ? { provider: hit.provider, model: hit.id } : undefined;
 }

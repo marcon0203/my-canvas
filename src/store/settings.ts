@@ -6,7 +6,7 @@ import { defaultConfig, defaultConfigs } from '@/domain/agent/config';
 import type { AgentId } from '@/domain/agent/roster';
 import { personaById } from '@/domain/agent/roster';
 import type { Modality, ModelRef, ModelSpec, ProviderId } from '@/domain/providers/model';
-import { defaultModel, providerOf } from '@/domain/providers/catalog';
+import { PROVIDERS, defaultModel, providerOf } from '@/domain/providers/catalog';
 import { maskHint, vault } from '@/api/desktop';
 
 /**
@@ -49,6 +49,13 @@ export interface SettingsState {
   clearKey: (id: ProviderId) => void;
   /** 启动时与钥匙串对一遍 —— 换台机器打开，状态要跟着那台机器的钥匙串走 */
   syncKeys: () => void;
+  /**
+   * 接入一家厂商。**「有没有这条记录」就是「接没接入」** ——
+   * 不另设一个 added 布尔值，那种设计迟早出现「记录在但 added=false」的中间态。
+   */
+  addProvider: (id: ProviderId, baseUrl?: string) => void;
+  /** 移除一家。连它下面的模型一起删；密钥单独清（在钥匙串里，不在这儿） */
+  removeProvider: (id: ProviderId) => void;
   toggleProvider: (id: ProviderId, on: boolean) => void;
   addModel: (id: ProviderId, m: ModelSpec) => void;
   removeModel: (id: ProviderId, modelId: string) => void;
@@ -105,6 +112,22 @@ export const useSettings = create<SettingsState>()(
           });
         });
       },
+      addProvider: (id, baseUrl) => set((s) => {
+        if (s.providers[id]) return s;          // 已经接入过，别把用户填的覆盖掉
+        return {
+          providers: {
+            ...s.providers,
+            [id]: { hasKey: false, extraModels: [], ...(baseUrl ? { baseUrl } : {}) },
+          },
+        };
+      }),
+
+      removeProvider: (id) => set((s) => {
+        const next = { ...s.providers };
+        delete next[id];
+        return { providers: next };
+      }),
+
       toggleProvider: (id, on) => set((s) => ({
         providers: { ...s.providers, [id]: { ...blank(s.providers[id]), disabled: !on } },
       })),
@@ -166,7 +189,17 @@ export const providerSetting = (s: SettingsState, id: ProviderId): ProviderSetti
 export const baseUrlOf = (s: SettingsState, id: ProviderId): string =>
   s.providers[id]?.baseUrl || providerOf(id)?.baseUrl || '';
 
-/** 可用的厂商：配了 key 且没停用。自定义端点还得填了 baseUrl */
+/**
+ * 已接入的厂商，顺序按目录。
+ *
+ * **「有没有这条记录」就是「接没接入」** —— 不另设一个 added 布尔值，
+ * 那种设计迟早出现「记录在但 added=false」这种说不清的中间态。
+ */
+export function addedProviders(s: SettingsState): ProviderId[] {
+  return PROVIDERS.map((p) => p.id).filter((id) => !!s.providers[id]);
+}
+
+/** 可用的厂商：接入了、配了 key、没停用。自定义端点还得填了 baseUrl */
 export function readyProviders(s: SettingsState): ProviderId[] {
   return (Object.keys(s.providers) as ProviderId[]).filter((id) => {
     const p = s.providers[id]!;
@@ -214,4 +247,9 @@ export function useExtraModels(): ModelSpec[] {
 export function useReadyProviders(): ProviderId[] {
   const providers = useSettings((s) => s.providers);
   return useMemo(() => readyProviders({ providers } as SettingsState), [providers]);
+}
+
+export function useAddedProviders(): ProviderId[] {
+  const providers = useSettings((s) => s.providers);
+  return useMemo(() => addedProviders({ providers } as SettingsState), [providers]);
 }

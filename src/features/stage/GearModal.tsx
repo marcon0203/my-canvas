@@ -11,7 +11,7 @@ export function GearModal({ open, onClose, rig, onPatch }: {
 }) {
   if (!open) return null;
   return (
-    <Modal open={open} onClose={onClose}
+    <Modal open={open} onClose={onClose} wide
       title="摄影机"
       subtitle="选真实器材，不是「标准焦段」— 光圈决定虚化，焦段决定空间压缩">
       <GearWheel rig={rig} onChange={onPatch} />

@@ -5,12 +5,23 @@ import {
   canHandleConfigured, checkConfig, defaultConfig, defaultConfigs,
   neededModalities, ownerOfConfigured, preambleOf,
 } from './config';
-import type { ModelRef } from '@/domain/providers/model';
+import { makeModel, type ModelRef, type ModelSpec } from '@/domain/providers/model';
 
 const TEXT: ModelRef = { provider: 'deepseek', model: 'deepseek-chat' };
 const IMAGE: ModelRef = { provider: 'zhipu', model: 'cogview-3-plus' };
 const VIDEO: ModelRef = { provider: 'volcengine', model: 'doubao-seedance' };
 const ALL = { text: TEXT, image: IMAGE, video: VIDEO };
+
+/**
+ * 模型全部由用户添加 —— 目录里一个都不预设，所以校验用的样本得自带，
+ * 并且要真的传给 checkConfig：不传就等于「一个模型都没加」，那本来就该报找不到。
+ */
+const MODELS: ModelSpec[] = [
+  makeModel({ provider: 'deepseek', id: 'deepseek-chat', name: 'DeepSeek Chat', modality: 'text', caps: { stream: true, tools: true } }),
+  makeModel({ provider: 'deepseek', id: 'deepseek-reasoner', name: 'DeepSeek Reasoner', modality: 'text', caps: { stream: true, reasoning: true } }),
+  makeModel({ provider: 'zhipu', id: 'cogview-3-plus', name: 'CogView 3 Plus', modality: 'image', caps: {} }),
+  makeModel({ provider: 'volcengine', id: 'doubao-seedance', name: 'Seedance', modality: 'video', caps: { refImage: true } }),
+];
 
 describe('agent/config · 默认配置自洽', () => {
   it('出厂默认下每位都能接自己认领的全部活儿', () => {
@@ -25,14 +36,14 @@ describe('agent/config · 默认配置自洽', () => {
   it('默认配置 + 三个模态都配了模型 → 零问题', () => {
     const cfgs = defaultConfigs();
     for (const p of PERSONAS) {
-      expect(checkConfig(cfgs[p.id], ALL).filter((i) => i.level === 'error'), p.name).toEqual([]);
+      expect(checkConfig(cfgs[p.id], ALL, MODELS).filter((i) => i.level === 'error'), p.name).toEqual([]);
     }
   });
 
   it('只要文本模型：剪辑不该被要求配文生图', () => {
     const editor = defaultConfig(personaById('editor'));
     expect(neededModalities(editor)).toEqual(['text']);
-    expect(checkConfig(editor, { text: TEXT }).filter((i) => i.level === 'error')).toEqual([]);
+    expect(checkConfig(editor, { text: TEXT }, MODELS).filter((i) => i.level === 'error')).toEqual([]);
   });
 
   it('模态顺序恒为 文本 → 图片 → 视频，不随勾工具的先后变', () => {
@@ -45,7 +56,7 @@ describe('agent/config · 默认配置自洽', () => {
   it('摄影指导要视频模型 —— 没配就报错，不静默跑不动', () => {
     const dp = defaultConfig(personaById('dp'));
     expect(neededModalities(dp)).toContain('video');
-    const issues = checkConfig(dp, { text: TEXT });
+    const issues = checkConfig(dp, { text: TEXT }, MODELS);
     expect(issues.some((i) => i.level === 'error' && i.text.includes('视频'))).toBe(true);
   });
 });
@@ -54,26 +65,32 @@ describe('agent/config · 报问题而不是偷偷改', () => {
   it('接了活却勾掉工具 → 明确报缺哪几件', () => {
     const dp = defaultConfig(personaById('dp'));
     const crippled = { ...dp, tools: dp.tools.filter((t) => t !== 'video.generate') };
-    const issues = checkConfig(crippled, ALL);
+    const issues = checkConfig(crippled, ALL, MODELS);
     expect(issues.some((i) => i.level === 'error' && i.text.includes('video.generate'))).toBe(true);
   });
 
   it('模型配错模态 → 报错', () => {
     const dp = defaultConfig(personaById('dp'));
     const wrong = { ...dp, models: { video: IMAGE } };
-    expect(checkConfig(wrong, ALL).some((i) => i.level === 'error' && i.text.includes('用不了'))).toBe(true);
+    expect(checkConfig(wrong, ALL, MODELS).some((i) => i.level === 'error' && i.text.includes('用不了'))).toBe(true);
   });
 
-  it('模型在目录里找不到 → 报错（厂商改了 id 的情况）', () => {
+  it('一个模型都没加 → 每个模态都报找不到，不静默当成配好了', () => {
+    const w = defaultConfig(personaById('writer'));
+    const issues = checkConfig({ ...w, models: { text: TEXT } }, {});
+    expect(issues.some((i) => i.level === 'error' && i.text.includes('找不到'))).toBe(true);
+  });
+
+  it('模型不在已添加的列表里 → 报错（厂商改了 id 的情况）', () => {
     const w = defaultConfig(personaById('writer'));
     const gone = { ...w, models: { text: { provider: 'deepseek' as const, model: 'deepseek-v0-不存在' } } };
-    expect(checkConfig(gone, ALL).some((i) => i.text.includes('找不到'))).toBe(true);
+    expect(checkConfig(gone, ALL, MODELS).some((i) => i.text.includes('找不到'))).toBe(true);
   });
 
   it('模型不支持工具调用 → 只是 warn，不拦着用', () => {
     const w = defaultConfig(personaById('writer'));
     const noTools = { ...w, models: { text: { provider: 'deepseek' as const, model: 'deepseek-reasoner' } } };
-    const issues = checkConfig(noTools, ALL);
+    const issues = checkConfig(noTools, ALL, MODELS);
     expect(issues.some((i) => i.level === 'warn' && i.text.includes('工具调用'))).toBe(true);
     expect(issues.filter((i) => i.level === 'error')).toEqual([]);
   });

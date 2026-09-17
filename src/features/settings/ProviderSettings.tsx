@@ -1,11 +1,11 @@
 import { useState } from 'react';
-import { Button, Chip, Icon, Input, Modal, Segmented, Switch } from '@/ui';
+import { Button, Chip, Icon, Input, Modal, Segmented, Switch, ToggleChip } from '@/ui';
 import { PROVIDERS, providerOf } from '@/domain/providers/catalog';
 import {
   CAPS_OF, MODALITY_LABEL, defaultCaps, makeModel,
   type Modality, type ModelSpec, type ProviderId,
 } from '@/domain/providers/model';
-import { baseUrlOf, providerSetting, useSettings } from '@/store/settings';
+import { baseUrlOf, providerSetting, useAddedProviders, useSettings } from '@/store/settings';
 import { Field, Fields } from './Field';
 import { useUi } from '@/store/ui';
 
@@ -20,19 +20,54 @@ const TONE: Record<Modality, 'a' | 'ok' | 'warn'> = { text: 'a', image: 'ok', vi
  * 七家的表单平铺在一页时，光是找「智谱的密钥填哪」就得滚半天。
  */
 export function ProviderList({ onOpen }: { onOpen: (id: ProviderId) => void }) {
+  const added = useAddedProviders();
+  const [adding, setAdding] = useState(false);
+
   return (
-    <div className="agrid">
-      {PROVIDERS.map((p) => <ProviderTile key={p.id} id={p.id} onOpen={onOpen} />)}
-    </div>
+    <>
+      <section className="pcard">
+        <header className="pcard__h">
+          <span className="pcard__n">已接入 · {added.length}</span>
+          <span className="t-cap dim">支持 {PROVIDERS.length} 家，接入哪家由你决定</span>
+          <div className="spacer" />
+          <Button variant="primary" onClick={() => setAdding(true)}>
+            <Icon name="plus" />新增供应商
+          </Button>
+        </header>
+
+        {added.length === 0 ? (
+          <div className="empty">
+            <Icon name="cube" />
+            还没接入任何供应商。点右上角选一家，填上密钥就能用。
+            <span className="t-cap dim">
+              模型不预设 —— 接入之后你自己加要用的那几个。
+              国内模型 id 变得快，预设一份只会过期，而过期的默认值比没有更糟。
+            </span>
+          </div>
+        ) : (
+          <div className="agrid">
+            {added.map((id) => <ProviderTile key={id} id={id} onOpen={onOpen} />)}
+          </div>
+        )}
+      </section>
+
+      <AddProviderModal open={adding} onClose={() => setAdding(false)} onAdded={onOpen} />
+    </>
   );
 }
 
+/**
+ * 一家厂商一张卡：接没接、有几个模型、停用没停用。
+ *
+ * 模型数全部来自用户添加 —— 目录不预设模型，所以「0 个模型」是
+ * 刚接入的正常状态，卡片得把下一步说出来，而不是显示成一个错误。
+ */
 function ProviderTile({ id, onOpen }: { id: ProviderId; onOpen: (id: ProviderId) => void }) {
   const spec = providerOf(id)!;
   const setting = useSettings((s) => providerSetting(s, id));
   const toggle = useSettings((s) => s.toggleProvider);
 
-  const models = [...spec.models, ...setting.extraModels];
+  const models = setting.extraModels;
   const byModality = MODALITIES.map((m) => ({ m, n: models.filter((x) => x.modality === m).length }))
     .filter((x) => x.n > 0);
   const off = setting.disabled;
@@ -58,9 +93,11 @@ function ProviderTile({ id, onOpen }: { id: ProviderId; onOpen: (id: ProviderId)
         <p className={`atile__st${!setting.hasKey && !off ? ' atile__st--bad' : ''}`}>
           {off
             ? '已停用，它的模型不会出现在选择列表里'
-            : setting.hasKey
-              ? `${models.length} 个模型可用`
-              : '没有密钥，它的模型选了也跑不起来'}
+            : !setting.hasKey
+              ? '没有密钥，模型选了也跑不起来'
+              : models.length
+                ? `${models.length} 个模型可用`
+                : '还没加模型 —— 点进去把要用的加上'}
         </p>
       </button>
       <div className="atile__sw">
@@ -70,19 +107,145 @@ function ProviderTile({ id, onOpen }: { id: ProviderId; onOpen: (id: ProviderId)
   );
 }
 
+/**
+ * 新增供应商：选一家 → 填端点与密钥。
+ *
+ * 密钥在这里就写进钥匙串 —— 接入一家和给它密钥是同一件事，
+ * 分两步做会留下一堆「接入了但没法用」的空壳。
+ */
+function AddProviderModal({ open, onClose, onAdded }: {
+  open: boolean;
+  onClose: () => void;
+  onAdded: (id: ProviderId) => void;
+}) {
+  const settings = useSettings((s) => s.providers);
+  const addProvider = useSettings((s) => s.addProvider);
+  const setKey = useSettings((s) => s.setKey);
+  const setBaseUrl = useSettings((s) => s.setBaseUrl);
+  const toast = useUi((s) => s.toast);
+
+  const avail = PROVIDERS.filter((p) => !settings[p.id]);
+  const [pick, setPick] = useState<ProviderId | ''>('');
+  const [url, setUrl] = useState('');
+  const [key, setK] = useState('');
+  const [busy, setBusy] = useState(false);
+
+  const spec = pick ? providerOf(pick) : undefined;
+  // 自定义端点必须自己填；其余家留空就用默认
+  const needUrl = !!spec?.userDefined;
+  const ready = !!pick && (!needUrl || url.trim().length > 0);
+
+  const close = () => { setPick(''); setUrl(''); setK(''); onClose(); };
+
+  const submit = async () => {
+    if (!pick || !ready) return;
+    setBusy(true);
+    try {
+      addProvider(pick, url.trim() || undefined);
+      if (needUrl && url.trim()) setBaseUrl(pick, url.trim());
+      if (key.trim()) {
+        await setKey(pick, key.trim());
+        toast(`${spec?.name} 已接入 —— 密钥写进系统钥匙串，前端不保存明文`);
+      } else {
+        toast(`${spec?.name} 已接入。还没填密钥，模型选了也跑不起来`);
+      }
+      const id = pick;
+      close();
+      onAdded(id);
+    } catch (e) {
+      toast(String((e as { message?: string })?.message ?? e));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <Modal open={open} onClose={close} title="新增供应商"
+      footer={<>
+        <Button onClick={close}>取消</Button>
+        <Button variant="primary" disabled={!ready || busy} onClick={() => void submit()}>
+          <Icon name="check" />{busy ? '接入中' : '接入'}
+        </Button>
+      </>}>
+      <div className="mo__form">
+        <div className="mo__field">
+          <span className="sec">选一家</span>
+          {avail.length === 0 ? (
+            <span className="t-cap dim">支持的几家都已经接入了。</span>
+          ) : (
+            <div className="chipwall">
+              {avail.map((p) => (
+                <ToggleChip key={p.id} on={pick === p.id}
+                  onClick={() => { setPick(p.id); setUrl(p.userDefined ? '' : ''); }}
+                  title={p.userDefined ? '自建网关、Ollama、公司内网代理都走这条' : p.baseUrl}>
+                  {p.name}
+                </ToggleChip>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {spec && (
+          <>
+            <div className="mo__field">
+              <span className="sec">端点{needUrl ? '（必填）' : ''}</span>
+              <Input value={url}
+                placeholder={needUrl ? '例如 http://localhost:11434/v1' : spec.baseUrl}
+                onChange={(e) => setUrl(e.target.value)} />
+              <span className="t-cap dim">
+                {needUrl
+                  ? '自定义端点没有默认值，必须填'
+                  : '留空就用默认；企业版或自建网关在这儿改'}
+              </span>
+            </div>
+
+            <div className="mo__field">
+              <span className="sec">密钥</span>
+              <Input type="password" value={key} placeholder="sk-…"
+                onChange={(e) => setK(e.target.value)} />
+              <span className="t-cap dim">
+                写进系统钥匙串，前端不保存明文，界面上只显示尾号。
+                {spec.console && <> 没有的话去 <a className="pcard__link" href={spec.console} target="_blank" rel="noreferrer">控制台拿 ↗</a></>}
+              </span>
+            </div>
+
+            <div className="mo__field">
+              <span className="sec">接下来</span>
+              <span className="t-cap dim">
+                接入之后进它的详情页，把要用的模型加上 —— 模型 id 照厂商文档填，
+                这里不预设也不猜。
+              </span>
+            </div>
+          </>
+        )}
+      </div>
+    </Modal>
+  );
+}
+
 /** 模型设置 · 供应商详情：端点、密钥、模型清单 */
-export function ProviderDetail({ id }: { id: ProviderId }) {
+export function ProviderDetail({ id, onBack }: { id: ProviderId; onBack: () => void }) {
   const spec = providerOf(id)!;
   const setting = useSettings((s) => providerSetting(s, id));
   const baseUrl = useSettings((s) => baseUrlOf(s, id));
   const setKey = useSettings((s) => s.setKey);
   const clearKey = useSettings((s) => s.clearKey);
   const setBaseUrl = useSettings((s) => s.setBaseUrl);
+  const removeProvider = useSettings((s) => s.removeProvider);
   const toast = useUi((s) => s.toast);
   const [draftKey, setDraftKey] = useState('');
   const [adding, setAdding] = useState(false);
+  const [dropping, setDropping] = useState(false);
 
-  const models = [...spec.models, ...setting.extraModels];
+  const models = setting.extraModels;
+
+  // 移除要先清钥匙串再删记录：反过来的话记录没了，那把 key 就留在钥匙串里没人管
+  const drop = () => {
+    clearKey(id);
+    removeProvider(id);
+    toast(`已移除 ${spec.name} —— 密钥也从钥匙串里清掉了`);
+    onBack();
+  };
 
   return (
     <>
@@ -95,6 +258,19 @@ export function ProviderDetail({ id }: { id: ProviderId }) {
           <div className="spacer" />
           {spec.console && (
             <a className="pcard__link" href={spec.console} target="_blank" rel="noreferrer">去控制台拿 key ↗</a>
+          )}
+          {dropping ? (
+            <>
+              <span className="t-cap" style={{ color: 'var(--color-warning)' }}>
+                {models.length
+                  ? `连它下面的 ${models.length} 个模型一起删，密钥也一起清掉？`
+                  : '移除它，密钥也一起清掉？'}
+              </span>
+              <Button onClick={() => setDropping(false)}>取消</Button>
+              <Button className="tbtn--bad" onClick={drop}><Icon name="trash" />确认移除</Button>
+            </>
+          ) : (
+            <Button onClick={() => setDropping(true)}><Icon name="trash" />移除</Button>
           )}
         </header>
 
@@ -128,21 +304,20 @@ export function ProviderDetail({ id }: { id: ProviderId }) {
       <section className="pcard">
         <header className="pcard__h">
           <span className="pcard__n">模型 · {models.length}</span>
-          <span className="t-cap dim">目录只是种子，跟不上新模型就自己加</span>
+          <span className="t-cap dim">模型 id 照厂商文档填，这里不预设也不猜</span>
           <div className="spacer" />
           <Button onClick={() => setAdding(true)}><Icon name="plus" />新增模型</Button>
         </header>
         {models.length === 0 ? (
           <p className="t-cap dim" style={{ margin: 0 }}>
-            还没有模型。{spec.userDefined ? '自定义端点的模型全靠自己加 —— 填模型 id 与它的类型。' : '点右上角新增一个。'}
+            还没有模型。点右上角加一个 —— 模型 id 照厂商文档填。
           </p>
         ) : (
           <div className="mtable">
             <div className="mhead">
               <span>类型</span><span>名称</span><span>模型 id</span><span>上下文</span><span>能力</span><span />
             </div>
-            {models.map((m) => <ModelRow key={m.id} providerId={id} m={m}
-              custom={setting.extraModels.some((x) => x.id === m.id)} />)}
+            {models.map((m) => <ModelRow key={m.id} providerId={id} m={m} />)}
           </div>
         )}
       </section>
@@ -152,7 +327,7 @@ export function ProviderDetail({ id }: { id: ProviderId }) {
   );
 }
 
-function ModelRow({ providerId, m, custom }: { providerId: ProviderId; m: ModelSpec; custom: boolean }) {
+function ModelRow({ providerId, m }: { providerId: ProviderId; m: ModelSpec }) {
   const remove = useSettings((s) => s.removeModel);
   const toast = useUi((s) => s.toast);
   const caps = [
@@ -166,14 +341,10 @@ function ModelRow({ providerId, m, custom }: { providerId: ProviderId; m: ModelS
       <span className="mono dim mrow__id">{m.id}</span>
       <span className="mrow__ctx">{m.context ? `${Math.round(m.context / 1024)}K` : '—'}</span>
       <span className="mrow__caps">{caps.map((c) => <Chip key={c}>{c}</Chip>)}</span>
-      {custom
-        ? (
-          <button className="tbtn mrow__del" title="移除这个自加的模型"
-            onClick={() => { remove(providerId, m.id); toast(`已移除 ${m.id}`); }}>
-            <Icon name="trash" />
-          </button>
-        )
-        : <span />}
+      <button className="tbtn mrow__del" title="移除这个模型"
+        onClick={() => { remove(providerId, m.id); toast(`已移除 ${m.id}`); }}>
+        <Icon name="trash" />
+      </button>
     </div>
   );
 }
@@ -210,7 +381,7 @@ function AddModelModal({ open, providerId, onClose }: {
     setCaps(defaultCaps(m));
   };
 
-  const taken = [...spec.models, ...setting.extraModels].some((m) => m.id === id.trim());
+  const taken = setting.extraModels.some((m) => m.id === id.trim());
 
   const submit = () => {
     const mid = id.trim();

@@ -338,9 +338,15 @@ function ModelSelect({ modality, value, inherited, onChange }: {
   ];
 
   return (
-    <Select ariaLabel={`${MODALITY_LABEL[modality]}模型`}
-      value={value ? modelKey(value) : ''}
-      options={options}
-      onChange={(v) => onChange(v ? parseModelKey(v) : undefined)} />
+    <>
+      <Select ariaLabel={`${MODALITY_LABEL[modality]}模型`}
+        value={value ? modelKey(value) : ''}
+        options={options}
+        onChange={(v) => onChange(v ? parseModelKey(v) : undefined)} />
+      {/* 一个模型都没有时，光一个空下拉框说不清该去哪儿加 */}
+      {list.length === 0 && (
+        <span className="t-cap dim">去「模型设置」接入厂商，再把要用的模型加上</span>
+      )}
+    </>
   );
 }
