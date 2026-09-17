@@ -10,6 +10,9 @@
 
 import { BUILTIN_SKILLS, builtinSkill } from '@/domain/skills/builtin';
 import type { SkillMeta, SkillWarning } from '@/domain/skills/loader';
+import type { ProposalPatch } from '@/domain/agent/types';
+import type { Risk } from '@/domain/agent/policy';
+import type { ToolId, ToolStatus } from '@/domain/agent/tools';
 
 export interface KeyStatus {
   provider: string;
@@ -204,4 +207,81 @@ export async function skillBody(name: string, workspace = ''): Promise<string> {
 export async function skillResource(name: string, rel: string, workspace = ''): Promise<string> {
   if (!isDesktop()) return '';
   return invoke<string>('skill_resource', { name, rel, workspace });
+}
+
+/* ---------------- 工具调用 ---------------- */
+
+/** 一次工具调用的结果。与 Rust 侧 `tools::Outcome` 同形（`t` 是判别字段） */
+export type Outcome =
+  | { t: 'ok'; value: unknown }
+  /** 写类工具的产物：一份补丁，交给人采纳后再由 store 应用 */
+  | { t: 'patch'; tool: string; patch: ProposalPatch }
+  /** 超出自主上限，等人点头。点了之后拿 `approved: true` 再调一次 */
+  | { t: 'needsApproval'; tool: string; risk: Risk; why: string }
+  | { t: 'notImplemented'; tool: string; blockedBy: string }
+  /** 不在 Rust 侧跑（布光台），由前端执行 */
+  | { t: 'elsewhere'; tool: string; runsIn: 'rust' | 'browser' };
+
+export interface ToolCallArgs {
+  projectId: string;
+  tool: ToolId;
+  args: Record<string, unknown>;
+  /** 这个 Agent 的自主上限 */
+  autoMax?: Risk;
+  /**
+   * **只有人真的点了「同意」才给 true**，而且只对这一次调用。
+   *
+   * 闸门的语义是「能不能不问就干」，egress 那档永远要问；
+   * 没有这个开关的话，人点了同意也执行不了（那条洞在 core 的 `tools::By` 上写着）。
+   * 它不存进任何配置，也不由模型的输出决定。
+   */
+  approved?: boolean;
+  /** 生成类工具要用：找模型与端点 */
+  cfg?: unknown;
+  globals?: unknown;
+  providers?: unknown;
+  /** 工作空间根目录。路径的持久化在前端，每次调用传下去（Rust 侧无状态） */
+  workspace?: string;
+}
+
+/**
+ * 调一次工具。**闸门在 Rust 侧的 dispatch 里**，这层只转发 ——
+ * 在前端补一套判断迟早和 Rust 那套对不上，而对不上的那一侧总是更宽松的那个。
+ *
+ * 浏览器里没有 Rust：如实返回「在别处跑」，不要在这儿伪造一个成功结果。
+ */
+export async function toolCall(a: ToolCallArgs): Promise<Outcome> {
+  if (!isDesktop()) {
+    return { t: 'notImplemented', tool: a.tool, blockedBy: '浏览器里没有 Rust 侧，工具要在桌面端才跑得起来' };
+  }
+  return invoke<Outcome>('tool_call', {
+    projectId: a.projectId,
+    tool: a.tool,
+    args: a.args,
+    autoMax: a.autoMax,
+    approved: a.approved ?? false,
+    cfg: a.cfg,
+    globals: a.globals,
+    providers: a.providers,
+    workspace: a.workspace ?? '',
+  });
+}
+
+/** 工具清单。桌面端以 Rust 的注册表为准 —— 那边才是真正会执行的那份 */
+export async function toolsList(): Promise<RustToolSpec[]> {
+  if (!isDesktop()) return [];
+  return invoke<RustToolSpec[]>('tools_list', {});
+}
+
+/** Rust 侧 `ToolSpec` 的形状（比前端那份多 schema 与 runsIn） */
+export interface RustToolSpec {
+  id: ToolId;
+  name: string;
+  group: string;
+  description: string;
+  risk: Risk;
+  runsIn: 'rust' | 'browser';
+  status: ToolStatus;
+  blockedBy?: string;
+  schema: unknown;
 }

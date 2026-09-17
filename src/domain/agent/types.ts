@@ -1,4 +1,4 @@
-import type { Asset, AssetGroup } from '@/domain/assets/model';
+import type { Asset, AssetGroup, Rig } from '@/domain/assets/model';
 import type { Shot } from '@/domain/shots/model';
 import type { Act, DocBlock } from '@/domain/story/model';
 import type { AgentId } from './roster';
@@ -37,6 +37,14 @@ export type ProposalPatch =
   | { t: 'shotPrompts'; edits: { id: string; own: string }[] }
   | { t: 'style'; style: string; stylePrompt: string }
   | { t: 'assetLock'; aid: string }
+  /**
+   * `asset.write` 工具的产物：只有分组/aid/名字/描述。
+   * 形状照那一堆由 `assetShell` 在应用补丁时补 —— aid 在 Rust 侧编号（它看得到
+   * 全项目已用的号），资产的形状归前端 domain 管，两边各做自己擅长的那半。
+   */
+  | { t: 'assetsDraft'; add: { group: AssetGroup; aid: string; name: string; desc: string; voice?: string }[] }
+  /** `shot.rig` 的产物：**只覆盖给到的字段**，没给的保持原样 */
+  | { t: 'shotRig'; edits: { id: string; rig: Partial<Rig> }[] }
   | { t: 'run'; action: 'video.batch' | 'edit.autocut' };
 
 /** 产物预览行：采纳前给人看的 diff 摘要 */

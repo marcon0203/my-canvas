@@ -99,12 +99,16 @@ fn tools_list() -> Vec<ToolSpec> {
 ///
 /// `cfg` / `globals` / `providers` 只有生成类工具要用（靠它们找模型与端点），
 /// 其余工具不用传。
+///
+/// `approved`：**只有在人真的点了「同意」之后才传 true**，而且只对那一次调用。
+/// 它不是设置，不落盘，也绝不能由模型的输出决定 —— 见 core 里 `tools::By`。
 #[tauri::command]
 async fn tool_call(
     project_id: String,
     tool: String,
     args: serde_json::Value,
     auto_max: Option<Risk>,
+    approved: Option<bool>,
     cfg: Option<AgentConfig>,
     globals: Option<HashMap<String, ModelRef>>,
     providers: Option<HashMap<String, ProviderSetting>>,
@@ -141,7 +145,8 @@ async fn tool_call(
         timeout: std::time::Duration::from_secs(300),
     });
 
-    tools::dispatch(&w.root, &project_id, &tool, args, auto_max, gen_ctx).await
+    let by = if approved == Some(true) { tools::By::Human } else { tools::By::Agent };
+    tools::dispatch(&w.root, &project_id, &tool, args, auto_max, by, gen_ctx).await
 }
 
 /* ---------------- Skill ---------------- */

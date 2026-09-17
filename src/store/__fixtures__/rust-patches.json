@@ -1,0 +1,74 @@
+{
+  "asset.lock": {
+    "aid": "CHAR-001",
+    "t": "assetLock"
+  },
+  "asset.write": {
+    "add": [
+      {
+        "aid": "CHAR-002",
+        "desc": "十岁，安静",
+        "group": "角色",
+        "name": "小林",
+        "voice": ""
+      }
+    ],
+    "t": "assetsDraft"
+  },
+  "outline.write": {
+    "acts": [
+      {
+        "beats": [
+          {
+            "id": "",
+            "k": "场景2",
+            "t": "开场"
+          }
+        ],
+        "id": "",
+        "span": "0:00–0:40",
+        "t": "新一幕"
+      }
+    ],
+    "t": "acts"
+  },
+  "script.write": {
+    "blocks": [
+      {
+        "body": "新写的一段正文",
+        "id": "d2",
+        "label": "场景2",
+        "type": "text"
+      }
+    ],
+    "t": "blocks"
+  },
+  "shot.rig": {
+    "edits": [
+      {
+        "id": "s1-1",
+        "rig": {
+          "az": 30,
+          "bright": 65
+        }
+      }
+    ],
+    "t": "shotRig"
+  },
+  "shot.write": {
+    "shots": [
+      {
+        "desc": "推近",
+        "id": "s1-2",
+        "sceneKey": "场景1",
+        "size": "中景"
+      }
+    ],
+    "t": "shots"
+  },
+  "style.apply": {
+    "style": "胶片质感",
+    "stylePrompt": "film photography, grainy",
+    "t": "style"
+  }
+}

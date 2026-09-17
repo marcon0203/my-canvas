@@ -11,6 +11,7 @@ import { applyIntentToView, RIG_COPY_KEYS } from '@/domain/prompt/apply';
 import type { ProjectBootstrap } from '@/api/mock';
 import type { Act, DocBlock } from '@/domain/story/model';
 import type { ProposalPatch } from '@/domain/agent/types';
+import { assetShell } from '@/domain/agent/drafts';
 
 export type { AssetGroup } from '@/domain/assets/model';
 
@@ -261,6 +262,17 @@ export const useProject = create<ProjectState>()(
           }
           case 'assets':
             for (const { group, asset } of patch.add) s.assets[group].push(asset);
+            break;
+          case 'assetsDraft':
+            // aid 是 Rust 侧编好的，这儿只把形状补全（见 assetShell 上的说明）
+            for (const d of patch.add) s.assets[d.group].push(assetShell(d));
+            break;
+          case 'shotRig':
+            for (const e of patch.edits) {
+              const sh = s.shots.find((x) => x.id === e.id);
+              // 逐字段合并，不整份替换 —— 整份替换会把布光台上调过的值抹回默认
+              if (sh) Object.assign(sh.rig, e.rig);
+            }
             break;
           case 'assetLock': {
             const a = [...s.assets.角色, ...s.assets.场景, ...s.assets.道具]

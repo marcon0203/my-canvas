@@ -10,7 +10,8 @@
     "tauri": "tauri",
     "test": "vitest run",
     "test:watch": "vitest",
-    "verify": "node verify.mjs && bash src-tauri/check-app.sh"
+    "verify": "node verify.mjs && bash src-tauri/check-app.sh",
+    "fixtures": "cargo run --quiet --manifest-path src-tauri/Cargo.toml -p studio-core --example patch_samples"
   },
   "dependencies": {
     "@react-three/drei": "^10.7.8",

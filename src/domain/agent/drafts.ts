@@ -169,19 +169,43 @@ export function candidateToAsset(cand: AssetCandidate, existing: readonly Asset[
     .filter(Boolean)
     .map((m) => Number(m![1]));
   const n = (nums.length ? Math.max(...nums) : 0) + 1;
-  const views: AssetView[] = VIEWS_OF[cand.group].map((name) => ({
+  return assetShell({
+    group: cand.group,
+    aid: `${prefix}-${String(n).padStart(3, '0')}`,
+    name: cand.name,
+    desc: `自剧本${cand.from}提取，待补描述`,
+  }, `${cand.name} 的%s，出自${cand.from}`);
+}
+
+/**
+ * 只有分组/aid/名字/描述的一份草稿 → 完整资产。
+ *
+ * `asset.write` 工具走这条：**aid 在 Rust 侧编**（它看得到全项目已用的号），
+ * 形状照那一堆在这儿补 —— 资产的形状归前端 domain 管，在 Rust 那边照抄
+ * 一份 rig 默认值迟早和这边对不上。
+ */
+export function assetShell(
+  d: { group: AssetGroup; aid: string; name: string; desc: string; voice?: string },
+  promptTpl = `${'%s'}`,
+): Asset {
+  const prefix = AID_PREFIX[d.group];
+  const n = Number(/(\d+)$/.exec(d.aid)?.[1] ?? 1);
+  const views: AssetView[] = VIEWS_OF[d.group].map((name) => ({
     name,
     style: '全局',
     gen: false,
     redo: 0,
-    prompt: `${cand.name} 的${name}，出自${cand.from}`,
+    prompt: promptTpl.includes('%s')
+      ? promptTpl.replace('%s', name)
+      : `${d.name} 的${name}`,
     rig: defaultRig(name),
   }));
   return {
     id: `${prefix.toLowerCase()}${n}`,
-    aid: `${prefix}-${String(n).padStart(3, '0')}`,
-    name: cand.name,
-    desc: `自剧本${cand.from}提取，待补描述`,
+    aid: d.aid,
+    name: d.name,
+    desc: d.desc,
+    ...(d.voice ? { voice: d.voice } : {}),
     ver: 0,
     status: 'draft',
     views,
