@@ -1,0 +1,161 @@
+{
+  "assetDescs": [
+    [
+      "CHAR-001",
+      "Amy, 11, quiet, short black hair"
+    ],
+    [
+      "SCENE-001",
+      "suburban house, wooden window frame"
+    ]
+  ],
+  "cases": [
+    {
+      "case": "跟项目画风",
+      "globalStylePrompt": "watercolor storybook",
+      "segments": [
+        {
+          "k": "style",
+          "v": "watercolor storybook"
+        },
+        {
+          "k": "ref",
+          "v": "Amy, 11, quiet, short black hair"
+        },
+        {
+          "k": "ref",
+          "v": "suburban house, wooden window frame"
+        },
+        {
+          "k": "own",
+          "v": "a girl at the window, morning light"
+        }
+      ],
+      "shot": {
+        "id": "s1-1",
+        "own": "a girl at the window, morning light",
+        "refs": [
+          "CHAR-001",
+          "SCENE-001"
+        ],
+        "style": "全局"
+      },
+      "text": "watercolor storybook, Amy, 11, quiet, short black hair, suburban house, wooden window frame, a girl at the window, morning light"
+    },
+    {
+      "case": "节点级画风压过项目",
+      "globalStylePrompt": "watercolor storybook",
+      "segments": [
+        {
+          "k": "style",
+          "v": "film photography, grainy"
+        },
+        {
+          "k": "ref",
+          "v": "Amy, 11, quiet, short black hair"
+        },
+        {
+          "k": "own",
+          "v": "close on her hands"
+        }
+      ],
+      "shot": {
+        "id": "s1-2",
+        "own": "close on her hands",
+        "refs": [
+          "CHAR-001"
+        ],
+        "style": "胶片质感"
+      },
+      "text": "film photography, grainy, Amy, 11, quiet, short black hair, close on her hands"
+    },
+    {
+      "case": "引用查不到描述时跳过_不把编号混进提示词",
+      "globalStylePrompt": "watercolor storybook",
+      "segments": [
+        {
+          "k": "style",
+          "v": "watercolor storybook"
+        },
+        {
+          "k": "own",
+          "v": "empty street"
+        }
+      ],
+      "shot": {
+        "id": "s1-3",
+        "own": "empty street",
+        "refs": [
+          "CHAR-999"
+        ],
+        "style": ""
+      },
+      "text": "watercolor storybook, empty street"
+    },
+    {
+      "case": "没有本镜内容时只有画风与引用",
+      "globalStylePrompt": "watercolor storybook",
+      "segments": [
+        {
+          "k": "style",
+          "v": "watercolor storybook"
+        },
+        {
+          "k": "ref",
+          "v": "suburban house, wooden window frame"
+        }
+      ],
+      "shot": {
+        "id": "s1-4",
+        "own": "   ",
+        "refs": [
+          "SCENE-001"
+        ],
+        "style": "全局"
+      },
+      "text": "watercolor storybook, suburban house, wooden window frame"
+    },
+    {
+      "case": "项目画风也为空时不留空段",
+      "globalStylePrompt": "",
+      "segments": [
+        {
+          "k": "style",
+          "v": ""
+        },
+        {
+          "k": "own",
+          "v": "rain on glass"
+        }
+      ],
+      "shot": {
+        "id": "s1-5",
+        "own": "rain on glass",
+        "refs": [],
+        "style": "全局"
+      },
+      "text": "rain on glass"
+    },
+    {
+      "case": "词表里没有的自定义画风名原样带上",
+      "globalStylePrompt": "watercolor storybook",
+      "segments": [
+        {
+          "k": "style",
+          "v": "我的风格"
+        },
+        {
+          "k": "own",
+          "v": "wide shot"
+        }
+      ],
+      "shot": {
+        "id": "s1-6",
+        "own": "wide shot",
+        "refs": [],
+        "style": "我的风格"
+      },
+      "text": "我的风格, wide shot"
+    }
+  ]
+}

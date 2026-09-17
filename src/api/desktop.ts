@@ -219,6 +219,11 @@ export type Outcome =
   /** 超出自主上限，等人点头。点了之后拿 `approved: true` 再调一次 */
   | { t: 'needsApproval'; tool: string; risk: Risk; why: string }
   | { t: 'notImplemented'; tool: string; blockedBy: string }
+  /**
+   * 实现有，缺配置。与 notImplemented 分开是因为**要做的事完全不同**：
+   * 这条是「去设置里配一下」，那条是「等人把它写出来」。
+   */
+  | { t: 'needsSetup'; tool: string; missing: string }
   /** 不在 Rust 侧跑（布光台），由前端执行 */
   | { t: 'elsewhere'; tool: string; runsIn: 'rust' | 'browser' };
 

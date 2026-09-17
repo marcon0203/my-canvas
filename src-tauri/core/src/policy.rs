@@ -46,11 +46,13 @@ pub fn risk_of_tool(id: &str) -> Risk {
     match id {
         // 只读：不碰项目，也不花钱
         "project.read" | "project.search" | "metrics.read" | "cost.estimate"
-        | "stage.render" | "prompt.translate" => Risk::Read,
+        // prompt.compile 也在这儿：它只是把「这一镜会发出去什么」算出来给你看，
+        // 提示词是派生值，改它要去改源头
+        | "stage.render" | "prompt.translate" | "prompt.compile" => Risk::Read,
 
         // 改项目内容，进撤销历史
         "outline.write" | "script.write" | "asset.write" | "asset.lock" | "shot.write"
-        | "prompt.compile" | "style.apply" | "shot.rig"
+        | "style.apply" | "shot.rig"
         | "edit.timeline" | "edit.subtitle" => Risk::Write,
 
         // 花积分，撤销退不回
@@ -105,7 +107,7 @@ mod tests {
         for t in ["project.read", "metrics.read"] {
             assert_eq!(risk_of_tool(t), Risk::Read, "{t}");
         }
-        for t in ["outline.write", "script.write", "shot.write", "prompt.compile"] {
+        for t in ["outline.write", "script.write", "shot.write", "style.apply"] {
             assert_eq!(risk_of_tool(t), Risk::Write, "{t}");
         }
     }

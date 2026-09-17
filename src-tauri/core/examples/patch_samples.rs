@@ -15,10 +15,16 @@
 //!
 //! 只读一个临时项目，不碰用户数据。
 
-use studio_core::patch;
+use studio_core::{patch, prompt};
 
 fn main() {
-    let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join(patch::SAMPLES_PATH);
-    std::fs::write(&path, patch::samples_json(&patch::samples())).expect("写 fixture");
-    eprintln!("已写入 {}", path.display());
+    let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
+    for (rel, v) in [
+        (patch::SAMPLES_PATH, patch::samples()),
+        (prompt::SAMPLES_PATH, prompt::samples()),
+    ] {
+        let path = dir.join(rel);
+        std::fs::write(&path, patch::samples_json(&v)).expect("写 fixture");
+        eprintln!("已写入 {}", path.display());
+    }
 }

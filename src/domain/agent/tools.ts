@@ -86,8 +86,8 @@ export const TOOLS: readonly ToolSpec[] = [
   { id: 'shot.write', group: 'write', name: '写分镜', desc: '拆镜、改镜头字段与引用；镜号由程序分配', needs: 'text', writes: true, status: 'ready' },
 
   /* 提示词 */
-  { id: 'prompt.compile', group: 'prompt', name: '合成提示词', desc: '画风 + 资产 + 镜头语言 → 英文提示词', needs: 'text', writes: true, status: 'declared', blockedBy: '合成规则要先从前端搬到 core' },
-  { id: 'prompt.translate', group: 'prompt', name: '提示词中译英', desc: '只译看得见的东西，不译情节与心理', needs: 'text', status: 'declared', blockedBy: '要能在 agent loop 里被调用' },
+  { id: 'prompt.compile', group: 'prompt', name: '合成提示词', desc: '看这几镜真正会发出去的提示词；它是算出来的，改要改源头', status: 'ready' },
+  { id: 'prompt.translate', group: 'prompt', name: '提示词中译英', desc: '只译看得见的东西，不译情节与心理', needs: 'text', status: 'ready' },
   { id: 'style.apply', group: 'prompt', name: '换画风', desc: '换画风并重算受影响的提示词；画风名要在项目清单里', needs: 'text', writes: true, status: 'ready' },
 
   /* 生成 */

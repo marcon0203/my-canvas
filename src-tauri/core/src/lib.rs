@@ -12,6 +12,7 @@ pub mod outline;
 pub mod patch;
 pub mod policy;
 pub mod project;
+pub mod prompt;
 pub mod providers;
 pub mod run;
 pub mod shotprompt;

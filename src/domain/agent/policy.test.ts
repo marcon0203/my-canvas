@@ -117,7 +117,7 @@ describe('agent/policy · 自主执行的边界', () => {
       'cost.estimate': 'read', 'stage.render': 'read', 'prompt.translate': 'read',
 
       'outline.write': 'write', 'script.write': 'write', 'asset.write': 'write',
-      'asset.lock': 'write', 'shot.write': 'write', 'prompt.compile': 'write',
+      'asset.lock': 'write', 'shot.write': 'write', 'prompt.compile': 'read',
       'style.apply': 'write', 'shot.rig': 'write',
       'edit.timeline': 'write', 'edit.subtitle': 'write',
 

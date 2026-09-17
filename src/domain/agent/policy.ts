@@ -53,13 +53,14 @@ const RISK: Record<ToolId, Risk> = {
   'cost.estimate': 'read',
   'stage.render': 'read',
   'prompt.translate': 'read',
+  // 只是把「这一镜会发出去什么」算出来给你看 —— 提示词是派生值，改它要去改源头
+  'prompt.compile': 'read',
 
   'outline.write': 'write',
   'script.write': 'write',
   'asset.write': 'write',
   'asset.lock': 'write',
   'shot.write': 'write',
-  'prompt.compile': 'write',
   'style.apply': 'write',
   'shot.rig': 'write',
   'edit.timeline': 'write',

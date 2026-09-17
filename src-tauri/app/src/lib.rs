@@ -119,24 +119,38 @@ async fn tool_call(
     // 生成类工具要模型、端点、密钥、厂商适配。任何一样拿不到就不给 GenCtx，
     // 由 dispatch 去说「缺模型或密钥」—— **不要在这层编一个错误**，
     // 那样闸门的判断会被绕过（缺密钥应该先过完闸门再报，不是提前失败）。
+    let globals = globals.unwrap_or_default();
+    let provs = providers.unwrap_or_default();
+
+    // 这个工具要哪种模型。None = 纯本地操作，不用配模型
+    let modality = match tool.as_str() {
+        "image.generate" | "image.edit" | "image.upscale" => Some("image"),
+        "video.generate" | "video.extend" => Some("video"),
+        "audio.tts" | "audio.music" | "audio.sfx" => Some("audio"),
+        "prompt.translate" => Some("text"),
+        _ => None,
+    };
+
+    // 找模型 → 端点 → 厂商适配 → 密钥。任何一样拿不到就不给 ctx，
+    // 由 dispatch 去说「缺什么」—— **不要在这层编一个错误**，
+    // 那样闸门的判断会被绕过（缺密钥应该先过完闸门再报，不是提前失败）。
     let mut owned: Option<(ModelRef, String, String, studio_core::generate::TaskApi)> = None;
-    if tool == "image.generate" || tool == "video.generate" {
-        let modality = if tool == "image.generate" { "image" } else { "video" };
-        let globals = globals.unwrap_or_default();
-        let provs = providers.unwrap_or_default();
-        if let Some(c) = cfg.as_ref() {
-            if let Some(m) = c.model_for(modality, &globals) {
-                let base = studio_core::providers::resolve_base_url(&m.provider, provs.get(&m.provider));
-                let api = studio_core::generate::adapters::of(&m.provider, modality);
-                // 密钥最后取，且只在这一处 —— 明文不进返回值、不进日志
-                if let (Ok(base), Some(api), Ok(key)) = (base, api, studio_core::vault_key(&m.provider)) {
+    let mut chat_owned: Option<(ModelRef, String, String)> = None;
+    if let (Some(modality), Some(c)) = (modality, cfg.as_ref()) {
+        if let Some(m) = c.model_for(modality, &globals) {
+            let base = studio_core::providers::resolve_base_url(&m.provider, provs.get(&m.provider));
+            // 密钥最后取，且只在这一处 —— 明文不进返回值、不进日志
+            if let (Ok(base), Ok(key)) = (base, studio_core::vault_key(&m.provider)) {
+                if modality == "text" {
+                    chat_owned = Some((m.clone(), base, key));
+                } else if let Some(api) = studio_core::generate::adapters::of(&m.provider, modality) {
                     owned = Some((m.clone(), base, key, api));
                 }
             }
         }
     }
 
-    let gen_ctx = owned.as_ref().map(|(m, base, key, api)| tools::GenCtx {
+    let task = owned.as_ref().map(|(m, base, key, api)| tools::GenCtx {
         model: m,
         base_url: base,
         api_key: key,
@@ -146,7 +160,13 @@ async fn tool_call(
     });
 
     let by = if approved == Some(true) { tools::By::Human } else { tools::By::Agent };
-    tools::dispatch(&w.root, &project_id, &tool, args, auto_max, by, gen_ctx).await
+    let chat = chat_owned.as_ref().map(|(m, base, key)| studio_core::prompt::ChatCtx {
+        model: m,
+        base_url: base,
+        api_key: key,
+        timeout: std::time::Duration::from_secs(60),
+    });
+    tools::dispatch(&w.root, &project_id, &tool, args, auto_max, by, tools::Ctx { task, chat }).await
 }
 
 /* ---------------- Skill ---------------- */

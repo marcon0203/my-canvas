@@ -94,14 +94,25 @@ export function compileShot(
   opts: { globalStylePrompt: string; assetDescOf: (aid: string) => string | undefined },
 ): PromptSegment[] {
   const parts: PromptSegment[] = [];
-  const style = s.style && s.style !== '全局' ? STYLEMAP[s.style] : undefined;
-  parts.push({ k: 'style', v: style ?? opts.globalStylePrompt });
+  // 走 styleFrag：词表里没有的自定义画风名要原样带上。
+  // 原来这儿是 `STYLEMAP[s.style] ?? globalStylePrompt` —— 用户给这一镜单独选了
+  // 一个自定义画风，会被静默换成项目画风，而形状照那条路（styleFrag）不会。
+  // 同一个概念两种行为，是 Rust 侧的 parity 测试把它抓出来的。
+  parts.push({ k: 'style', v: styleFrag(s.style, opts.globalStylePrompt) });
   for (const aid of s.refs) {
     const d = opts.assetDescOf(aid);
     if (d) parts.push({ k: 'ref', v: d });
   }
-  if (s.own) parts.push({ k: 'own', v: s.own });
+  // 先 trim：模型回来的本镜内容常带空白，`'   '` 是 truthy，会变成一个空段落
+  const own = s.own?.trim();
+  if (own) parts.push({ k: 'own', v: own });
   return parts;
 }
 
-export const segmentsText = (segs: readonly PromptSegment[]): string => segs.map((p) => p.v).join(', ');
+/**
+ * 分段 → 真正发出去的那条。**空段落要滤掉**：画风没设时会留一个空的 style 段，
+ * 不滤的话提示词以 `, ` 开头 —— 出图模型会把它读成一个空槽。
+ * 分段本身保留空的 style 段，界面按 k 上色要靠它占位。
+ */
+export const segmentsText = (segs: readonly PromptSegment[]): string =>
+  segs.map((p) => p.v.trim()).filter(Boolean).join(', ');

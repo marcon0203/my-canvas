@@ -196,16 +196,18 @@ pub fn all() -> Vec<ToolSpec> {
           obj(json!({ "shots": { "type": "array" } }), &["shots"])),
 
         /* ---------------- 提示词 ---------------- */
+        // **只读**。分镜提示词是从画风/引用/本镜内容算出来的派生值，
+        // 落盘反而会让它和源头对不上 —— 要改提示词就去改源头。
+        // 注册表里它原来标着「会改项目」，那是错的。
         t("prompt.compile", "合成提示词", Prompt,
-          "画风 + 引用资产描述 + 镜头语言 → 英文提示词。",
-          W, Rust, Declared,
-          Some("合成规则现在在前端 domain/prompt，要先搬到 core 才能两边共用"),
-          obj(json!({ "shotIds": { "type": "array", "items": { "type": "string" } } }), &["shotIds"])),
+          "看这几镜真正会发出去的提示词长什么样（画风 + 引用资产描述 + 本镜内容）。它是算出来的，改提示词要改源头。",
+          R, Rust, Ready, None,
+          obj(json!({ "shotIds": { "type": "array", "items": { "type": "string" },
+              "description": "不给就合成全部" } }), &[])),
 
         t("prompt.translate", "提示词中译英", Prompt,
           "把中文描述译成出图模型认的英文提示词。只译画面里看得见的东西，不译情节与心理。",
-          R, Rust, Declared,
-          Some("要调文本模型，等工具能在 Rig 的 agent loop 里被调用"),
+          R, Rust, Ready, None,
           obj(json!({ "text": { "type": "string" } }), &["text"])),
 
         t("style.apply", "换画风", Prompt,
@@ -334,8 +336,14 @@ pub enum Outcome {
     Patch { tool: String, patch: Value },
     /// 超出自主上限，等人点头
     NeedsApproval { tool: String, risk: Risk, why: String },
-    /// 契约在、实现还没有
+    /// 契约在、实现还没有。**这是「等人写代码」**，与下面那条不是一回事
     NotImplemented { tool: String, blocked_by: String },
+    /// 实现有，但缺配置（没配模型、没填密钥、厂商没适配）。
+    ///
+    /// 和 `NotImplemented` 分开是因为**要做的事完全不同**：这条是「去设置里配一下」，
+    /// 那条是「等人把它写出来」。混成一条的话，界面只能说「用不了」，
+    /// 而用户手上明明有能解决的办法。
+    NeedsSetup { tool: String, missing: String },
     /// 这个工具不在 Rust 侧跑
     Elsewhere { tool: String, runs_in: RunsIn },
 }
@@ -357,6 +365,27 @@ pub struct GenCtx<'a> {
     pub timeout: std::time::Duration,
 }
 
+/// 一次调用可能要用到的外部上下文。**两类工具要的东西不一样**：
+/// 出图出视频要异步任务接口（`gen`），译提示词要文本模型（`chat`）。
+///
+/// 聚成一个参数而不是往 `dispatch` 上再挂一个 `Option` —— 后面还会有别的
+/// （音频、搜索服务），一个个加参数迟早排错顺序。
+#[derive(Default)]
+pub struct Ctx<'a> {
+    /// 异步任务接口（出图出视频）。字段名不叫 gen —— 那是 edition 2024 的保留字
+    pub task: Option<GenCtx<'a>>,
+    pub chat: Option<crate::prompt::ChatCtx<'a>>,
+}
+
+impl<'a> Ctx<'a> {
+    pub fn task(g: GenCtx<'a>) -> Self {
+        Self { task: Some(g), chat: None }
+    }
+    pub fn chat(c: crate::prompt::ChatCtx<'a>) -> Self {
+        Self { task: None, chat: Some(c) }
+    }
+}
+
 pub async fn dispatch(
     root: &Path,
     project_id: &str,
@@ -364,7 +393,7 @@ pub async fn dispatch(
     args: Value,
     auto_max: Option<Risk>,
     by: By,
-    gen_ctx: Option<GenCtx<'_>>,
+    ctx: Ctx<'_>,
 ) -> Result<Outcome> {
     let Some(t) = spec(tool_id) else {
         return Err(Error::UnknownTool(tool_id.to_string()));
@@ -384,14 +413,26 @@ pub async fn dispatch(
 
     // 出图/出视频：有 GenCtx 才跑得起来。没有就说清缺什么，不要假装跑了
     if t.id == "image.generate" || t.id == "video.generate" {
-        let Some(ctx) = gen_ctx else {
-            return Ok(Outcome::NotImplemented {
+        let Some(g) = ctx.task else {
+            return Ok(Outcome::NeedsSetup {
                 tool: t.id.into(),
-                blocked_by: format!("{}没有可用的模型或密钥", t.name),
+                missing: format!("{}要一个{}模型和它的密钥 —— 去「模型设置」接入一家、加上模型，再在这位 Agent 的配置里选上",
+                    t.name, if t.id == "image.generate" { "图片" } else { "视频" }),
             });
         };
-        let urls = run_generate(t.id, &ctx, &args).await?;
-        return Ok(Outcome::Ok { value: json!({ "urls": urls, "model": ctx.model.model }) });
+        let urls = run_generate(t.id, &g, &args).await?;
+        return Ok(Outcome::Ok { value: json!({ "urls": urls, "model": g.model.model }) });
+    }
+
+    // 译提示词：要文本模型。同理 —— 缺了就说缺了
+    if t.id == "prompt.translate" {
+        let Some(c) = ctx.chat else {
+            return Ok(Outcome::NeedsSetup {
+                tool: t.id.into(),
+                missing: "译提示词要一个文本模型和它的密钥 —— 去「模型设置」接入一家、加上模型".into(),
+            });
+        };
+        return Ok(Outcome::Ok { value: crate::prompt::translate(&c, &args).await? });
     }
 
     if t.status != Status::Ready {
@@ -411,6 +452,7 @@ pub async fn dispatch(
         "project.search" => search_project(root, project_id, &args)?,
         "metrics.read" => read_metrics(root, project_id)?,
         "cost.estimate" => estimate_cost(&args)?,
+        "prompt.compile" => crate::prompt::compile(root, project_id, &args)?,
         // status == Ready 的工具必须在这儿有分支，否则是注册表和实现对不上
         other => return Err(Error::UnknownTool(format!("{other} 标成已实现却没有实现"))),
     };
@@ -597,7 +639,7 @@ mod tests {
     #[tokio::test]
     async fn 读项目能只读一部分_整份太长塞进上下文是浪费() {
         let tmp = setup();
-        let o = dispatch(tmp.path(), "p1", "project.read", json!({ "part": "outline" }), None, By::Agent, None)
+        let o = dispatch(tmp.path(), "p1", "project.read", json!({ "part": "outline" }), None, By::Agent, Ctx::default())
             .await.unwrap();
         let Outcome::Ok { value } = o else { panic!("{o:?}") };
         assert!(value.get("acts").is_some());
@@ -607,7 +649,7 @@ mod tests {
     #[tokio::test]
     async fn 读项目_all_给全份() {
         let tmp = setup();
-        let o = dispatch(tmp.path(), "p1", "project.read", json!({ "part": "all" }), None, By::Agent, None).await.unwrap();
+        let o = dispatch(tmp.path(), "p1", "project.read", json!({ "part": "all" }), None, By::Agent, Ctx::default()).await.unwrap();
         let Outcome::Ok { value } = o else { panic!() };
         for k in ["meta", "acts", "blocks", "assets", "shots"] {
             assert!(value.get(k).is_some(), "缺 {k}");
@@ -617,7 +659,7 @@ mod tests {
     #[tokio::test]
     async fn 记账算出的数对得上() {
         let tmp = setup();
-        let Outcome::Ok { value } = dispatch(tmp.path(), "p1", "metrics.read", json!({}), None, By::Agent, None).await.unwrap()
+        let Outcome::Ok { value } = dispatch(tmp.path(), "p1", "metrics.read", json!({}), None, By::Agent, Ctx::default()).await.unwrap()
             else { panic!() };
         assert_eq!(value["shots"], 3);
         assert_eq!(value["takes"], 5);      // 3 + 2 + 0
@@ -633,7 +675,7 @@ mod tests {
             meta: Meta { id: "空".into(), ..Meta::default() },
             shots: json!([]), ..Default::default()
         }).unwrap();
-        let Outcome::Ok { value } = dispatch(tmp.path(), "空", "metrics.read", json!({}), None, By::Agent, None).await.unwrap()
+        let Outcome::Ok { value } = dispatch(tmp.path(), "空", "metrics.read", json!({}), None, By::Agent, Ctx::default()).await.unwrap()
             else { panic!() };
         assert!(value["hitRate"].is_null());
         assert!(value["note"].as_str().unwrap().contains("算不出"));
@@ -643,7 +685,7 @@ mod tests {
     async fn 超出自主上限的工具不执行_返回要人点头() {
         let tmp = setup();
         // 出厂上限是 write，出图是 spend
-        let o = dispatch(tmp.path(), "p1", "image.generate", json!({ "prompt": "x" }), None, By::Agent, None).await.unwrap();
+        let o = dispatch(tmp.path(), "p1", "image.generate", json!({ "prompt": "x" }), None, By::Agent, Ctx::default()).await.unwrap();
         match o {
             Outcome::NeedsApproval { tool, risk, why } => {
                 assert_eq!(tool, "image.generate");
@@ -659,7 +701,7 @@ mod tests {
         let tmp = setup();
         // image.generate 既没实现、风险又超标。必须报越权而不是「还没做」——
         // 否则将来补上实现，拦截行为会悄悄变
-        let o = dispatch(tmp.path(), "p1", "image.generate", json!({}), None, By::Agent, None).await.unwrap();
+        let o = dispatch(tmp.path(), "p1", "image.generate", json!({}), None, By::Agent, Ctx::default()).await.unwrap();
         assert!(matches!(o, Outcome::NeedsApproval { .. }));
     }
 
@@ -667,11 +709,13 @@ mod tests {
     async fn 上限放开但没给模型密钥时_如实说缺什么_不假装跑了() {
         let tmp = setup();
         let o = dispatch(tmp.path(), "p1", "image.generate", json!({ "prompt": "cat" }),
-            Some(Risk::Spend), By::Agent, None).await.unwrap();
+            Some(Risk::Spend), By::Agent, Ctx::default()).await.unwrap();
+        // 缺配置是 NeedsSetup，不是 NotImplemented —— 用户手上有能解决的办法，
+        // 界面要说「去配一下」，而不是「用不了」
         match o {
-            Outcome::NotImplemented { tool, blocked_by } => {
+            Outcome::NeedsSetup { tool, missing } => {
                 assert_eq!(tool, "image.generate");
-                assert!(blocked_by.contains("模型或密钥"), "{blocked_by}");
+                assert!(missing.contains("模型设置"), "{missing}");
             }
             x => panic!("{x:?}"),
         }
@@ -691,7 +735,7 @@ mod tests {
     async fn 出本机的工具_自主上限调到最高也得先问人() {
         let tmp = setup();
         for m in [None, Some(Risk::Write), Some(Risk::Spend), Some(Risk::Egress)] {
-            let o = dispatch(tmp.path(), "p1", "file.export", json!({ "what": "script" }), m, By::Agent, None)
+            let o = dispatch(tmp.path(), "p1", "file.export", json!({ "what": "script" }), m, By::Agent, Ctx::default())
                 .await.unwrap();
             assert!(matches!(o, Outcome::NeedsApproval { .. }), "上限 {m:?} 下没挡住：{o:?}");
         }
@@ -705,7 +749,7 @@ mod tests {
     #[tokio::test]
     async fn 人点过同意的那一次要能跑_不然_egress_工具全是死代码() {
         let tmp = setup();
-        let o = dispatch(tmp.path(), "p1", "file.export", json!({ "what": "script" }), None, By::Human, None)
+        let o = dispatch(tmp.path(), "p1", "file.export", json!({ "what": "script" }), None, By::Human, Ctx::default())
             .await.unwrap();
         assert!(!matches!(o, Outcome::NeedsApproval { .. }), "人都点了同意还挡：{o:?}");
     }
@@ -713,7 +757,7 @@ mod tests {
     #[tokio::test]
     async fn 浏览器里跑的工具明说在别处跑() {
         let tmp = setup();
-        let o = dispatch(tmp.path(), "p1", "stage.render", json!({ "shotId": "s1-1" }), None, By::Agent, None).await.unwrap();
+        let o = dispatch(tmp.path(), "p1", "stage.render", json!({ "shotId": "s1-1" }), None, By::Agent, Ctx::default()).await.unwrap();
         match o {
             Outcome::Elsewhere { runs_in, .. } => assert_eq!(runs_in, RunsIn::Browser),
             x => panic!("{x:?}"),
@@ -723,7 +767,7 @@ mod tests {
     #[tokio::test]
     async fn 不存在的工具报错_而不是悄悄当成没实现() {
         let tmp = setup();
-        let e = dispatch(tmp.path(), "p1", "rm.rf", json!({}), None, By::Agent, None).await.unwrap_err();
+        let e = dispatch(tmp.path(), "p1", "rm.rf", json!({}), None, By::Agent, Ctx::default()).await.unwrap_err();
         assert_eq!(e.code(), "unknown_tool");
     }
 
@@ -736,7 +780,7 @@ mod tests {
     async fn 标成已实现的工具真能调到_否则注册表在说谎() {
         let tmp = setup();
         for t in all().into_iter().filter(|t| t.status == Status::Ready) {
-            match dispatch(tmp.path(), "p1", t.id, json!({}), None, By::Human, None).await {
+            match dispatch(tmp.path(), "p1", t.id, json!({}), None, By::Human, Ctx::default()).await {
                 Ok(Outcome::NotImplemented { tool, .. }) => panic!("{tool} 标成 Ready 却说没实现"),
                 Err(e) => assert_ne!(e.code(), "unknown_tool", "{}：{e}", t.id),
                 Ok(_) => {}
@@ -795,7 +839,7 @@ mod tests {
         let m = ModelRef { provider: "volcengine".into(), model: "doubao-seedream".into() };
         let o = dispatch(tmp.path(), "p1", "image.generate",
             json!({ "prompt": "a cat in the rain", "batch": 2 }),
-            Some(Risk::Spend), By::Agent, Some(gen_ctx(&base, &m))).await.unwrap();
+            Some(Risk::Spend), By::Agent, Ctx::task(gen_ctx(&base, &m))).await.unwrap();
         let Outcome::Ok { value } = o else { panic!("{o:?}") };
         assert_eq!(value["urls"][0], "http://img/1.png");
         assert_eq!(value["model"], "doubao-seedream");
@@ -808,7 +852,7 @@ mod tests {
         let m = ModelRef { provider: "volcengine".into(), model: "x".into() };
         // 出厂上限是 write，出图是 spend
         let o = dispatch(tmp.path(), "p1", "image.generate", json!({ "prompt": "x" }),
-            None, By::Agent, Some(gen_ctx(&base, &m))).await.unwrap();
+            None, By::Agent, Ctx::task(gen_ctx(&base, &m))).await.unwrap();
         assert!(matches!(o, Outcome::NeedsApproval { .. }), "该被挡住，实际 {o:?}");
     }
 
@@ -818,7 +862,7 @@ mod tests {
         let base = fake_image_provider().await;
         let m = ModelRef { provider: "volcengine".into(), model: "x".into() };
         let e = dispatch(tmp.path(), "p1", "image.generate", json!({ "prompt": "   " }),
-            Some(Risk::Spend), By::Agent, Some(gen_ctx(&base, &m))).await.unwrap_err();
+            Some(Risk::Spend), By::Agent, Ctx::task(gen_ctx(&base, &m))).await.unwrap_err();
         assert!(e.to_string().contains("空的"));
     }
 
@@ -829,7 +873,7 @@ mod tests {
         let o = dispatch(tmp.path(), "p1", "outline.write", json!({
             "acts": [{ "id": "", "t": "新的一幕", "span": "0:00–1:00",
                        "beats": [{ "id": "", "k": "随便写的", "t": "一场" }] }]
-        }), None, By::Agent, None).await.unwrap();
+        }), None, By::Agent, Ctx::default()).await.unwrap();
         match o {
             Outcome::Patch { tool, patch } => {
                 assert_eq!(tool, "outline.write");
@@ -849,7 +893,7 @@ mod tests {
             "acts": [{ "id": "", "t": "幕", "span": "",
                        "beats": [{ "id": "", "k": "模型瞎写的", "t": "甲" },
                                  { "id": "", "k": "模型瞎写的", "t": "乙" }] }]
-        }), None, By::Agent, None).await.unwrap() else { panic!() };
+        }), None, By::Agent, Ctx::default()).await.unwrap() else { panic!() };
         // seed 里已有 1 场，所以接着编 2、3
         assert_eq!(patch["acts"][0]["beats"][0]["k"], "场景2");
         assert_eq!(patch["acts"][0]["beats"][1]["k"], "场景3");
@@ -862,7 +906,7 @@ mod tests {
         let Outcome::Patch { patch, .. } = dispatch(tmp.path(), "p1", "shot.write", json!({
             "shots": [{ "sceneKey": "场景1", "desc": "新的" },
                       { "sceneKey": "场景1", "desc": "又一个" }]
-        }), None, By::Agent, None).await.unwrap() else { panic!() };
+        }), None, By::Agent, Ctx::default()).await.unwrap() else { panic!() };
         let ids: Vec<&str> = patch["shots"].as_array().unwrap().iter()
             .map(|s| s["id"].as_str().unwrap()).collect();
         assert_eq!(ids, ["s1-4", "s1-5"]);
@@ -871,7 +915,7 @@ mod tests {
     #[tokio::test]
     async fn 空大纲不算产物_直接报错() {
         let tmp = setup();
-        let e = dispatch(tmp.path(), "p1", "outline.write", json!({ "acts": [] }), None, By::Agent, None)
+        let e = dispatch(tmp.path(), "p1", "outline.write", json!({ "acts": [] }), None, By::Agent, Ctx::default())
             .await.unwrap_err();
         assert!(e.to_string().contains("空大纲"));
     }
@@ -879,11 +923,11 @@ mod tests {
     #[tokio::test]
     async fn 锁不存在的资产直接报错_而不是让分镜引一个空的() {
         let tmp = setup();
-        let e = dispatch(tmp.path(), "p1", "asset.lock", json!({ "aid": "CHAR-999" }), None, By::Agent, None)
+        let e = dispatch(tmp.path(), "p1", "asset.lock", json!({ "aid": "CHAR-999" }), None, By::Agent, Ctx::default())
             .await.unwrap_err();
         assert!(e.to_string().contains("CHAR-999"));
         // 存在的能锁
-        let o = dispatch(tmp.path(), "p1", "asset.lock", json!({ "aid": "CHAR-001" }), None, By::Agent, None)
+        let o = dispatch(tmp.path(), "p1", "asset.lock", json!({ "aid": "CHAR-001" }), None, By::Agent, Ctx::default())
             .await.unwrap();
         assert!(matches!(o, Outcome::Patch { .. }));
     }
@@ -893,7 +937,7 @@ mod tests {
         let tmp = setup();
         let o = dispatch(tmp.path(), "p1", "outline.write",
             json!({ "acts": [{ "id": "", "t": "x", "span": "", "beats": [] }] }),
-            Some(Risk::Read), By::Agent, None).await.unwrap();
+            Some(Risk::Read), By::Agent, Ctx::default()).await.unwrap();
         assert!(matches!(o, Outcome::NeedsApproval { .. }));
     }
 
@@ -910,7 +954,7 @@ mod tests {
     async fn 找内容返回命中在哪儿_不把整份项目倒出来() {
         let tmp = setup();
         let Outcome::Ok { value } = dispatch(tmp.path(), "p1", "project.search",
-            json!({ "q": "画猫" }), None, By::Agent, None).await.unwrap() else { panic!() };
+            json!({ "q": "画猫" }), None, By::Agent, Ctx::default()).await.unwrap() else { panic!() };
         assert_eq!(value["hits"], 1);
         assert_eq!(value["results"][0]["where"], "outline");
         assert_eq!(value["results"][0]["key"], "场景1");
@@ -919,17 +963,17 @@ mod tests {
     #[tokio::test]
     async fn 找内容_关键词为空时报错_而不是把全部倒出来() {
         let tmp = setup();
-        assert!(dispatch(tmp.path(), "p1", "project.search", json!({ "q": "  " }), None, By::Agent, None).await.is_err());
+        assert!(dispatch(tmp.path(), "p1", "project.search", json!({ "q": "  " }), None, By::Agent, Ctx::default()).await.is_err());
     }
 
     #[tokio::test]
     async fn 估花费按价目表算_不让模型自己编一个数() {
         let tmp = setup();
         let Outcome::Ok { value } = dispatch(tmp.path(), "p1", "cost.estimate",
-            json!({ "kind": "video", "count": 18 }), None, By::Agent, None).await.unwrap() else { panic!() };
+            json!({ "kind": "video", "count": 18 }), None, By::Agent, Ctx::default()).await.unwrap() else { panic!() };
         assert_eq!(value["credits"], 216);   // 12 × 18 × 1
         let Outcome::Ok { value } = dispatch(tmp.path(), "p1", "cost.estimate",
-            json!({ "kind": "image", "count": 4, "batch": 2 }), None, By::Agent, None).await.unwrap() else { panic!() };
+            json!({ "kind": "image", "count": 4, "batch": 2 }), None, By::Agent, Ctx::default()).await.unwrap() else { panic!() };
         assert_eq!(value["credits"], 24);    // 3 × 4 × 2
     }
 
@@ -937,7 +981,7 @@ mod tests {
     async fn 估花费是只读的_自主模式下不用等人点头() {
         let tmp = setup();
         // 「先报个数」这件事本身不该被闸门挡住，否则报数也要人点头就没意义了
-        let o = dispatch(tmp.path(), "p1", "cost.estimate", json!({ "kind": "image", "count": 1 }), None, By::Agent, None)
+        let o = dispatch(tmp.path(), "p1", "cost.estimate", json!({ "kind": "image", "count": 1 }), None, By::Agent, Ctx::default())
             .await.unwrap();
         assert!(matches!(o, Outcome::Ok { .. }));
     }
