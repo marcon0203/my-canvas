@@ -1,1 +1,4 @@
 target/
+
+# tauri dev / build 每次都重新生成的 capability schema，不是源码
+app/gen/
