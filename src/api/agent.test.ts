@@ -5,7 +5,9 @@ import { defaultConfigs } from '@/domain/agent/config';
 import type { AgentContext } from '@/domain/agent/context';
 import { allBeats, actOfBeat } from '@/domain/story/model';
 import { plan } from '@/domain/agent/plans';
-import { altsProposal, expandInput, promptProposal, selectedBeat, shotBriefs } from './agent';
+import {
+  altsProposal, expandInput, failureText, promptProposal, selectedBeat, shotBriefs,
+} from './agent';
 
 function ctx(over: Partial<AgentContext> = {}): AgentContext {
   const p = structuredClone(MOCK_PROJECT);
@@ -156,5 +158,36 @@ describe('api/agent · 延展走向的产物卡', () => {
     const local = plan('outline.expand', ctx({ agentId: 'writer' })).proposal!;
     const remote = altsProposal({ reply: 'x', alts: ['甲', '乙', '丙'] }, { id: 'b3', k: '场景3' });
     expect(remote.cost).toBe(local.cost);
+  });
+});
+
+describe('api/agent · 失败给人话', () => {
+  it('不重复 message 已经说过的事 —— 那会叠成一句自相矛盾的长话', () => {
+    // 真实场景：供应商 400 说「思考模式不支持这个 tool_choice」。
+    // 旧版会输出「模型没按要求的结构返回，重试几次都没成：模型返回无法解析：…」
+    // —— 两层前缀叠起来，而且第一句还是错的（不是模型不听话）
+    const msg = '请求失败：CompletionError: ProviderResponseError: status 400';
+    const out = failureText('http', msg);
+    expect(out.startsWith(msg), out).toBe(true);
+    expect(out).not.toContain('模型没按要求的结构返回');
+    // 只补下一步
+    expect(out).toContain('核对模型名和密钥');
+  });
+
+  it('每种码都只补一句「接下来干什么」', () => {
+    for (const [code, must] of [
+      ['no_key', '模型设置'],
+      ['no_model', '智能体管理'],
+      ['no_base_url', 'baseURL'],
+      ['decode', '换一个支持工具调用的模型'],
+    ] as const) {
+      const out = failureText(code, 'X');
+      expect(out.startsWith('X。'), `${code}: ${out}`).toBe(true);
+      expect(out, code).toContain(must);
+    }
+  });
+
+  it('不认识的码原样给出，不编一句安慰', () => {
+    expect(failureText('某个新码', '出了点问题')).toBe('出了点问题');
   });
 });

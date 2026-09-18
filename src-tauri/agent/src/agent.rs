@@ -74,18 +74,63 @@ pub fn resolve(
 ///
 /// 国内六家的文本接口都是 OpenAI 兼容，所以统一走 Rig 的 OpenAI 客户端改 baseURL；
 /// 图片/视频不走这里 —— 它们是各家自有的异步任务接口，作为 tool 挂进来。
+/// 拿这家供应商的模型句柄。**能用 rig 内置的那家就用它，别一律走通用客户端。**
+///
+/// 两件事都踩过：
+///
+/// 1. **接口家族**：`openai::Client` 在 rig 0.42 里是 Responses API（`/responses`）
+///    的客户端 —— OpenAI 自家的新接口。目录里这几家国内供应商只提供
+///    `/chat/completions`，所以通用那条必须是 `CompletionsClient`。
+///    用错了的症状很难查：响应解析报「unknown variant `chat.completion`,
+///    expected `response`」，看着像供应商返回格式不对，其实是我们问错了接口。
+///
+/// 2. **各家的脾气 rig 已经替我们处理了一部分**。结构化输出要强制
+///    `tool_choice: required`，而好几家的思考模型不接受它，直接回 400
+///    （「Thinking mode does not support this tool_choice」）。rig 的
+///    `providers::deepseek` 会在思考模式下把强制 tool_choice 抹成 null，
+///    `providers::moonshot` 会降级成 `auto` 并补一句引导 —— 走它们的客户端
+///    就白拿这些修复，自己写等于重复劳动还容易漏。
+///
+/// 剩下几家 rig 没有专属模块（火山方舟、阿里百炼、腾讯混元、自定义端点），
+/// 智谱那个 `providers::zai` 是 z.ai 国际站且没做这类修正，用它没好处。
+/// 这些走通用 chat/completions —— 它们的思考模型仍会 400，由
+/// `structured::extract` 换成提示词那条兜住。
+pub fn model_handle(spec: &AgentSpec, api_key: &str) -> rig::agent::ModelHandle {
+    use rig::agent::ModelHandle;
+    use rig::client::CompletionClient;
+    use rig::providers::{deepseek, moonshot, openai};
+
+    let m = &spec.model.model;
+    match spec.model.provider.as_str() {
+        "deepseek" => ModelHandle::new(
+            deepseek::Client::builder()
+                .api_key(api_key)
+                .base_url(&spec.base_url)
+                .build()
+                .expect("deepseek 客户端构建失败")
+                .completion_model(m),
+        ),
+        "moonshot" => ModelHandle::new(
+            moonshot::Client::builder()
+                .api_key(api_key)
+                .base_url(&spec.base_url)
+                .build()
+                .expect("moonshot 客户端构建失败")
+                .completion_model(m),
+        ),
+        _ => ModelHandle::new(
+            openai::CompletionsClient::builder()
+                .api_key(api_key)
+                .base_url(&spec.base_url)
+                .build()
+                .expect("openai 兼容客户端构建失败")
+                .completion_model(m),
+        ),
+    }
+}
+
 pub fn build(spec: &AgentSpec, api_key: &str) -> rig::agent::Agent {
-    use rig::client::AgentClientExt;
-    use rig::providers::openai;
-
-    let client = openai::Client::builder()
-        .api_key(api_key)
-        .base_url(&spec.base_url)
-        .build()
-        .expect("openai 兼容客户端构建失败");
-
-    let mut b = client
-        .agent(&spec.model.model)
+    let mut b = rig::agent::AgentBuilder::from_model_handle(model_handle(spec, api_key))
         .name(&spec.agent_id)
         .preamble(&spec.preamble);
     if let Some(t) = spec.temperature {

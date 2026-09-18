@@ -5,7 +5,7 @@
 //! 提示词写错了人一眼能看出来，写到别的镜头上却是静默的错。
 
 use crate::agent::AgentSpec;
-use studio_error::{Error, Result};
+use studio_error::Result;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
@@ -118,26 +118,11 @@ pub fn prompt_of(input: &PromptInput) -> String {
     s
 }
 
-/// 跑一次。
+/// 跑一次。结构化输出走 `structured::extract` —— 工具调用不通时它会自动换成
+/// 提示词那条（思考模型不接受强制 tool_choice，见那个模块的说明）。
 pub async fn draft(spec: &AgentSpec, api_key: &str, preamble: &str, input: &PromptInput) -> Result<PromptDraft> {
-    use rig::prelude::*;
-    use rig::providers::openai;
-
-    let client = openai::Client::builder()
-        .api_key(api_key)
-        .base_url(&spec.base_url)
-        .build()
-        .map_err(|e| Error::Http(e.to_string()))?;
-
-    let extractor = client
-        .extractor::<PromptDraft>(&spec.model.model)
-        .preamble(preamble)
-        .build();
-
-    let mut draft = extractor
-        .extract(prompt_of(input))
-        .await
-        .map_err(|e| Error::Decode(e.to_string()))?;
+    let mut draft: PromptDraft =
+        crate::structured::extract(spec, api_key, preamble, &prompt_of(input)).await?;
     reconcile(&mut draft, input);
     Ok(draft)
 }

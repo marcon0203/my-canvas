@@ -15,3 +15,4 @@ pub mod outline;
 pub mod prompt;
 pub mod run;
 pub mod shotprompt;
+pub mod structured;

@@ -412,19 +412,35 @@ async function* pump(
 }
 
 /** 常见失败给人话，而不是把错误码甩出去 */
-function failureText(code: string, message: string): string {
-  switch (code) {
-    case 'no_key':
-      return `${message}。去设置 → 模型服务商里填一个。`;
-    case 'no_model':
-      return `${message}。去设置 → Agent 配置里给它选一个文本模型。`;
-    case 'no_base_url':
-      return `${message}。自定义端点必须填 baseURL。`;
-    case 'decode':
-      return `模型没按要求的结构返回，重试几次都没成：${message}`;
-    default:
-      return message;
-  }
+/**
+ * 常见失败给人话。
+ *
+ * **不要再替 message 说一遍它已经说了的事** —— Rust 侧的 Error 自带中文说明
+ * （「模型返回无法解析：…」），再加一句「模型没按要求的结构返回」就成了
+ * 「模型没按要求的结构返回，重试几次都没成：模型返回无法解析：…」这种叠句，
+ * 而且第一句还可能是错的（供应商 400 不是模型不听话）。
+ * 这里只补**下一步该干什么**。
+ */
+export function failureText(code: string, message: string): string {
+  const hint = (() => {
+    switch (code) {
+      case 'no_key':
+        return '去设置 → 模型设置里填一个。';
+      case 'no_model':
+        return '去设置 → 智能体管理里给它选一个文本模型。';
+      case 'no_base_url':
+        return '自定义端点必须填 baseURL。';
+      case 'http':
+        return '这是供应商直接返回的错误。先核对模型名和密钥；'
+          + '如果它是思考模型，程序会自动换一条不用强制工具调用的路，'
+          + '还失败的话把上面这段原话发出来。';
+      case 'decode':
+        return '模型两条路都没给出能解析的结构。换一个支持工具调用的模型更稳。';
+      default:
+        return '';
+    }
+  })();
+  return hint ? `${message}。${hint}` : message;
 }
 
 /** Rust 产物 → 前端产物卡。id 在这里生成 —— 前端才知道现有 id 用到哪 */

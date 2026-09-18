@@ -5,7 +5,7 @@
 //! 产物形状与前端 `domain/story/model.ts` 的 `Act` 一致 —— 采纳时直接进项目树。
 
 use crate::agent::AgentSpec;
-use studio_error::{Error, Result};
+use studio_error::Result;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
@@ -90,28 +90,11 @@ pub fn prompt_of(input: &OutlineInput) -> String {
     }
 }
 
-/// 跑一次。Rig 的 Extractor 负责让模型填 schema，失败自动重试。
+/// 跑一次。结构化输出走 `structured::extract` —— 工具调用不通时它会自动换成
+/// 提示词那条（思考模型不接受强制 tool_choice，见那个模块的说明）。
 pub async fn draft(spec: &AgentSpec, api_key: &str, preamble: &str, input: &OutlineInput) -> Result<OutlineDraft> {
-    // prelude 一次带齐 CompletionClient（父 trait）与 AgentClientExt，
-    // 只导后者的话 completion_model 不在方法解析范围内，.extractor() 找不到
-    use rig::prelude::*;
-    use rig::providers::openai;
-
-    let client = openai::Client::builder()
-        .api_key(api_key)
-        .base_url(&spec.base_url)
-        .build()
-        .map_err(|e| Error::Http(e.to_string()))?;
-
-    let extractor = client
-        .extractor::<OutlineDraft>(&spec.model.model)
-        .preamble(preamble)
-        .build();
-
-    let mut draft = extractor
-        .extract(prompt_of(input))
-        .await
-        .map_err(|e| Error::Decode(e.to_string()))?;
+    let mut draft: OutlineDraft =
+        crate::structured::extract(spec, api_key, preamble, &prompt_of(input)).await?;
     number(&mut draft, input.beat_count);
     Ok(draft)
 }

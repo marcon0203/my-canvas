@@ -85,6 +85,7 @@ serde 的 derive 本来就找不到，报假阳性一两次就没人看了。
 | `skill` | `skills` | Skill 加载：扫目录只读 frontmatter，正文与附件按需取 |
 | `agent` | `agent` | 配置 → `AgentSpec` → Rig agent。解析是纯函数，配置错误在花钱之前就报出来 |
 | `agent` | `expand` | 延展一场的走向。`tidy()` 去重截断，一条不剩就报错 |
+| `agent` | `structured` | 让模型填 schema：先工具调用，供应商不收就换提示词 + 自己解析 |
 | `agent` | `outline` | 起草大纲。`number()` 补场次键 |
 | `agent` | `prompt` | 提示词三段式合成与中译英 |
 | `agent` | `run` | 编排：`Run<I>` 带公共入参，每条链路只换输入与产物事件 |
@@ -343,6 +344,44 @@ Skill 会被那份旧副本盖掉，而界面上看不出是副本在生效；`W
 句式套上这一场的标题，如果接模型时只把标题送过去，模型给的三条和那份模板差别
 不大 —— 所以前后各两场、所在幕、已定稿的角色都要送（见 `expand::prompt_of`
 与前端 `expandInput`，两边都有测试盯着）。
+
+## 结构化输出：为什么不能只用 Rig 的 Extractor
+
+三条链路都要模型填一个有 schema 的结构。Rig 的 `Extractor` 是靠
+「注册一个 submit 工具 + 强制 `tool_choice: required`」实现的（`extractor.rs` 里
+那句 `ToolChoice::Required` 写死在构造函数里）。**好几家的思考模型不接受强制
+tool_choice**，供应商直接回 400：
+
+```text
+Thinking mode does not support this tool_choice
+```
+
+国内几家的旗舰现在默认就是思考模型，所以这不是边角情况。两层应对：
+
+**一、能用 rig 内置的那家就用它。** rig 已经替我们处理了一部分脾气：
+
+| 供应商 | rig 模块 | 它做了什么 |
+|---|---|---|
+| DeepSeek | `providers::deepseek` | 思考模式下把强制 tool_choice 抹成 null |
+| 月之暗面 | `providers::moonshot` | 降级成 `auto` 并补一句引导 |
+| 火山方舟 / 阿里百炼 / 腾讯混元 / 自定义 | 无专属模块 | 走通用 chat/completions |
+
+智谱那个 `providers::zai` 是 z.ai 国际站、也没做这类修正，用它没好处，走通用。
+
+**二、通用那几家靠 `structured::extract` 兜底**：先试工具调用，拿到
+「不支持这个 tool_choice」这类 400 就换成 `OutputMode::Prompted`
+（schema 由 rig 注进提示词）+ 自己解析返回的 JSON。某个模型判定过一次之后
+进程内记下来，后面同一个模型不再白挨那个 400。
+
+解析必须自己做 —— rig 的文档明写这条路的文本「不保证是干净 JSON，可能带解释
+或 markdown 围栏」。`json_of` 负责剥 ``` 围栏、剥 `<think>` 块、按括号配对取出
+第一段完整对象（不是贪婪匹配到最后一个 `}`，那样 JSON 后面跟一句解释就会被吞进来）。
+
+**接口家族也踩过**：`openai::Client` 在 rig 0.42 里是 Responses API
+（`/responses`）的客户端，目录里这几家只提供 `/chat/completions`，
+通用那条必须用 `CompletionsClient`。用错了的症状是响应解析报
+「unknown variant `chat.completion`, expected `response`」—— 看着像供应商返回
+格式不对，其实是我们问错了接口。`structured` 里有测试对着假供应商核这两件事。
 
 ## 还没做
 

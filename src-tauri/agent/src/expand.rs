@@ -136,33 +136,16 @@ pub fn tidy(draft: &mut AltsDraft) -> Result<()> {
     Ok(())
 }
 
-/// 跑一次。
+/// 跑一次。结构化输出走 `structured::extract` —— 工具调用不通时它会自动换成
+/// 提示词那条（思考模型不接受强制 tool_choice，见那个模块的说明）。
 pub async fn expand(
     spec: &AgentSpec,
     api_key: &str,
     preamble: &str,
     input: &ExpandInput,
 ) -> Result<AltsDraft> {
-    // prelude 一次带齐 CompletionClient（父 trait）与 AgentClientExt，
-    // 只导后者的话 completion_model 不在方法解析范围内，.extractor() 找不到
-    use rig::prelude::*;
-    use rig::providers::openai;
-
-    let client = openai::Client::builder()
-        .api_key(api_key)
-        .base_url(&spec.base_url)
-        .build()
-        .map_err(|e| Error::Http(e.to_string()))?;
-
-    let extractor = client
-        .extractor::<AltsDraft>(&spec.model.model)
-        .preamble(preamble)
-        .build();
-
-    let mut draft = extractor
-        .extract(prompt_of(input))
-        .await
-        .map_err(|e| Error::Decode(e.to_string()))?;
+    let mut draft: AltsDraft =
+        crate::structured::extract(spec, api_key, preamble, &prompt_of(input)).await?;
     tidy(&mut draft)?;
     Ok(draft)
 }
