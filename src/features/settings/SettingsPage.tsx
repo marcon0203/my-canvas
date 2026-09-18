@@ -36,9 +36,11 @@ export function SettingsPage({ section, detail, onOpen, onBack }: {
   onBack: () => void;
 }) {
   const ready = useReadyProviders();
-  const syncKeys = useSettings((st) => st.syncKeys);
-  // 密钥的真相在系统钥匙串里，不在 store —— 打开设置时对一遍
-  useEffect(() => { syncKeys(); }, [syncKeys]);
+  const syncProviders = useSettings((st) => st.syncProviders);
+  // 真相在 <workspace>/providers/*.yaml 里，不在 store —— 打开设置时对一遍。
+  // **这是一次目录扫描，不弹任何东西**：上一版密钥在系统钥匙串里，而界面要
+  // 显示尾号，于是这一步是「一家一次读明文」，macOS 上配了几家就弹几次登录密码
+  useEffect(() => { void syncProviders(); }, [syncProviders]);
 
   const hint = SETTINGS_SUB.find((s) => s.k === section)?.hint;
   // 智能体分区的详情段有两种：**任务 id 带点**（outline.draft），智能体 id 不带点。

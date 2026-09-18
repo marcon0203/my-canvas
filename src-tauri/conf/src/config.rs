@@ -92,7 +92,8 @@ impl AgentConfig {
     }
 }
 
-/// 一家厂商的接入设置。**密钥不在这里** —— 它只进系统钥匙串。
+/// 一家厂商的接入设置。**这是旧形状**，只剩解析 `resolve_base_url` 时在用；
+/// 真相在 `provfile`（一家一个 YAML）。
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ProviderSetting {

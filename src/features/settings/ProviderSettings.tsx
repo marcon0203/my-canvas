@@ -2,16 +2,42 @@ import { useState } from 'react';
 import { Button, Chip, Icon, Input, Modal, Segmented, Switch, ToggleChip } from '@/ui';
 import { PROVIDERS, providerOf } from '@/domain/providers/catalog';
 import {
-  CAPS_OF, MODALITY_LABEL, defaultCaps, makeModel,
+  CAPS_OF, MODALITIES, MODALITY_LABEL, defaultCaps, makeModel,
   type Modality, type ModelSpec, type ProviderId,
 } from '@/domain/providers/model';
 import { baseUrlOf, providerSetting, useAddedProviders, useSettings } from '@/store/settings';
 import { Field, Fields } from './Field';
 import { useUi } from '@/store/ui';
 
-const MODALITIES: Modality[] = ['text', 'image', 'video', 'audio'];
-
 const TONE: Record<Modality, 'a' | 'ok' | 'warn'> = { text: 'a', image: 'ok', video: 'warn', audio: 'a' };
+
+/**
+ * 读不了的那几份配置文件。
+ *
+ * **不能默默跳过。** 手写 YAML 缩进差一格是常事，跳过的结果是「我明明配了
+ * DeepSeek，设置页里怎么没有」—— 而人根本不会想到是那个文件写坏了。
+ * 所以如实说是哪个文件、哪儿坏了，并且说清它在哪个目录。
+ */
+function BadFiles({ bad }: { bad: readonly [string, string][] }) {
+  return (
+    <section className="pcard pcard--bad">
+      <header className="pcard__h">
+        <span className="pcard__n">有 {bad.length} 份配置文件读不了</span>
+      </header>
+      <p className="t-cap dim">
+        它们在工作空间的 providers 目录下。改好之后回到这一页就会重新读。
+      </p>
+      <ul className="badlist">
+        {bad.map(([id, why]) => (
+          <li key={id}>
+            <code>{id}.yaml</code>
+            <span className="t-cap dim">{why}</span>
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
+}
 
 /**
  * 模型设置 · 供应商列表。
@@ -21,10 +47,12 @@ const TONE: Record<Modality, 'a' | 'ok' | 'warn'> = { text: 'a', image: 'ok', vi
  */
 export function ProviderList({ onOpen }: { onOpen: (id: ProviderId) => void }) {
   const added = useAddedProviders();
+  const bad = useSettings((s) => s.badProviders);
   const [adding, setAdding] = useState(false);
 
   return (
     <>
+      {bad.length > 0 && <BadFiles bad={bad} />}
       <section className="pcard">
         <header className="pcard__h">
           <span className="pcard__n">已接入 · {added.length}</span>
@@ -107,7 +135,7 @@ function ProviderTile({ id, onOpen }: { id: ProviderId; onOpen: (id: ProviderId)
 /**
  * 新增供应商：选一家 → 填端点与密钥。
  *
- * 密钥在这里就写进钥匙串 —— 接入一家和给它密钥是同一件事，
+ * 密钥在这里就写进那家的 YAML —— 接入一家和给它密钥是同一件事，
  * 分两步做会留下一堆「接入了但没法用」的空壳。
  */
 function AddProviderModal({ open, onClose, onAdded }: {
@@ -229,7 +257,7 @@ export function ProviderDetail({ id, onBack }: { id: ProviderId; onBack: () => v
 
   const models = setting.extraModels;
 
-  // 移除要先清钥匙串再删记录：反过来的话记录没了，那把 key 就留在钥匙串里没人管
+  // 移除一家 = 删那个文件，key 和模型清单跟着一起没了 —— 不会留下个没人管的 key
   const drop = () => {
     clearKey(id);
     removeProvider(id);

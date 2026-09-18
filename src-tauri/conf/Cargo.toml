@@ -8,4 +8,11 @@ license.workspace = true
 [dependencies]
 serde.workspace = true
 serde_json.workspace = true
+# 供应商配置是一家一个 YAML —— 人要直接拿编辑器改，所以不是 JSON。
+# serde_yaml 已经不维护了，_ng 是它的维护分支
+serde_yaml_ng = "0.10"
 studio-error = { path = "../error" }
+studio-doc = { path = "../doc" }
+
+[dev-dependencies]
+tempfile = "3"

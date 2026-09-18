@@ -134,7 +134,8 @@ export function WorkspaceSettings() {
           <li className="issue">
             <Icon name="bolt" />
             <span>
-              密钥不在这儿。它写在系统钥匙串里，换工作空间不影响，也不会跟着目录被复制走。
+              供应商配置在这儿：providers 目录下一家一个 YAML，api key 也在里面（文件权限 0600）。
+              换工作空间之后要重新接入，把目录整个拷走则跟着走。
             </span>
           </li>
         </ul>

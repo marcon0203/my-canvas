@@ -26,7 +26,7 @@
 │  Rust core (src-tauri/)                       │
 │   ├ providers/  厂商适配：文本/图片/视频         │
 │   ├ jobs/       生成队列：提交/轮询/取消/成本     │
-│   ├ vault/      密钥：系统钥匙串，永不落盘明文    │
+│   ├ provfile/   供应商：一家一个 YAML（含 apikey）│
 │   ├ store/      SQLite：项目、资产、生成记录      │
 │   └ media/      产物文件：图片/视频/参考图         │
 └──────────────────────────────────────────────┘
@@ -39,11 +39,18 @@
 ## 三、关键决策
 
 ### 密钥不进前端
-API Key 只存系统钥匙串（macOS Keychain / Windows Credential Manager / Linux Secret Service），
-Rust 侧 `keyring` crate 读写。**前端永远拿不到明文**，只拿到「这家配没配」的布尔值
-和脱敏尾号。请求由 Rust 发出，密钥不过 IPC。
+供应商配置一家一个 `<workspace>/providers/<id>.yaml`：端点、api key、模型清单
+都在那一个文件里，权限 0600。**前端永远拿不到明文** —— 送去前端的那个结构
+（`provfile::View`）根本没有 apikey 字段，只有「这家配没配」和脱敏尾号。
+请求由 Rust 发出，密钥不过 IPC。
 
-这条决定了配置体系的形状：设置界面里填 key 是「写入钥匙串」，不是「存进 store」。
+这条决定了配置体系的形状：设置界面里填 key 是「写进那个文件」，不是「存进 store」。
+
+**这里原来写的是系统钥匙串，后来改了。** 钥匙串看着更正规，实际代价是
+*每次点进设置页都弹一次系统密码，配了几家弹几次* —— 因为界面要显示尾号，
+而 `keyring` 那条路上没有「只问在不在、不读内容」的接口，于是为了算四个字符
+把每一把明文都读了一遍，而读钥匙串条目就会触发系统授权框。
+一个本地创作工具不该付这个代价。完整取舍写在 `src-tauri/conf/src/provfile.rs` 开头。
 
 ### 生成队列在 Rust
 `api/generation.ts` 现在是 setTimeout 模拟。搬到 Rust 后：tokio 任务 + SQLite 持久化，
@@ -108,7 +115,7 @@ SQLite（`sqlx`）存项目树、资产、生成记录、成本流水。
 | 阶段 | 内容 | 前端改动 |
 |---|---|---|
 | ~~0~~ | **配置体系**：厂商/模型注册表、每个 Agent 单独配 skill/模型/工具、设置界面 | 已完成（本轮） |
-| 1 | Tauri 骨架：cargo 工程、IPC 命令、钥匙串、SQLite | `api/client.ts` 换 `invoke` |
+| 1 | Tauri 骨架：cargo 工程、IPC 命令、供应商配置文件、SQLite | `api/client.ts` 换 `invoke` |
 | 2 | 厂商适配：文本先通，图片/视频按家接 | `api/generation.ts` 换 transport |
 | 3 | Agent 接 Rig：每位一个 agent（preamble/tools/model 来自配置），`api/agent.ts` 的流式换成真 SSE | `domain/agent/` 的 Plan/Proposal 契约不动 |
 | 4 | 打包与自更新：三平台产物、签名、增量更新 | 无 |

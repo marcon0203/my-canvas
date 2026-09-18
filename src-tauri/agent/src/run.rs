@@ -50,9 +50,9 @@ impl<F: Fn(RunEvent)> Sink for F {
     }
 }
 
-/// 取密钥的方式。测试里换成假的，免得碰真钥匙串。
+/// 取密钥的方式。测试里换成假的，免得碰真的那份。
 ///
-/// **只有 trait 在这儿，真实现（读系统钥匙串）不在。** 那一份在门面 crate
+/// **只有 trait 在这儿，真实现（读那家的 YAML）不在。** 那一份在门面 crate
 /// 里紧挨着 vault —— 这样 `vault::load` 不必为了被这里调用而变成公开的，
 /// 「没有任何 IPC 命令能读出明文」这句话才还是编译器保证的。
 pub trait Keys {
@@ -282,7 +282,7 @@ mod tests {
                 skills: &SkillStore::default(), skill: None,
             },
             &sink,
-            // 取密钥就 panic：证明模型都没解析出来时不该碰钥匙串
+            // 取密钥就 panic：证明模型都没解析出来时不该去读密钥
             &FakeKeys(None),
         );
         assert_eq!(sink.codes(), ["no_model"]);

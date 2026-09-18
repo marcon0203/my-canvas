@@ -11,20 +11,29 @@ import {
 } from '@/domain/agent/roster';
 import type { Modality, ModelRef, ModelSpec, ProviderId } from '@/domain/providers/model';
 import { PROVIDERS, defaultModel, providerOf } from '@/domain/providers/catalog';
-import { maskHint, vault } from '@/api/desktop';
+import { MODALITIES } from '@/domain/providers/model';
+import { groupOf, toSpec } from '@/domain/providers/yaml';
+import { maskHint, provs, type ProvView } from '@/api/desktop';
 
 /**
  * 应用设置：厂商接入 + 每个 Agent 的配置。
  *
- * **密钥不在这里。** 按桌面架构（docs/desktop-architecture.md），API Key 只进系统钥匙串，
- * 由 Rust 侧读写，前端永远拿不到明文 —— 这里只留「配没配」和脱敏尾号。
- * 当前是浏览器环境，keyStatus 由 mock 的 vault 维护；接 Tauri 后换成 invoke，结构不变。
+ * **桌面端的真相在磁盘上**：一家供应商一个 `<workspace>/providers/<id>.yaml`，
+ * 端点、api key、模型清单全在那一个文件里。这个 store 里那份是它的**投影** ——
+ * 每次改都同时写回文件，打开设置时再从文件读一遍对上。
+ *
+ * **明文不在这里。** api key 只有「用户刚打的那串往下传」这一个方向；
+ * Rust 送回来的那份（`ProvView`）根本没有 apikey 字段，所以这里只可能有
+ * 「配没配」和脱敏尾号。
+ *
+ * 浏览器里没有那些文件，`provs.*` 返回 null，于是只剩 localStorage 里这一份 ——
+ * 设置界面上如实说明。
  */
 
 export interface ProviderSetting {
   /** 用户改过的端点；空则用目录里的默认值 */
   readonly baseUrl?: string;
-  /** 密钥是否已写入钥匙串 */
+  /** 那家的 YAML 里有没有 apikey */
   readonly hasKey: boolean;
   /** 脱敏尾号，给人确认「是不是那把 key」 */
   readonly keyHint?: string;
@@ -36,6 +45,13 @@ export interface ProviderSetting {
 
 export interface SettingsState {
   providers: Partial<Record<ProviderId, ProviderSetting>>;
+  /**
+   * 读不了的那几份 YAML：`[id, 为什么]`。
+   *
+   * **一份写坏的文件不该让设置页打不开** —— 手写 YAML 缩进差一格是常事。
+   * 所以坏的那几家单独放这儿，界面上如实说是哪个文件、哪儿坏了。
+   */
+  badProviders: readonly [string, string][];
   /** 没给 Agent 单独配时用的默认模型 */
   globalModels: Partial<Record<Modality, ModelRef>>;
   /**
@@ -55,17 +71,21 @@ export interface SettingsState {
   customAgents: readonly Persona[];
 
   setBaseUrl: (id: ProviderId, url: string) => void;
-  /** 桌面端写系统钥匙串；浏览器只记状态。两种情况都不在 store 里存明文 */
+  /** 桌面端写进那家的 YAML；浏览器只记状态。两种情况都不在 store 里存明文 */
   setKey: (id: ProviderId, key: string) => void;
   clearKey: (id: ProviderId) => void;
-  /** 启动时与钥匙串对一遍 —— 换台机器打开，状态要跟着那台机器的钥匙串走 */
-  syncKeys: () => void;
+
+  /**
+   * 从磁盘上那些 YAML 读一遍，覆盖 store 里这份投影。
+   * 启动时和打开设置时都要跑 —— `hasKey` 喂着「哪家能用」。
+   */
+  syncProviders: () => Promise<void>;
   /**
    * 接入一家厂商。**「有没有这条记录」就是「接没接入」** ——
    * 不另设一个 added 布尔值，那种设计迟早出现「记录在但 added=false」的中间态。
    */
   addProvider: (id: ProviderId, baseUrl?: string) => void;
-  /** 移除一家。连它下面的模型一起删；密钥单独清（在钥匙串里，不在这儿） */
+  /** 移除一家 = 删那个 YAML 文件，端点、key、模型清单一起没 */
   removeProvider: (id: ProviderId) => void;
   toggleProvider: (id: ProviderId, on: boolean) => void;
   addModel: (id: ProviderId, m: ModelSpec) => void;
@@ -85,87 +105,145 @@ export interface SettingsState {
   removeAgent: (id: AgentId) => void;
 }
 
-// 与 Rust 侧 vault::hint_of 同一规则，见 api/desktop.ts
+// 与 Rust 侧 provfile::hint_of 同一规则，见 api/desktop.ts
 const KEY_HINT = maskHint;
+
+/** 这次要写回哪个工作空间 */
+const ws = () => useSettings.getState().workspace;
+
+/** Rust 送来的那份 → store 里的形状 */
+const toSetting = (v: ProvView): ProviderSetting => ({
+  ...(v.baseUrl ? { baseUrl: v.baseUrl } : {}),
+  hasKey: v.hasKey,
+  ...(v.keyHint ? { keyHint: v.keyHint } : {}),
+  extraModels: MODALITIES.flatMap((m) =>
+    v[m].map((y) => toSpec(v.id as ProviderId, m, y)),
+  ),
+  ...(v.enabled ? {} : { disabled: true }),
+});
+
 
 export const useSettings = create<SettingsState>()(
   persist(
     (set) => ({
       providers: {},
+      badProviders: [],
       globalModels: {},
       workspace: '',
       customAgents: [],
       agents: defaultConfigs(),
 
-      setBaseUrl: (id, url) => set((s) => ({
-        providers: { ...s.providers, [id]: { ...blank(s.providers[id]), baseUrl: url.trim() || undefined } },
-      })),
+      /**
+       * 改一项 = 本地先改 + 写回那个 YAML 文件。
+       *
+       * **先改本地再写文件**（乐观更新）：写文件是异步的，等它回来再改界面
+       * 会让输入框有一下明显的卡顿。写失败的话下次打开设置会从文件读一遍对上，
+       * 界面不会一直骗人。
+       *
+       * patch 里只给改的那一项 —— Rust 侧是读改写，没给的字段保持磁盘原样。
+       * 所以改个端点不会顺带把 key 和模型清单重写一遍。
+       */
+      setBaseUrl: (id, url) => {
+        set((s) => ({
+          providers: { ...s.providers, [id]: { ...blank(s.providers[id]), baseUrl: url.trim() || undefined } },
+        }));
+        // 空串在 Rust 侧的意思是「清掉，用回内置默认」
+        void provs.save(id, { baseUrl: url.trim() }, ws());
+      },
 
-      // 明文交给桥接去写钥匙串，store 里只留状态与尾号
+      // 明文只往下传，不往回拿。回来的那份（ProvView）根本没有 apikey 字段
       setKey: (id, key) => {
         set((s) => ({
           providers: { ...s.providers, [id]: { ...blank(s.providers[id]), hasKey: true, keyHint: KEY_HINT(key) } },
         }));
-        void vault.set(id, key).then((st) => set((s) => ({
-          providers: { ...s.providers, [id]: { ...blank(s.providers[id]), hasKey: st.hasKey, keyHint: st.hint } },
-        })));
+        void provs.save(id, { apikey: key }, ws()).then((v) => {
+          if (!v) return;       // 浏览器回落：没有文件可写，本地那份就是全部
+          set((s) => ({
+            providers: { ...s.providers, [id]: { ...blank(s.providers[id]), hasKey: v.hasKey, keyHint: v.keyHint } },
+          }));
+        });
       },
       clearKey: (id) => {
         set((s) => ({
           providers: { ...s.providers, [id]: { ...blank(s.providers[id]), hasKey: false, keyHint: undefined } },
         }));
-        void vault.clear(id);
+        void provs.save(id, { apikey: '' }, ws());
       },
 
-      syncKeys: () => {
-        const ids = Object.keys(useSettings.getState().providers) as ProviderId[];
-        if (!ids.length) return;
-        void vault.status(ids).then((list) => {
-          if (!list.length) return;   // 浏览器回落：没有钥匙串可对
-          set((s) => {
-            const next = { ...s.providers };
-            for (const st of list) {
-              const id = st.provider as ProviderId;
-              next[id] = { ...blank(next[id]), hasKey: st.hasKey, keyHint: st.hint };
-            }
-            return { providers: next };
-          });
+      /**
+       * 从磁盘上那些 YAML 文件读一遍，覆盖 store 里这份投影。
+       *
+       * **这是一次目录扫描 + 几次文件读，不弹任何东西。** 上一版密钥在系统
+       * 钥匙串里，而界面要显示尾号，于是这一步是「一家一次读明文」——
+       * macOS 上每读一次弹一次登录密码，配了几家弹几次。
+       *
+       * 启动时和打开设置时都要跑：`hasKey` 喂着「哪家能用」，它不对的话，
+       * 明明配好了的模型会被当成没配。
+       */
+      syncProviders: async () => {
+        const got = await provs.list(ws());
+        if (!got) return;       // 浏览器回落：没有那些文件，localStorage 那份就是全部
+        set(() => {
+          const next: Partial<Record<ProviderId, ProviderSetting>> = {};
+          for (const v of got.items) {
+            // 内置目录里没有这个 id：现在的界面遍历的是目录那几家，
+            // 收进来会让详情页拿到一个 undefined 的 spec 然后崩掉。
+            // 「丢个文件进去就是全新一家」还没做，所以这里先跳过
+            if (!providerOf(v.id as ProviderId)) continue;
+            next[v.id as ProviderId] = toSetting(v);
+          }
+          return { providers: next, badProviders: got.bad };
         });
       },
-      addProvider: (id, baseUrl) => set((s) => {
-        if (s.providers[id]) return s;          // 已经接入过，别把用户填的覆盖掉
-        return {
+
+      addProvider: (id, baseUrl) => {
+        if (useSettings.getState().providers[id]) return;   // 接入过了，别把用户填的覆盖掉
+        set((s) => ({
           providers: {
             ...s.providers,
             [id]: { hasKey: false, extraModels: [], ...(baseUrl ? { baseUrl } : {}) },
           },
-        };
-      }),
+        }));
+        // 建出那个文件。名字写进去，以后「丢个文件进去就是新接一家」用得上
+        void provs.save(id, {
+          ...(baseUrl ? { baseUrl } : {}),
+          name: providerOf(id)?.name,
+          enabled: true,
+        }, ws());
+      },
 
-      removeProvider: (id) => set((s) => {
-        const next = { ...s.providers };
-        delete next[id];
-        return { providers: next };
-      }),
+      removeProvider: (id) => {
+        set((s) => {
+          const next = { ...s.providers };
+          delete next[id];
+          return { providers: next };
+        });
+        // 删一家 = 删那个文件，key 和模型清单跟着一起没了
+        void provs.remove(id, ws());
+      },
 
-      toggleProvider: (id, on) => set((s) => ({
-        providers: { ...s.providers, [id]: { ...blank(s.providers[id]), disabled: !on } },
-      })),
+      toggleProvider: (id, on) => {
+        set((s) => ({
+          providers: { ...s.providers, [id]: { ...blank(s.providers[id]), disabled: !on } },
+        }));
+        void provs.save(id, { enabled: on }, ws());
+      },
 
-      addModel: (id, m) => set((s) => {
-        const cur = blank(s.providers[id]);
-        if (cur.extraModels.some((x) => x.id === m.id)) return s;
-        return { providers: { ...s.providers, [id]: { ...cur, extraModels: [...cur.extraModels, m] } } };
-      }),
-      removeModel: (id, modelId) => set((s) => {
-        const cur = blank(s.providers[id]);
-        return {
-          providers: {
-            ...s.providers,
-            [id]: { ...cur, extraModels: cur.extraModels.filter((x) => x.id !== modelId) },
-          },
-        };
-      }),
+      addModel: (id, m) => {
+        const cur = blank(useSettings.getState().providers[id]);
+        if (cur.extraModels.some((x) => x.id === m.id)) return;
+        const list = [...cur.extraModels, m];
+        set((s) => ({ providers: { ...s.providers, [id]: { ...blank(s.providers[id]), extraModels: list } } }));
+        // 按类型整组替换：只送这一类，别的类不动
+        void provs.save(id, { [m.modality]: groupOf(list, m.modality) }, ws());
+      },
+      removeModel: (id, modelId) => {
+        const cur = blank(useSettings.getState().providers[id]);
+        const gone = cur.extraModels.find((x) => x.id === modelId);
+        const list = cur.extraModels.filter((x) => x.id !== modelId);
+        set((s) => ({ providers: { ...s.providers, [id]: { ...blank(s.providers[id]), extraModels: list } } }));
+        if (gone) void provs.save(id, { [gone.modality]: groupOf(list, gone.modality) }, ws());
+      },
 
       setWorkspace: (workspace) => set({ workspace: workspace.trim() }),
       setGlobalModel: (m, ref) => set((s) => {
@@ -219,6 +297,17 @@ export const useSettings = create<SettingsState>()(
     {
       name: 'studio.settings',
       version: 2,
+      /**
+       * `badProviders` 不存 —— 它是「这一次读磁盘时哪几份文件坏了」，
+       * 存下来的话用户把文件改好了，那条报错还会跟着他到下次启动。
+       *
+       * `providers` 在桌面端也是投影（启动时 `syncProviders` 会覆盖），
+       * 但浏览器里它就是全部，所以得存。
+       */
+      partialize: (s) => {
+        const { badProviders: _bad, ...rest } = s;
+        return rest as SettingsState;
+      },
       /**
        * 存过的配置要能跟上代码的变化。
        *

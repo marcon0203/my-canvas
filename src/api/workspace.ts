@@ -5,7 +5,8 @@
  * 用 localStorage 顶一个**同形**的实现 —— 接口一致，所以界面代码只有一份，
  * 而且开发时在浏览器里就能把「新建项目 → 跑完七个阶段」整条路走通。
  *
- * **密钥不走这里**。它只进系统钥匙串，见 api/desktop.ts 的 vault。
+ * **供应商配置不走这里**。它一家一个 `<workspace>/providers/<id>.yaml`，
+ * 端点、api key、模型清单都在那儿，见 api/desktop.ts 的 `provs`。
  */
 
 import { isDesktop } from './desktop';

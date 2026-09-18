@@ -1301,6 +1301,16 @@ body { background: var(--color-bg-canvas); overflow: hidden; }
   background: var(--color-bg-surface); padding: var(--space-4) var(--space-5);
 }
 .pcard--off { opacity: 0.55; }
+/* 读不了的那几份配置文件。用警示色而不是错误色：文件写坏了是可以改好的，
+   不是程序出了问题 */
+.pcard--bad { border-color: var(--color-warning); background: var(--color-warning-bg); }
+.pcard--bad .pcard__n { color: var(--color-warning); }
+.badlist { list-style: none; margin: var(--space-3) 0 0; padding: 0; display: grid; gap: var(--space-2); }
+.badlist li { display: flex; align-items: baseline; gap: var(--space-2); flex-wrap: wrap; }
+.badlist code {
+  font-size: 12px; padding: 1px 6px; border-radius: var(--radius-chip);
+  background: var(--color-bg-surface); color: var(--color-text-primary);
+}
 .pcard__h { display: flex; align-items: center; gap: var(--space-2); margin-bottom: var(--space-3); flex-wrap: wrap; }
 .pcard__n { font-size: 15px; font-weight: 600; color: var(--color-text-primary); }
 .pcard__en { font-size: 11px; color: var(--color-text-tertiary); }

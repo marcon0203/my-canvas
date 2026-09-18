@@ -3,6 +3,7 @@
 //! ```text
 //! ~/.hitv/                 ← 默认；用户可以改到任意目录
 //! ├── skills/              用户自己放的 skill，盖过内置同名的
+//! ├── providers/           供应商配置，一家一个 YAML（含 api key，0600）
 //! └── projects/            项目数据
 //! ```
 //!
@@ -25,6 +26,7 @@ pub const DEFAULT_DIR: &str = ".hitv";
 pub const SUBDIRS: &[(&str, &str, bool)] = &[
     // (目录名, 说明, 现在是否真的在用)
     ("skills", "用户自己放的 skill，与内置同名时盖过内置", true),
+    ("providers", "供应商配置，一家一个 YAML —— api key 也在里面", true),
     ("projects", "项目数据", false),
 ];
 

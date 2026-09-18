@@ -11,7 +11,7 @@ use serde::Serialize;
 pub enum Error {
     #[error("没有配置 {0} 的密钥")]
     NoKey(String),
-    #[error("钥匙串读写失败：{0}")]
+    #[error("密钥读写失败：{0}")]
     Vault(String),
     #[error("找不到厂商 {0}")]
     UnknownProvider(String),

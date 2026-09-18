@@ -34,10 +34,12 @@ done
 
 # 密钥明文只能从 core 的 vault_key 出去。
 #
-# 今天编译器已经挡住了（keychain 是私有模块），这条守的是**下一步**：
-# 有人为了让某处编过去，把 keychain 改成 pub，然后在 IPC 层直接读明文。
-# 那一改编译器就不再拦，而 review 很容易滑过去。
-leak=$(grep -rnE 'keychain|vault::load|vault::get' app/src || true)
+# 出去那一半由类型保证（provfile::View 没有 apikey 字段，有测试钉着）。
+# 这条守的是进来那一半：有人在 IPC 层直接调 provfile::apikey 或 read 之后
+# 把整份 ProvFile 返回给前端 —— 那一改编译器不拦，review 很容易滑过去。
+#
+# 唯一允许的明文出口是 studio_core::vault_key，它只在「马上要发请求」处调。
+leak=$(grep -rnE 'provfile::apikey|provfile::read|keychain|vault::load|vault::get' app/src || true)
 if [ -n "$leak" ]; then
   echo "❌ IPC 层不能碰密钥明文 —— 唯一出口是 studio_core::vault_key"
   echo "$leak" | sed 's/^/   /'

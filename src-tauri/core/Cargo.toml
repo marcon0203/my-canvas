@@ -1,8 +1,8 @@
 # 门面：把功能包按原来的模块名再导出一遍，加上密钥保管。
 #
 # 为什么要有这一层：app/ 里那些 `studio_core::project::…` 的路径不用跟着动，
-# 而且**密钥的真实现留在这儿** —— vault::load 不公开，
-# run::Keys 的系统钥匙串实现也在这儿，见 lib.rs。
+# 而且**取密钥明文的唯一出口在这儿**（vault_key），run::Keys 的真实现也在这儿。
+# 见 lib.rs。密钥本身在 <workspace>/providers/<id>.yaml，读写在 conf/src/provfile.rs。
 [package]
 name = "studio-core"
 version.workspace = true
@@ -19,6 +19,3 @@ studio-net = { path = "../net" }
 studio-skill = { path = "../skill" }
 studio-agent = { path = "../agent" }
 studio-tools = { path = "../tools" }
-
-# 密钥只进系统钥匙串，明文不落盘、不过 IPC
-keyring = "4"

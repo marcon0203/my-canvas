@@ -4,8 +4,9 @@
  * 同一份前端既跑在浏览器（开发、演示）也跑在 Tauri WebView（正式）：
  * `isDesktop()` 为假时全部回落到浏览器实现，界面代码不需要分支。
  *
- * 密钥相关的命令**只有桌面端有真实现** —— 浏览器里没有系统钥匙串，
- * 回落实现只记「配没配」，并且在设置界面里如实说明。
+ * 供应商配置**只有桌面端有真实现** —— 它在 `<workspace>/providers/<id>.yaml`，
+ * 浏览器里没有文件系统。回落实现只在内存/localStorage 里记一份，
+ * 并且在设置界面里如实说明。
  */
 
 import { BUILTIN_SKILLS, builtinSkill } from '@/domain/skills/builtin';
@@ -14,10 +15,65 @@ import type { ProposalPatch } from '@/domain/agent/types';
 import type { Risk } from '@/domain/agent/policy';
 import type { ToolId, ToolStatus } from '@/domain/agent/tools';
 
-export interface KeyStatus {
-  provider: string;
+/* ---------------- 供应商：一家一个 YAML ---------------- */
+
+/** 与 Rust 侧 `provfile::ModelFull` 同形 */
+export interface YamlModel {
+  id: string;
+  name?: string;
+  /** 上下文窗口（token），文本模型才有 */
+  context?: number;
+  note?: string;
+  /**
+   * 这个模型支持什么（refImage / stream / tools …）。
+   *
+   * **`undefined` 与 `[]` 不是一件事**：`undefined` 是「YAML 里没写」，
+   * 按 modality 给一组默认值；`[]` 是「明确都不支持」。混成一件事的话，
+   * 手写一份最简的文件就等于把所有能力都关掉，而 Agent 配置页会说这个模型
+   * 不支持 function calling —— 那是假的。
+   */
+  caps?: string[];
+}
+
+/**
+ * 与 Rust 侧 `provfile::View` 同形 —— 送来的那份**没有 apikey**。
+ *
+ * 明文只有一个方向能走：用户刚打的那串经 `save` 进去。出来的只有
+ * 「配没配」和脱敏尾号。Rust 侧那个结构里根本没有 apikey 字段，有测试钉着。
+ */
+export interface ProvView {
+  id: string;
+  name?: string;
+  baseUrl?: string;
+  enabled: boolean;
   hasKey: boolean;
-  hint?: string;
+  keyHint?: string;
+  text: YamlModel[];
+  image: YamlModel[];
+  video: YamlModel[];
+  audio: YamlModel[];
+}
+
+/**
+ * 要改什么。**没给的字段不动** —— 改个端点不该顺带把 key 和模型清单重写一遍。
+ * 要清掉一项就给空串：`baseUrl: ''` 是「用回内置默认」，`apikey: ''` 是「删掉」。
+ */
+export interface ProvPatch {
+  baseUrl?: string;
+  /** 明文只走这个方向 */
+  apikey?: string;
+  name?: string;
+  enabled?: boolean;
+  text?: YamlModel[];
+  image?: YamlModel[];
+  video?: YamlModel[];
+  audio?: YamlModel[];
+}
+
+export interface ProvListing {
+  items: ProvView[];
+  /** 读不了的那几家：[id, 为什么]。**一份写坏的 YAML 不该让设置页打不开** */
+  bad: [string, string][];
 }
 
 /** Tauri 注入的全局标记；浏览器里没有 */
@@ -30,23 +86,30 @@ async function invoke<T>(cmd: string, args?: Record<string, unknown>): Promise<T
   return call<T>(cmd, args);
 }
 
-export const vault = {
-  async set(provider: string, key: string): Promise<KeyStatus> {
-    if (!isDesktop()) return { provider, hasKey: true, hint: maskHint(key) };
-    return invoke<KeyStatus>('vault_set', { provider, key });
+/**
+ * 供应商配置的读写。浏览器里**没有真实现** —— `null` 表示「这儿没有那些文件」，
+ * 调用方（store）自己回落到 localStorage 里那份。
+ *
+ * 刻意返回 `null` 而不是空清单：空清单的意思是「一家都没接入」，
+ * 那会让浏览器里刚填的配置被一个空结果覆盖掉。
+ */
+export const provs = {
+  async list(workspace: string): Promise<ProvListing | null> {
+    if (!isDesktop()) return null;
+    return invoke<ProvListing>('providers_list', { workspace });
   },
-  async clear(provider: string): Promise<KeyStatus> {
-    if (!isDesktop()) return { provider, hasKey: false };
-    return invoke<KeyStatus>('vault_clear', { provider });
+  async save(id: string, patch: ProvPatch, workspace: string): Promise<ProvView | null> {
+    if (!isDesktop()) return null;
+    return invoke<ProvView>('providers_save', { id, patch, workspace });
   },
-  async status(providers: string[]): Promise<KeyStatus[]> {
-    if (!isDesktop()) return [];
-    return invoke<KeyStatus[]>('vault_status', { providers });
+  async remove(id: string, workspace: string): Promise<void> {
+    if (!isDesktop()) return;
+    await invoke<void>('providers_remove', { id, workspace });
   },
 };
 
 /**
- * 与 Rust 侧 `vault::hint_of` 同一规则：短密钥全遮，否则只露最后四位。
+ * 与 Rust 侧 `provfile::hint_of` 同一规则：短密钥全遮，否则只露最后四位。
  * 两边必须一致，否则浏览器和桌面端显示的尾号会不一样。
  */
 export function maskHint(key: string): string {

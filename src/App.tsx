@@ -61,7 +61,12 @@ export function App() {
   useEffect(() => startAutosave(), []);
   useEffect(() => startSettingsSync(), []);
   const workspace = useSettings((s) => s.workspace);
-  useEffect(() => { void loadSettings(workspace); }, [workspace]);
+  // 供应商配置在 <workspace>/providers/*.yaml 里，**启动时就要读**：
+  // hasKey 喂着「哪家能用」，不对的话明明配好的模型会被当成没配，
+  // 而用户不一定会先去点一下设置页
+  useEffect(() => {
+    void loadSettings(workspace).then(() => useSettings.getState().syncProviders());
+  }, [workspace]);
 
   return (
     <QueryClientProvider client={queryClient}>

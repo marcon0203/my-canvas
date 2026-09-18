@@ -5,6 +5,9 @@
 /** 模态：一个模型只干一件事，别指望一个 id 同时出文本和视频 */
 export type Modality = 'text' | 'image' | 'video' | 'audio';
 
+/** 四种类型，固定顺序。要遍历「每一类各一串」的地方照着它 —— 漏一类是静默的 */
+export const MODALITIES: readonly Modality[] = ['text', 'image', 'video', 'audio'];
+
 export const MODALITY_LABEL: Record<Modality, string> = {
   text: '文本', image: '图片', video: '视频', audio: '音频',
 };

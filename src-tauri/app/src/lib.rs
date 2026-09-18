@@ -17,28 +17,53 @@ use studio_core::project::{self, Bundle, Meta};
 use studio_core::store::{self, ConfigFile};
 use studio_core::tools::{self, Outcome, ToolSpec};
 use studio_core::policy::Risk;
-use studio_core::vault::{self, KeyStatus};
+use studio_core::provfile::{self, Patch, View};
 
-/* ---------------- 密钥：明文只进钥匙串，出不来 ---------------- */
+/* ---------------- 供应商：一家一个 YAML，api key 就在里面 ---------------- */
 
-#[tauri::command]
-fn vault_set(provider: String, key: String) -> Result<KeyStatus> {
-    vault::set(&provider, &key)
+/// 列出接入过的所有家。
+///
+/// **一份写坏的 YAML 不该让设置页打不开** —— 坏的那几家单独放在 `bad` 里，
+/// 界面上如实说是哪个文件、哪儿坏了。
+#[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+struct ProvList {
+    items: Vec<View>,
+    /// (id, 为什么读不了)
+    bad: Vec<(String, String)>,
 }
 
 #[tauri::command]
-fn vault_clear(provider: String) -> Result<KeyStatus> {
-    vault::clear(&provider)
+fn providers_list(workspace: Option<String>) -> Result<ProvList> {
+    let w = ws(workspace.as_deref())?;
+    let got = provfile::list(&w.root)?;
+    Ok(ProvList {
+        items: got.files.iter().map(|(id, f)| View::of(id, f)).collect(),
+        bad: got.bad,
+    })
 }
 
+/// 改一家（文件不存在就是新接入一家）。
+///
+/// `patch` 里**没给的字段保持磁盘上原样** —— 改个端点不该顺带把 key 和模型
+/// 清单重写一遍。明文 api key 只走这个方向进来；返回的 `View` 没有那个字段。
 #[tauri::command]
-fn vault_status(providers: Vec<String>) -> Result<Vec<KeyStatus>> {
-    providers.iter().map(|p| vault::status(p)).collect()
+fn providers_save(id: String, patch: Patch, workspace: Option<String>) -> Result<View> {
+    let w = ws(workspace.as_deref())?;
+    let f = provfile::apply(&w.root, &id, &patch)?;
+    Ok(View::of(&id, &f))
+}
+
+/// 删一家 = 删那个文件
+#[tauri::command]
+fn providers_remove(id: String, workspace: Option<String>) -> Result<()> {
+    let w = ws(workspace.as_deref())?;
+    provfile::remove(&w.root, &id)
 }
 
 /* ---------------- 配置：落在工作空间里，不进数据库 ---------------- */
 
-/// 读一份配置。**密钥不在这里** —— 它在系统钥匙串，工作空间整个复制走也带不走。
+/// 读一份配置。**供应商配置不在这里** —— 它一家一个 providers/<id>.yaml。
 #[tauri::command]
 fn config_load(which: String, workspace: Option<String>) -> Result<serde_json::Value> {
     let file = ConfigFile::parse(&which)
@@ -141,7 +166,7 @@ async fn tool_call(
         if let Some(m) = c.model_for(modality, &globals) {
             let base = studio_core::providers::resolve_base_url(&m.provider, provs.get(&m.provider));
             // 密钥最后取，且只在这一处 —— 明文不进返回值、不进日志
-            if let (Ok(base), Ok(key)) = (base, studio_core::vault_key(&m.provider)) {
+            if let (Ok(base), Ok(key)) = (base, studio_core::vault_key(&w.root, &m.provider)) {
                 if modality == "text" {
                     chat_owned = Some((m.clone(), base, key));
                 } else if let Some(api) = studio_core::generate::adapters::of(&m.provider, &tool) {
@@ -181,6 +206,24 @@ async fn tool_call(
 /// 解析工作空间。路径由前端传进来（它负责持久化），这里只校验。
 fn ws(configured: Option<&str>) -> Result<Workspace> {
     workspace::resolve(configured, &workspace::home()?)
+}
+
+/// 跑模型那三条命令要的工作空间根目录。**失败走事件** ——
+/// 那三条命令不返回 Result，见 `RunEvent::Failed` 上的注释
+fn root_or_fail(
+    configured: Option<&str>,
+    on_event: &tauri::ipc::Channel<RunEvent>,
+) -> Option<std::path::PathBuf> {
+    match ws(configured) {
+        Ok(w) => Some(w.root),
+        Err(e) => {
+            let _ = on_event.send(RunEvent::Failed {
+                code: e.code().into(),
+                message: e.to_string(),
+            });
+            None
+        }
+    }
 }
 
 /// 扫描 skill 目录，**只解析 frontmatter**（第 1 级）。
@@ -428,6 +471,11 @@ async fn agent_outline_draft(
     app: tauri::AppHandle,
 ) {
     let skills = SkillStore::scan(&roots(&app, workspace.as_deref()));
+    // 密钥在 <workspace>/providers/<id>.yaml 里，所以这条链路要先有工作空间。
+    // **这三条命令不返回 Result**（失败一律走事件，见 RunEvent::Failed 上的注释），
+    // 所以解析不出来在这儿就发一个 Failed —— 别让它退化成后面一句 no_key，
+    // 那句话会把人指到「去填密钥」，而真原因是工作空间路径不对
+    let Some(root) = root_or_fail(workspace.as_deref(), &on_event) else { return };
     run::outline_draft(
         run::OutlineRun {
             cfg: &cfg,
@@ -441,7 +489,7 @@ async fn agent_outline_draft(
         move |e: RunEvent| {
             let _ = on_event.send(e);
         },
-        run::SystemKeys,
+        run::SystemKeys(root),
     )
     .await;
 }
@@ -460,6 +508,11 @@ async fn agent_shots_prompt(
     app: tauri::AppHandle,
 ) {
     let skills = SkillStore::scan(&roots(&app, workspace.as_deref()));
+    // 密钥在 <workspace>/providers/<id>.yaml 里，所以这条链路要先有工作空间。
+    // **这三条命令不返回 Result**（失败一律走事件，见 RunEvent::Failed 上的注释），
+    // 所以解析不出来在这儿就发一个 Failed —— 别让它退化成后面一句 no_key，
+    // 那句话会把人指到「去填密钥」，而真原因是工作空间路径不对
+    let Some(root) = root_or_fail(workspace.as_deref(), &on_event) else { return };
     run::shots_prompt(
         run::PromptRun {
             cfg: &cfg,
@@ -473,7 +526,7 @@ async fn agent_shots_prompt(
         move |e: RunEvent| {
             let _ = on_event.send(e);
         },
-        run::SystemKeys,
+        run::SystemKeys(root),
     )
     .await;
 }
@@ -492,6 +545,11 @@ async fn agent_outline_expand(
     app: tauri::AppHandle,
 ) {
     let skills = SkillStore::scan(&roots(&app, workspace.as_deref()));
+    // 密钥在 <workspace>/providers/<id>.yaml 里，所以这条链路要先有工作空间。
+    // **这三条命令不返回 Result**（失败一律走事件，见 RunEvent::Failed 上的注释），
+    // 所以解析不出来在这儿就发一个 Failed —— 别让它退化成后面一句 no_key，
+    // 那句话会把人指到「去填密钥」，而真原因是工作空间路径不对
+    let Some(root) = root_or_fail(workspace.as_deref(), &on_event) else { return };
     run::outline_expand(
         run::ExpandRun {
             cfg: &cfg,
@@ -505,7 +563,7 @@ async fn agent_outline_expand(
         move |e: RunEvent| {
             let _ = on_event.send(e);
         },
-        run::SystemKeys,
+        run::SystemKeys(root),
     )
     .await;
 }
@@ -514,9 +572,9 @@ async fn agent_outline_expand(
 pub fn run() {
     tauri::Builder::default()
         .invoke_handler(tauri::generate_handler![
-            vault_set,
-            vault_clear,
-            vault_status,
+            providers_list,
+            providers_save,
+            providers_remove,
             agent_resolve,
             agent_outline_draft,
             agent_shots_prompt,
