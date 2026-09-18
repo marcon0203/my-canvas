@@ -913,6 +913,22 @@ body { background: var(--color-bg-canvas); overflow: hidden; }
 }
 @keyframes agent-spin { to { transform: rotate(360deg); } }
 
+/* ---- 会话历史：一行一条存档 ---- */
+.chist {
+  display: flex; align-items: center; gap: var(--space-2);
+  padding: var(--space-2) 0; border-bottom: 1px solid var(--color-border-subtle);
+}
+.chist:last-of-type { border-bottom: 0; }
+.chist__main {
+  flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; text-align: left;
+}
+.chist__t {
+  font-size: 13px; color: var(--color-text-primary);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.chist__main:hover .chist__t { color: var(--color-accent); }
+.chist__meta { font-size: 11px; color: var(--color-text-tertiary); }
+
 /* ---- 计划进度：这一条把「你在一条七步的路上」说出来 ---- */
 .aplan {
   flex: 0 0 auto; margin: 0 var(--space-4) var(--space-2);

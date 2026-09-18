@@ -7,6 +7,9 @@ import type { AgentId } from '@/domain/agent/roster';
 import { personaById, personaForStep } from '@/domain/agent/roster';
 import type { AgentMessage, IntentKind, Proposal } from '@/domain/agent/types';
 import { pipelineFor, type ProjectKind, type Stage } from '@/domain/agent/pipeline';
+import {
+  archive, dropArchive, listArchive, loadLive, saveLive, takeArchive, type ChatSession,
+} from '@/api/chatlog';
 import { autoAllowed, holdReason, riskOfProposal } from '@/domain/agent/policy';
 import { useProject } from './project';
 import { useUi } from './ui';
@@ -49,6 +52,20 @@ export interface AgentState {
   startPipeline: (brief: string, kind: ProjectKind) => void;
   /** 停下剩下的步骤，但不动已经采纳的产物 */
   stopPlan: () => void;
+  /**
+   * 换项目：把当前会话存到旧项目名下，再把新项目的读出来。
+   *
+   * **会话按项目分**。一个项目里换环节（大纲 → 剧本 → 分镜）是同一条会话
+   * 往下走，不该清 —— 换环节只是换当班的那位。
+   */
+  bindProject: (projectId: string) => void;
+  /** 这条会话属于哪个项目。空串 = 还没进项目（首页） */
+  projectId: string;
+  /** 存档列表，界面上「会话历史」按它画 */
+  archived: ChatSession[];
+  /** 恢复一份存档：当前这条先存档，再把它读成当前会话 */
+  restore: (id: string) => void;
+  dropArchived: (id: string) => void;
   /** 环节变了就清空。send 会先认领当前环节，所以「跳页并发起」不会被清掉 */
   syncStep: (step: string) => void;
   stop: () => void;
@@ -112,32 +129,79 @@ export const useAgent = create<AgentState>((set, get) => ({
   planTotal: 0,
   brief: '',
   kind: '短剧',
+  projectId: '',
+  archived: [],
 
+  /**
+   * 换环节。**只换当班的那位，不清会话。**
+   *
+   * 原来这里会把消息清空（「换环节开新会话」），于是从大纲跳到剧本，
+   * 刚才那几轮就没了 —— 反馈原话是「对话历史记录也丢了」。
+   * 会话按项目分，一个项目里的几个环节是同一条流水线，本来就该连着看。
+   */
   syncStep: (step) => {
     if (get().step === step) return;
-    // 流水线自己会跳页（采纳产物后落到产物所在环节）。那不是用户换了话题，
-    // 是同一条流水线往下走了一步 —— 清掉会话等于把后面几步一起清掉。
-    if (get().queue.length) {
-      set({ step, agentId: personaForStep(step).id });
-      return;
-    }
+    set({ step, agentId: personaForStep(step).id });
+  },
+
+  bindProject: (projectId) => {
+    if (get().projectId === projectId) return;
+    const prev = get().projectId;
+    if (prev) saveLive(prev, snap(get()));
     get().stop();
-    set({ messages: [], runningId: null, queue: [], brief: '', step, agentId: personaForStep(step).id });
+    const live = loadLive(projectId);
+    set({
+      projectId,
+      archived: listArchive(projectId),
+      messages: live ? [...live.messages] : [],
+      queue: live ? [...live.queue] : [],
+      planTotal: live?.planTotal ?? 0,
+      brief: live?.brief ?? '',
+      kind: live?.kind ?? '短剧',
+      agentId: live?.agentId ?? personaForStep(useUi.getState().step).id,
+      runningId: null,
+      step: useUi.getState().step,
+    });
+  },
+
+  restore: (id) => {
+    const pid = get().projectId;
+    if (!pid) return;
+    // 当前这条先存档，否则恢复旧的就把现在这条弄没了
+    archive(pid, snap(get()));
+    const { session, rest } = takeArchive(pid, id);
+    if (!session) { set({ archived: rest }); return; }
+    get().stop();
+    set({
+      messages: [...session.messages],
+      queue: [...session.queue],
+      planTotal: session.planTotal,
+      brief: session.brief,
+      kind: session.kind,
+      agentId: session.agentId,
+      runningId: null,
+      archived: listArchive(pid),
+    });
+  },
+
+  dropArchived: (id) => {
+    const pid = get().projectId;
+    if (!pid) return;
+    set({ archived: dropArchive(pid, id) });
   },
 
   send: (text, kind, relayed = false) => {
     get().stop();
     const meId = seq++;
     const aiId = seq++;
-    // 认领当前环节：随后 AgentPanel 的 syncStep 就不会把这轮清掉
+    // 认领当前环节。**消息一律接着往后加** —— 换环节不再清会话，
+    // 会话按项目分，一个项目里几个环节是同一条流水线
     const step = useUi.getState().step;
-    // 流水线跨环节，整条算一次会话；否则每跳一页就把前几步的消息清了
-    const sameSession = get().step === step || get().queue.length > 0;
-    const agentId = sameSession ? get().agentId : personaForStep(step).id;
+    const agentId = get().step === step ? get().agentId : personaForStep(step).id;
     set((s) => ({
       step, agentId,
       messages: [
-        ...(sameSession ? s.messages : []),
+        ...s.messages,
         ...(relayed ? [] : [{ id: meId, who: 'me' as const, text }]),
         { id: aiId, who: 'ai', agentId, text: '', streaming: true, stepDone: 0, kind },
       ],
@@ -264,10 +328,52 @@ export const useAgent = create<AgentState>((set, get) => ({
 
   reset: () => {
     get().stop();
+    const pid = get().projectId;
+    // 「新会话」= 把这条收进历史，不是把它删掉
+    const archived = pid ? archive(pid, snap(get())) : [];
     const step = useUi.getState().step;
-    set({ messages: [], runningId: null, queue: [], brief: '', step, agentId: personaForStep(step).id });
+    set({
+      messages: [], runningId: null, queue: [], planTotal: 0, brief: '',
+      step, agentId: personaForStep(step).id, archived,
+    });
+    if (pid) saveLive(pid, snap(useAgent.getState()));
   },
 }));
+
+/** 当前会话的快照，存盘用 */
+const snap = (s: AgentState): Omit<ChatSession, 'id' | 'at' | 'title'> => ({
+  messages: s.messages,
+  queue: s.queue,
+  planTotal: s.planTotal,
+  brief: s.brief,
+  kind: s.kind,
+  agentId: s.agentId,
+});
+
+/**
+ * 会话变了就存一份。
+ *
+ * 用订阅而不是在每个 set 后面补一句：会改消息的地方有七八处（发送、流式、
+ * 采纳、丢弃、工具卡的五种状态…），补漏一处就是「这种情况下历史会丢」，
+ * 而那种 bug 要用户跑到那一步才发现。
+ */
+let lastSaved: { m: unknown; q: unknown; b: string; t: number } | null = null;
+useAgent.subscribe((s) => {
+  // 流式输出时每个字都会触发一次 set，那时候不存 —— 一轮结束（runningId 归空）
+  // 会再触发一次，存那一次就够
+  if (!s.projectId || s.runningId) return;
+  if (
+    lastSaved
+    && lastSaved.m === s.messages
+    && lastSaved.q === s.queue
+    && lastSaved.b === s.brief
+    && lastSaved.t === s.planTotal
+  ) {
+    return;
+  }
+  lastSaved = { m: s.messages, q: s.queue, b: s.brief, t: s.planTotal };
+  saveLive(s.projectId, snap(s));
+});
 
 /** 采纳：写项目 + 扣分 + 提示 + 跳到产物所在环节 */
 function applyProposal(p: Proposal): void {

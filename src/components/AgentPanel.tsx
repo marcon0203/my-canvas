@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Icon } from '@/ui/Icon';
+import { Modal } from '@/ui/Modal';
+import { MAX_ARCHIVE } from '@/api/chatlog';
 import { useUi } from '@/store/ui';
 import { useAgent } from '@/store/agent';
 import { useSettings } from '@/store/settings';
@@ -28,6 +30,7 @@ export function AgentPanel() {
   // 这位实际接哪些活儿看配置，不看出厂的 owns
   const cfg = useSettings((s) => s.agents[agentId]);
   const [draft, setDraft] = useState('');
+  const [history, setHistory] = useState(false);
   const logRef = useRef<HTMLDivElement>(null);
 
   // 换环节开新会话（技能卡是按环节推的）。
@@ -56,12 +59,15 @@ export function AgentPanel() {
           <span className="agent__role">{persona.en}</span>
         </span>
         <div className="spacer" />
-        <button className="tbtn" title="新会话" onClick={reset}><Icon name="plus" />New</button>
+        <button className="tbtn" title="把当前会话收进历史，开一条新的" onClick={reset}>
+          <Icon name="plus" />新会话
+        </button>
         <button className="tbtn" title="会话历史" aria-label="会话历史" style={{ padding: '0 8px' }}
-          onClick={() => toast('会话历史：本地模拟阶段只保留当前会话')}><Icon name="hist" /></button>
+          onClick={() => setHistory(true)}><Icon name="hist" /></button>
       </div>
 
       <PlanBar />
+      <HistoryModal open={history} onClose={() => setHistory(false)} />
 
       <div className="agent__log" id="alog" ref={logRef}>
         {messages.length > 0
@@ -223,6 +229,54 @@ function StepList({ steps, done }: { steps: AgentMessage['steps'] & object; done
         );
       })}
     </div>
+  );
+}
+
+/**
+ * 会话历史。
+ *
+ * **按项目分，存在浏览器本地** —— 会话里有步骤卡、产物采纳状态、工具参数，
+ * 那些是界面状态不是项目内容；塞进工作空间的项目文件就把项目格式和界面
+ * 内部结构绑死了。代价说清楚：换台机器打开同一个项目，看不到这边的记录。
+ */
+function HistoryModal({ open, onClose }: { open: boolean; onClose: () => void }) {
+  const archived = useAgent((s) => s.archived);
+  const restore = useAgent((s) => s.restore);
+  const drop = useAgent((s) => s.dropArchived);
+  const projectId = useAgent((s) => s.projectId);
+
+  return (
+    <Modal open={open} onClose={onClose} title="会话历史"
+      subtitle={projectId ? '这个项目的' : '进项目后才有'}>
+      <div className="mo__form">
+        {archived.length === 0
+          ? (
+            <p className="t-cap dim" style={{ margin: 0 }}>
+              还没有存档。点「新会话」时，当前这条会收进这里。
+            </p>
+          )
+          : archived.map((s) => (
+            <div key={s.id} className="chist">
+              <button className="chist__main" onClick={() => { restore(s.id); onClose(); }}
+                title="恢复成当前会话（现在这条会先收进历史）">
+                <span className="chist__t">{s.title}</span>
+                <span className="chist__meta">
+                  {new Date(s.at).toLocaleString('zh-CN', { hour12: false })}
+                  {' · '}{s.messages.length} 条
+                  {s.planTotal ? ` · 计划 ${s.planTotal} 步` : ''}
+                </span>
+              </button>
+              <button className="tbtn" title="删掉这条存档" onClick={() => drop(s.id)}>
+                <Icon name="x" />
+              </button>
+            </div>
+          ))}
+        <p className="t-cap dim" style={{ margin: 0 }}>
+          存在这台机器的浏览器里，最多留 {MAX_ARCHIVE} 条。项目内容在工作空间里，
+          换机器跟着走；会话记录不跟着走。
+        </p>
+      </div>
+    </Modal>
   );
 }
 

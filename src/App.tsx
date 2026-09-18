@@ -27,6 +27,7 @@ import type { ProviderId } from '@/domain/providers/model';
 import { startAutosave } from '@/api/autosave';
 import { loadSettings, startSettingsSync } from '@/api/settingsSync';
 import { useSettings } from '@/store/settings';
+import { useAgent } from '@/store/agent';
 import { SETTINGS_SUB, STEPS, WORKBENCH_SUB, defaultSub, isValidSub, type SectionId } from '@/domain/nav';
 import { TokenGallery } from './routes/TokenGallery';
 
@@ -240,6 +241,11 @@ export function ProjectRoute() {
     setUi('projectId', projectIdIsStep ? '' : (projectId ?? ''));
     if (validStep !== useUi.getState().step) useUi.getState().setStep(validStep);
   }, [projectId, projectIdIsStep, validStep, setUi]);
+
+  // 会话按项目分：换项目时把上一条存起来，把这个项目的读出来
+  useEffect(() => {
+    if (!projectIdIsStep && projectId) useAgent.getState().bindProject(projectId);
+  }, [projectId, projectIdIsStep]);
 
   // store → URL：顶栏切页时写回地址栏（带项目 ID）
   useEffect(() => {

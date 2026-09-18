@@ -108,19 +108,30 @@ describe('store/agent', () => {
     expect(useAgent.getState().runningId).toBeNull();
   });
 
-  it('换环节开新会话，但「跳页并直接发起」的那轮要保住', async () => {
+  /**
+   * 换环节**不再清会话**，只换当班的那位。
+   *
+   * 原来是「换环节开新会话」，于是从大纲跳到剧本，刚才那几轮就没了 ——
+   * 反馈原话是「对话历史记录也丢了」。会话按项目分，一个项目里几个环节是
+   * 同一条流水线，本来就该连着看。
+   */
+  it('换环节只换当班的那位，消息接着往后加', async () => {
     // 用当班（摄影指导）自己能接的活儿，免得被转交搅进来 —— 转交另有用例覆盖
     useAgent.getState().send('补写提示词');
     await settle();
     expect(useAgent.getState().messages.length).toBe(2);
 
-    useAgent.getState().syncStep('storyboard');   // 同一环节，不清
+    useAgent.getState().syncStep('storyboard');   // 同一环节
     expect(useAgent.getState().messages.length).toBe(2);
 
     useUi.setState({ step: 'assets' });
-    useAgent.getState().send('从剧本提取角色', 'assets.extract'); // 先发起
-    useAgent.getState().syncStep('assets');                      // 面板随后同步
-    expect(useAgent.getState().messages.length).toBe(2);         // 这轮没被清掉
+    useAgent.getState().syncStep('assets');
+    expect(useAgent.getState().messages.length, '换环节不该清掉刚才那轮').toBe(2);
+    expect(useAgent.getState().agentId, '当班的要换成美术').toBe('art');
+
+    useAgent.getState().send('从剧本提取角色', 'assets.extract');
+    await settle();
+    expect(useAgent.getState().messages.length, '接着往后加').toBe(4);
     useAgent.getState().stop();
   });
 });
