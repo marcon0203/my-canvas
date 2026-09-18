@@ -47,6 +47,7 @@ npm run verify     # token 分层自检（需先 build）
   执行权限、skill、模型、工具。设置是**应用级**的（`/settings`），跨项目共用 ——
   项目详情里不出现任何模型与配置。
   桌面端（Tauri + Rust + Rig）架构见 `docs/desktop-architecture.md`。
+  记忆与上下文预算的方案（照 Claude Code 抄，还没实现）见 `docs/memory-and-context.md`。
 
 ## Agent 班底：一个环节一位，各有专长
 
