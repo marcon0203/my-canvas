@@ -22,8 +22,7 @@ import { Rail } from '@/components/shell/Rail';
 import { SubNav } from '@/components/shell/SubNav';
 import { isAgentId } from '@/domain/agent/roster';
 import { providerOf } from '@/domain/providers/catalog';
-import { isSkillId } from '@/domain/agent/skills';
-import { builtinSkill } from '@/domain/skills/builtin';
+import { isTaskId } from '@/domain/agent/tasks';
 import type { ProviderId } from '@/domain/providers/model';
 import { startAutosave } from '@/api/autosave';
 import { loadSettings, startSettingsSync } from '@/api/settingsSync';
@@ -120,10 +119,16 @@ export function SettingsRoute() {
   const { section, detail } = useParams();
   const navigate = useNavigate();
   const active = (isValidSub('settings', section ?? '') ? section! : defaultSub('settings')) as SettingsSection;
-  // 详情段只有模型与智能体两个分区有；乱填的名字当没填，回列表而不是白屏
-  const valid = active === 'agents' ? isAgentId(detail)
+  // 每个分区的详情段认什么，各不一样：
+  // - agents：智能体 id（不带点）**或**任务 id（带点，如 outline.draft）——
+  //   任务分工那张表就挂在这个分区下面
+  // - models：已登记的供应商
+  // - skills：任意非空文件名。**不在这儿查它存不存在** —— 桌面端用户自己导入的
+  //   skill 不在构建期嵌进来的那份清单里，在这儿查等于点进去又被弹回列表；
+  //   查不到由详情页如实说「没有这个 Skill」
+  const valid = active === 'agents' ? (isAgentId(detail) || isTaskId(detail))
     : active === 'models' ? !!providerOf(detail as ProviderId)
-    : active === 'skills' ? (isSkillId(detail) || !!builtinSkill(detail ?? ''))
+    : active === 'skills' ? !!detail?.trim()
     : false;
   const item = valid ? detail : undefined;
 

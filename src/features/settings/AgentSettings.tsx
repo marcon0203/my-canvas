@@ -1,36 +1,68 @@
 import { useState } from 'react';
-import { Button, Icon, Switch } from '@/ui';
+import { Button, Icon, Switch, Tabs } from '@/ui';
 import { NewAgentModal } from './AgentWizard';
+import { OrphanNotice, TaskList } from './TaskAssign';
+import { TASKS } from '@/domain/agent/tasks';
 import { faceClass, personaById, roster } from '@/domain/agent/roster';
 import type { AgentId } from '@/domain/agent/roster';
 import { AUTONOMY_LABEL, checkConfig, defaultConfig } from '@/domain/agent/config';
 import { findModel } from '@/domain/providers/catalog';
 import { useEffectiveGlobals, useExtraModels, useReadyProviders, useSettings } from '@/store/settings';
 
+/** 智能体管理分两页：按人看能力，按任务看分工 */
+type Tab = 'agents' | 'tasks';
+
 /**
  * 智能体管理 · 列表页。
  *
- * 卡片只回答「这位是谁、现在什么状态、有没有毛病」—— 五位并排能一眼扫完。
- * 具体怎么配（提示词、模型、活儿、工具）进详情页，那儿是一位一屏，不用挤。
+ * 两个页签是同一件事的两个方向：
+ * - **智能体**：这位能做什么、现在状态如何（按人看）
+ * - **任务分工**：这件任务由谁做、结果写到哪、做法能不能改（按任务看）
+ *
+ * 两个都要有。按人看时，「成本报告谁都没接」这种漏洞得五位挨个点开才发现；
+ * 按任务看，它就在那一行摆着。
+ *
+ * 「任务分工」原来挂在 Skill 管理下面叫「功能清单」—— 那张表四列里有三列讲的
+ * 是智能体的分工，只有「实现方式」和 Skill 文件有关，放错地方了。
  */
-export function AgentList({ onOpen }: { onOpen: (id: AgentId) => void }) {
+export function AgentList({ onOpen }: { onOpen: (id: string) => void }) {
+  const [tab, setTab] = useState<Tab>('agents');
   const [adding, setAdding] = useState(false);
   const customs = useSettings((s) => s.customAgents);
+
   return (
     <>
+      {/* 没有负责人的提示放在页签外：两个页签都看得见 */}
+      <OrphanNotice />
+
       <div className="settabs">
-        <span className="pcard__n">智能体 · {roster().length}</span>
-        <span className="t-cap dim">
-          内置 5 个各负责一个创作环节{customs.length ? `，另有 ${customs.length} 个为你自建` : ''}
-        </span>
+        <Tabs value={tab} onChange={setTab}
+          items={[
+            { key: 'agents', label: `智能体 · ${roster().length}` },
+            { key: 'tasks', label: `任务分工 · ${TASKS.length}` },
+          ]} />
         <div className="spacer" />
-        <Button variant="primary" onClick={() => setAdding(true)}>
-          <Icon name="plus" />新建智能体
-        </Button>
+        {tab === 'agents' && (
+          <Button variant="primary" onClick={() => setAdding(true)}>
+            <Icon name="plus" />新建智能体
+          </Button>
+        )}
       </div>
-      <div className="agrid">
-        {roster().map((p) => <AgentTile key={p.id} id={p.id} onOpen={onOpen} />)}
-      </div>
+
+      {tab === 'agents'
+        ? (
+          <>
+            <p className="t-cap dim" style={{ margin: 0 }}>
+              内置 5 个各负责一个创作环节
+              {customs.length ? `，另有 ${customs.length} 个为你自建` : ''}
+            </p>
+            <div className="agrid">
+              {roster().map((p) => <AgentTile key={p.id} id={p.id} onOpen={onOpen} />)}
+            </div>
+          </>
+        )
+        : <TaskList onOpen={onOpen} />}
+
       <NewAgentModal open={adding} onClose={() => setAdding(false)} onCreated={onOpen} />
     </>
   );

@@ -3,14 +3,14 @@ import { StageBar } from '@/components/StageBar';
 import { Button, Chip, Icon } from '@/ui';
 import { ProviderDetail, ProviderList } from './ProviderSettings';
 import { AgentDetail, AgentList } from './AgentSettings';
-import { SkillDetail, SkillFileDetail, SkillList } from './SkillSettings';
+import { SkillFileDetail, SkillList } from './SkillSettings';
+import { TaskDetail } from './TaskAssign';
 import { WorkspaceSettings } from './WorkspaceSettings';
 import { SETTINGS_SUB } from '@/domain/nav';
 import { faceClass, personaById, type AgentId } from '@/domain/agent/roster';
 import { providerOf } from '@/domain/providers/catalog';
 import type { ProviderId } from '@/domain/providers/model';
-import { isSkillId, skillOf } from '@/domain/agent/skills';
-import { builtinSkill } from '@/domain/skills/builtin';
+import { isTaskId, taskOf } from '@/domain/agent/tasks';
 import { useReadyProviders, useSettings } from '@/store/settings';
 import { isDesktop } from '@/api/desktop';
 
@@ -41,11 +41,15 @@ export function SettingsPage({ section, detail, onOpen, onBack }: {
   useEffect(() => { syncKeys(); }, [syncKeys]);
 
   const hint = SETTINGS_SUB.find((s) => s.k === section)?.hint;
-  const p = section === 'agents' && detail ? personaById(detail as AgentId) : undefined;
+  // 智能体分区的详情段有两种：**任务 id 带点**（outline.draft），智能体 id 不带点。
+  // 靠这个分辨，不用再多一段路由
+  const task = section === 'agents' && isTaskId(detail) ? taskOf(detail) : undefined;
+  const p = section === 'agents' && detail && !task ? personaById(detail as AgentId) : undefined;
   const prov = section === 'models' && detail ? providerOf(detail as ProviderId) : undefined;
-  const sk = section === 'skills' && isSkillId(detail) ? skillOf(detail) : undefined;
-  // 详情段可能是内置能力的 id（带点，如 outline.draft），也可能是真 skill 的名字
-  const file = section === 'skills' && !sk && detail ? builtinSkill(detail) : undefined;
+  // Skill 分区的详情段就是文件名。**不经过 builtinSkill 查一遍** ——
+  // 那份清单只有构建期嵌进来的内置几个，桌面端点自己导入的 skill 会查不到，
+  // 于是又渲染回列表页（这是个真出现过的 bug）。名字直接传下去，详情页自己去读
+  const file = section === 'skills' && detail ? detail : undefined;
 
   return (
     <div className="stage">
@@ -63,15 +67,15 @@ export function SettingsPage({ section, detail, onOpen, onBack }: {
         />
       ) : file ? (
         <StageBar
-          title={<span className="crumb"><Icon name="wand" />{file.meta.name}</span>}
-          pills={<span className="t-cap dim">{file.meta.source} Skill</span>}
+          title={<span className="crumb"><Icon name="wand" /><span className="mono">{file}</span></span>}
+          pills={<span className="t-cap dim">Skill 文件</span>}
           actions={<Button onClick={onBack}><Icon name="left" />返回 Skill</Button>}
         />
-      ) : sk ? (
+      ) : task ? (
         <StageBar
-          title={<span className="crumb"><Icon name={sk.icon} />{sk.name}</span>}
-          pills={<span className="t-cap dim">{sk.summary}</span>}
-          actions={<Button onClick={onBack}><Icon name="left" />返回 Skill</Button>}
+          title={<span className="crumb"><Icon name={task.icon} />{task.name}</span>}
+          pills={<span className="t-cap dim">{task.summary}</span>}
+          actions={<Button onClick={onBack}><Icon name="left" />返回智能体</Button>}
         />
       ) : prov ? (
         <StageBar
@@ -95,16 +99,16 @@ export function SettingsPage({ section, detail, onOpen, onBack }: {
           {section === 'models' && (prov
             ? <ProviderDetail id={prov.id} onBack={onBack} />
             : <ProviderList onOpen={onOpen} />)}
-          {section === 'skills' && (sk
-            ? <SkillDetail id={sk.id} />
-            : file
-              ? <SkillFileDetail name={file.meta.name} />
-              : <SkillList onOpen={onOpen} />)}
-          {section === 'agents' && (p
-            ? <AgentDetail id={p.id} />
-            : <AgentList onOpen={onOpen} />)}
+          {section === 'skills' && (file
+            ? <SkillFileDetail name={file} />
+            : <SkillList onOpen={onOpen} />)}
+          {section === 'agents' && (task
+            ? <TaskDetail id={task.id} />
+            : p
+              ? <AgentDetail id={p.id} />
+              : <AgentList onOpen={onOpen} />)}
         </div>
-        {!p && !prov && !sk && !file && (
+        {!p && !prov && !task && !file && (
           <p className="t-cap dim setnote">
             <Icon name="bolt" />
             这里的配置跨项目共用。

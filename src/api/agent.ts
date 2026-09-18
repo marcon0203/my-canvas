@@ -148,7 +148,7 @@ export async function* runAgent(
  * 只有这几件已经有 SKILL.md（在 `resources/skills/`），跑的时候会把那份正文
  * 展开进 preamble。其余的还是 plans.ts 里的本地逻辑，没有 skill 可展开。
  */
-export const SKILL_FOR_INTENT: Partial<Record<IntentKind, string>> = {
+export const SKILL_FOR_TASK: Partial<Record<IntentKind, string>> = {
   'outline.draft': 'draft-outline',
   'outline.expand': 'expand-scene',
   'shots.prompt': 'write-shot-prompts',
@@ -188,7 +188,7 @@ async function* runOutlineOnDesktop(
           actCount: ctx.acts.length,
           beatCount: allBeats(ctx.acts).length,
         },
-        skill: SKILL_FOR_INTENT['outline.draft'],
+        skill: SKILL_FOR_TASK['outline.draft'],
         workspace: useSettings.getState().workspace,
       },
       (e) => emit(e, (d) => outlineProposal(d as OutlineDraft, fresh, ctx)),
@@ -256,7 +256,7 @@ async function* runExpandOnDesktop(
         globals: ctx.globalModels,
         providers: {},
         input: expandInput(ctx, beat.id),
-        skill: SKILL_FOR_INTENT['outline.expand'],
+        skill: SKILL_FOR_TASK['outline.expand'],
         workspace: useSettings.getState().workspace,
       },
       (e) => emit(e, (d) => altsProposal(d as AltsDraft, beat)),
@@ -310,7 +310,7 @@ async function* runShotPromptsOnDesktop(
           stylePrompt: ctx.stylePrompt,
           shots: shotBriefs(ctx, miss),
         },
-        skill: SKILL_FOR_INTENT['shots.prompt'],
+        skill: SKILL_FOR_TASK['shots.prompt'],
         workspace: useSettings.getState().workspace,
       },
       (e) => emit(e, (d) => promptProposal(d as PromptDraft, miss.length)),

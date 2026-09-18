@@ -5,7 +5,7 @@ import { allBeats } from '@/domain/story/model';
 import type { AgentContext } from './context';
 import { plan } from './plans';
 import { defaultConfigs } from './config';
-import { skillOf } from './skills';
+import { taskOf } from './tasks';
 
 /** 用真实 seed 建上下文：计划必须对得上项目现状，不能是写死的文案 */
 function ctx(input = '', over: Partial<AgentContext> = {}): AgentContext {
@@ -125,7 +125,7 @@ describe('agent/plans · 产物来自项目现状', () => {
     expect(moved.proposal!.rows.map((r) => r.v)).toEqual(alts);
 
     // 说明里要同时讲清两件事：桌面端送了什么、浏览器里会回落
-    const note = skillOf('outline.expand')!.impl.note;
+    const note = taskOf('outline.expand')!.impl.note;
     expect(note).toContain('前后');
     expect(note).toMatch(/浏览器/);
     expect(note).toMatch(/回落|固定句式/);

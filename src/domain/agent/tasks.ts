@@ -4,9 +4,9 @@ import { TOOLS_FOR_INTENT } from './tools';
 import type { ToolId } from './tools';
 import type { IntentKind, ProposalPatch } from './types';
 
-export type SkillId = Exclude<IntentKind, 'chat'>;
+export type TaskId = Exclude<IntentKind, 'chat'>;
 
-/** 这件活现在是**真的调模型**，还是本地拿项目数据算一版草稿 */
+/** 这件任务现在是**真的调模型**，还是本地拿项目数据算一版草稿 */
 export type Impl =
   /** 桌面端走 Rust + Rig，真发请求。括号里是那个模块 */
   | { readonly by: 'model'; readonly module: string; readonly note: string }
@@ -19,17 +19,17 @@ export type Impl =
    */
   | { readonly by: 'local'; readonly note: string };
 
-export interface SkillSpec {
-  readonly id: SkillId;
+export interface TaskSpec {
+  readonly id: TaskId;
   readonly name: string;
   readonly icon: string;
-  /** 一句话：这件活到底干什么 */
+  /** 一句话：这件任务到底做什么 */
   readonly summary: string;
   /** 前置条件。不满足时 Agent 明说不行，而不是假装做了 */
   readonly needs: string;
   /**
    * 产出什么补丁 —— 与 plans.ts 实际产出的 patch.t 一致，有测试盯着。
-   * `null` = 这件活只说话不改东西（报告类），没有可采纳的产物。
+   * `null` = 这件任务只说话不改东西（报告类），没有可采纳的产物。
    */
   readonly patch: ProposalPatch['t'] | null;
   /** 采纳后跳到哪一页。没有产物时为 null */
@@ -38,14 +38,24 @@ export interface SkillSpec {
 }
 
 /**
- * Skill 注册表。
+ * 任务注册表：这个产品一共会做哪几件事。
+ *
+ * **和 Skill 不是一回事**，这两个词以前撞在一起，是「功能清单那页看不懂」的
+ * 根因之一：
+ * - **任务**（这里）= 用户能提的一件需求，比如「延展这一场的走向」。
+ *   它有负责人（哪位智能体）、有前置条件、有产物落到哪一页。
+ * - **Skill**（`skill/` crate 与 `domain/skills/`）= 磁盘上一份写给模型的
+ *   操作说明文件。一个任务的做法**可以**写在 Skill 文件里（`impl.by === 'model'`
+ *   的那几个），也可以内置在程序里。
+ *
+ * 一句话：任务是「做什么」，Skill 是「怎么做的那份说明」。
  *
  * **这里不复制任何已有的事实**：触发词从 router 的 RULES 取，工具从
  * TOOLS_FOR_INTENT 取，产出的 patch 有测试对着 plans.ts 的真实产物核对。
  * 只有 summary / needs / impl 是这里新写的 —— 前两个是给人看的说明，
  * impl 说的是「这条链路接没接模型」，这件事以前只有读代码才知道。
  */
-export const SKILLS: readonly SkillSpec[] = [
+export const TASKS: readonly TaskSpec[] = [
   {
     id: 'outline.draft', ...INTENT_META['outline.draft'],
     summary: '从一句灵感搭出三幕结构；已有大纲时只补最薄的那一幕，不推翻重来。',
@@ -138,15 +148,15 @@ export const SKILLS: readonly SkillSpec[] = [
   },
 ];
 
-const BY_ID = new Map(SKILLS.map((s) => [s.id, s]));
-export const skillOf = (id: SkillId): SkillSpec | undefined => BY_ID.get(id);
+const BY_ID = new Map(TASKS.map((s) => [s.id, s]));
+export const taskOf = (id: TaskId): TaskSpec | undefined => BY_ID.get(id);
 
-/** URL 段是不是一个真的 Skill —— 路由直达时用它挡住乱填的名字 */
-export const isSkillId = (id: string | undefined): id is SkillId =>
-  !!id && BY_ID.has(id as SkillId);
+/** URL 段是不是一个真的任务 id —— 路由直达时用它挡住乱填的名字 */
+export const isTaskId = (id: string | undefined): id is TaskId =>
+  !!id && BY_ID.has(id as TaskId);
 
-/** 这件活要哪些工具。**取自 tools.ts，不在这儿重写一遍** */
-export const toolsOf = (id: SkillId): readonly ToolId[] => TOOLS_FOR_INTENT[id];
+/** 这件任务要哪些工具。**取自 tools.ts，不在这儿重写一遍** */
+export const toolsOf = (id: TaskId): readonly ToolId[] => TOOLS_FOR_INTENT[id];
 
 export interface Triggers {
   /** 祈使动词，权重 10 —— 动词决定意图 */
@@ -155,8 +165,8 @@ export interface Triggers {
   readonly topic: readonly string[];
 }
 
-/** 这件活的触发词。**取自 router.ts 的 RULES，不在这儿重写一遍** */
-export function triggersOf(id: SkillId): Triggers {
+/** 这件任务的触发词。**取自 router.ts 的 RULES，不在这儿重写一遍** */
+export function triggersOf(id: TaskId): Triggers {
   const r = RULES.find((x) => x.kind === id);
   return { act: r?.act ?? [], topic: r?.topic ?? [] };
 }
