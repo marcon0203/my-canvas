@@ -48,6 +48,13 @@ export type ProposalPatch =
   | { t: 'assetsDraft'; add: { group: AssetGroup; aid: string; name: string; desc: string; voice?: string }[] }
   /** `shot.rig` 的产物：**只覆盖给到的字段**，没给的保持原样 */
   | { t: 'shotRig'; edits: { id: string; rig: Partial<Rig> }[] }
+  /**
+   * 出视频跑完之后：这一镜的视频文件落在哪儿（项目目录下的相对路径）。
+   *
+   * **这一条是「拿到成片」那条链上原来断掉的一环** —— 生成跑完只把厂商那串
+   * URL 当文字甩出来，没有任何东西写回镜头，于是拼片那步永远找不到片段。
+   */
+  | { t: 'shotFiles'; edits: { id: string; file: string }[] }
   /** `edit.timeline` 的产物：整条时间线换掉（顺序与时长是一起算出来的） */
   | { t: 'timeline'; timeline: Timeline }
   /** `edit.subtitle` 的产物 */

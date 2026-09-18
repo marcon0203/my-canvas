@@ -2520,6 +2520,111 @@
     "tool": "edit.subtitle"
   },
   {
+    "allowed": true,
+    "autoMax": null,
+    "over": null,
+    "risk": "write",
+    "tool": "film.render"
+  },
+  {
+    "allowed": true,
+    "autoMax": null,
+    "over": "allow",
+    "risk": "write",
+    "tool": "film.render"
+  },
+  {
+    "allowed": false,
+    "autoMax": null,
+    "over": "ask",
+    "risk": "write",
+    "tool": "film.render"
+  },
+  {
+    "allowed": false,
+    "autoMax": "read",
+    "over": null,
+    "risk": "write",
+    "tool": "film.render"
+  },
+  {
+    "allowed": true,
+    "autoMax": "read",
+    "over": "allow",
+    "risk": "write",
+    "tool": "film.render"
+  },
+  {
+    "allowed": false,
+    "autoMax": "read",
+    "over": "ask",
+    "risk": "write",
+    "tool": "film.render"
+  },
+  {
+    "allowed": true,
+    "autoMax": "write",
+    "over": null,
+    "risk": "write",
+    "tool": "film.render"
+  },
+  {
+    "allowed": true,
+    "autoMax": "write",
+    "over": "allow",
+    "risk": "write",
+    "tool": "film.render"
+  },
+  {
+    "allowed": false,
+    "autoMax": "write",
+    "over": "ask",
+    "risk": "write",
+    "tool": "film.render"
+  },
+  {
+    "allowed": true,
+    "autoMax": "spend",
+    "over": null,
+    "risk": "write",
+    "tool": "film.render"
+  },
+  {
+    "allowed": true,
+    "autoMax": "spend",
+    "over": "allow",
+    "risk": "write",
+    "tool": "film.render"
+  },
+  {
+    "allowed": false,
+    "autoMax": "spend",
+    "over": "ask",
+    "risk": "write",
+    "tool": "film.render"
+  },
+  {
+    "allowed": true,
+    "autoMax": "egress",
+    "over": null,
+    "risk": "write",
+    "tool": "film.render"
+  },
+  {
+    "allowed": true,
+    "autoMax": "egress",
+    "over": "allow",
+    "risk": "write",
+    "tool": "film.render"
+  },
+  {
+    "allowed": false,
+    "autoMax": "egress",
+    "over": "ask",
+    "risk": "write",
+    "tool": "film.render"
+  },
+  {
     "allowed": false,
     "autoMax": null,
     "over": null,

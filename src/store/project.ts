@@ -298,6 +298,18 @@ export const useProject = create<ProjectState>()(
               if (sh) Object.assign(sh.rig, e.rig);
             }
             break;
+          case 'shotFiles':
+            for (const e of patch.edits) {
+              const sh = s.shots.find((x) => x.id === e.id);
+              if (!sh) continue;
+              sh.file = e.file;
+              // 出好了视频：这一镜进入「可判定」状态，连续失败清掉。
+              // **不自动判成可用** —— 能不能进成片是人看过才算的
+              sh.vid = 'ok';
+              sh.takes += 1;
+              delete sh.fail;
+            }
+            break;
           case 'assetLock': {
             const a = [...s.assets.角色, ...s.assets.场景, ...s.assets.道具]
               .find((x) => x.aid === patch.aid);

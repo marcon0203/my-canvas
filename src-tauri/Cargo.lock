@@ -7519,6 +7519,7 @@ dependencies = [
  "serde",
  "serde_json",
  "studio-error",
+ "tempfile",
  "tokio",
 ]
 

@@ -510,6 +510,14 @@ export function toolProposal(tool: ToolId, patch: ProposalPatch, value: unknown)
         patch, cost: 0, goto: 'editing',
       };
     }
+    case 'shotFiles': {
+      const n = patch.edits.length;
+      return {
+        title: `${title} · ${n} 镜`,
+        rows: patch.edits.slice(0, 6).map((e) => ({ k: e.id, v: e.file })),
+        patch, cost: 0, goto: 'storyboard',
+      };
+    }
     case 'subtitles':
       return {
         title: `${title} · ${patch.subtitles.cues.length} 条`,
@@ -551,6 +559,13 @@ export function toolOkText(tool: ToolId, value: unknown): string {
   const v = (value ?? {}) as Record<string, unknown>;
   if (tool === 'file.export') {
     return `已生成 ${String(v['filename'])}（${Math.round(Number(v['bytes'] ?? 0) / 1024)} KB）。保存位置由你在保存对话框里选。`;
+  }
+  if (tool === 'film.render') {
+    const mb = (Number(v['bytes'] ?? 0) / 1024 / 1024).toFixed(1);
+    const sec = (Number(v['durationMs'] ?? 0) / 1000).toFixed(1);
+    return `成片出来了：${String(v['file'])}，${String(v['shots'])} 镜 · ${sec} 秒 · ${mb} MB`
+      + (v['hasSubtitles'] ? '，字幕已烧进画面。' : '（没有字幕轨，所以没烧字幕）。')
+      + '它在项目目录里，跟项目一起走。';
   }
   if (tool === 'prompt.compile') {
     const list = (v['prompts'] ?? []) as { id: string; text: string }[];

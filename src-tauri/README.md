@@ -80,6 +80,7 @@ serde 的 derive 本来就找不到，报假阳性一两次就没人看了。
 | `doc` | `md` | 大纲与剧本的 Markdown 编解码，往返无损 |
 | `doc` | `project` | 项目目录布局：project.json + outline.md + script/*.md + assets/shots.json |
 | `doc` | `store` | 落盘：原子写、缺文件给默认值、配置分三个文件 |
+| `doc` | `render` | 拼片：时间线 + 片段 → mp4（shell 出去调 ffmpeg，要本机装了） |
 | `doc` | `timeline` | 成片顺序与字幕 |
 | `doc` | `workspace` | 工作空间解析：`~/.hitv` 或用户指定的目录，用户数据的唯一落脚点 |
 | `conf` | `config` | 与前端 `domain/agent/config.ts` 同形的契约。前端 JSON 直接反序列化，字段名用 camelCase 省掉映射层 |
@@ -87,6 +88,7 @@ serde 的 derive 本来就找不到，报假阳性一两次就没人看了。
 | `conf` | `providers` | 端点解析：用户改过的优先，内置目录只是种子 |
 | `net` | `generate` | 异步任务协议：出图/出视频/配音都走这套 |
 | `net` | `web` | 读网页：剥掉脚本样式、限长、如实标截断 |
+| `net` | `media` | 把生成结果下载进项目目录 —— 厂商那串 URL 会过期 |
 | `skill` | `skills` | Skill 加载：扫目录只读 frontmatter，正文与附件按需取 |
 | `agent` | `agent` | 配置 → `AgentSpec` → Rig agent。解析是纯函数，配置错误在花钱之前就报出来 |
 | `agent` | `expand` | 延展一场的走向。`tidy()` 去重截断，一条不剩就报错 |
@@ -414,6 +416,40 @@ Thinking mode does not support this tool_choice
 通用那条必须用 `CompletionsClient`。用错了的症状是响应解析报
 「unknown variant `chat.completion`, expected `response`」—— 看着像供应商返回
 格式不对，其实是我们问错了接口。`structured` 里有测试对着假供应商核这两件事。
+
+## 成片：最后那两截
+
+原来「成片」只到一份「谁在第几秒」的清单，磁盘上没有任何能交给别人看的东西。
+缺的是两截，现在都在：
+
+```
+出视频 → net::media::fetch_all      结果下载进 <project>/media/
+       → Outcome::Patch shotFiles   文件写回那一镜（store 是唯一写入者）
+       → edit.timeline              排顺序与时长
+       → film.render                doc::render → ffmpeg → <project>/film.mp4
+```
+
+**为什么生成完必须下载**：厂商那串结果 URL 几小时到几天就失效；拼片要 ffmpeg 读
+本机文件；而出一次视频是真花的钱，只存个链接等于没留下来。文件名由我们按
+「镜号 + 序号」编，**一个字节都不从 URL 里取**，后缀按 `Content-Type` 定 ——
+认不出来就拒（最常见的是厂商回了个 HTML 错误页）。
+
+**为什么 shell 出去调 ffmpeg**：拼片转码烧字幕它做得比任何 Rust 封装都好，
+而链 `ffmpeg-sys` 会让构建又多一堆系统依赖。代价是用户机器上要有 ffmpeg，
+所以 `render::probe()` 先查在不在，不在就说清去哪儿装 —— 不在拼到一半才报。
+
+命令由 `render::args_of()` 纯函数拼出来，所以裁切、顺序、字幕挂没挂全都能单测；
+另有一组真跑 ffmpeg 的测试（三个不同尺寸的片段 → ffprobe 验成片的尺寸、时长、
+像素格式、没有音轨）。
+
+几处刻意的取舍：
+- **补边不裁画面**。出图模型给的比例和成片画布不一致时，裁掉会把人脸切一半。
+- **按时间线的时长裁切**，不是整段用完 —— 卡点对齐之后时长是算出来的。
+- **字幕在 concat 之后烧**。每一路各烧一次的话时间戳是各自片段的。
+- **无声，不塞静音轨**。配音还没做，塞一条静音轨会让人以为跑过了。
+- **少一镜就不拼**，点名是哪几镜。交一个比预期短的片子比直接失败难查得多。
+- Linux 上没有中文字体时字幕会烧成方块（macOS/Windows 自带）。这件事代码里
+  解决不了，记在 `render.rs` 开头。
 
 ## 还没做
 

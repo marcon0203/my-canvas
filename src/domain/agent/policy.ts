@@ -65,6 +65,9 @@ const RISK: Record<ToolId, Risk> = {
   'shot.rig': 'write',
   'edit.timeline': 'write',
   'edit.subtitle': 'write',
+  // 拼成片：只读项目目录里的文件、调本机 ffmpeg，写出一个 mp4。
+  // **不是 egress**（不出网），也不是 spend（不花厂商的钱）
+  'film.render': 'write',
 
   'image.generate': 'spend',
   'image.edit': 'spend',

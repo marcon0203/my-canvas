@@ -53,7 +53,10 @@ pub fn risk_of_tool(id: &str) -> Risk {
         // 改项目内容，进撤销历史
         "outline.write" | "script.write" | "asset.write" | "asset.lock" | "shot.write"
         | "style.apply" | "shot.rig"
-        | "edit.timeline" | "edit.subtitle" => Risk::Write,
+        | "edit.timeline" | "edit.subtitle"
+        // 拼成片：只读项目目录里的文件、调本机 ffmpeg，写出一个 mp4。
+        // **不是 Egress** —— 它不出网；也不是 Spend —— 不花厂商的钱
+        | "film.render" => Risk::Write,
 
         // 花积分，撤销退不回
         "image.generate" | "image.edit" | "image.upscale"

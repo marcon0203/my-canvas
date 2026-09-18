@@ -327,6 +327,14 @@ pub fn all() -> Vec<ToolSpec> {
           W, Rust, Ready, None,
           obj(json!({ "lang": { "type": "string", "description": "语言标记，默认 zh" } }), &[])),
 
+        // **这条是「拿到视频」那一刻。** 在它之前，「成片」只是一份
+        // 「谁在第几秒」的清单，磁盘上没有任何能交给别人看的东西。
+        // 不标 Egress：它只读项目目录里的文件、调本机的 ffmpeg，不出网
+        t("film.render", "拼成片", Deliver,
+          "把时间线上的片段按顺序裁切拼成一个 mp4，字幕烧进画面。要本机装了 ffmpeg。",
+          W, Rust, Ready, None,
+          obj(json!({}), &[])),
+
         // 只产出内容，落盘路径由用户在保存对话框里选 —— 见 export_file
         t("file.export", "导出文件", Deliver,
           "导出大纲/剧本（Markdown）或分镜表（CSV）。只产出内容，存到哪儿由人在保存对话框里选。",
@@ -513,7 +521,37 @@ pub async fn dispatch(
             });
         };
         let urls = run_generate(t.id, &g, &args).await?;
-        return Ok(Outcome::Ok { value: json!({ "urls": urls, "model": g.model.model }) });
+        // **生成完就下载。** 厂商那串 URL 几小时到几天就失效，而且拼片要的是
+        // 本地文件 —— 只存链接的后果是「过几天项目里这一镜打不开了」，
+        // 以及「成片那一步等半天最后炸」。花过的钱要留得下来
+        let dir = studio_doc::project::project_dir(root, project_id)?;
+        let stem = media_stem(t.id, &args);
+        let files = studio_net::media::fetch_all(
+            &dir,
+            &urls,
+            &|i| format!("{stem}-{}", i + 1),
+            std::time::Duration::from_secs(120),
+        )
+        .await?;
+
+        // 出视频：这一镜现在有文件了，**交回一份补丁让 store 写进去**。
+        // 只返回 Ok 的话，没有任何东西写回镜头 —— 那是原来「拿到成片」这条链
+        // 断掉的那一环：拼片那步永远找不到片段。
+        //
+        // 走补丁而不是在这儿落盘，是为了守住「项目内容只有一个写入者」
+        // （见 Outcome::Patch 上的说明）—— 而且这样人能先看一眼再采纳
+        if matches!(t.id, "video.generate" | "video.extend")
+            && let Some(shot) = args.get("shotId").and_then(Value::as_str)
+            && let Some(f) = files.first()
+        {
+            return Ok(Outcome::Patch {
+                tool: t.id.into(),
+                patch: json!({ "t": "shotFiles", "edits": [{ "id": shot, "file": f }] }),
+            });
+        }
+        return Ok(Outcome::Ok {
+            value: json!({ "files": files, "model": g.model.model }),
+        });
     }
 
     // 译提示词：要文本模型。同理 —— 缺了就说缺了
@@ -555,6 +593,7 @@ pub async fn dispatch(
         "cost.estimate" => estimate_cost(&args)?,
         "prompt.compile" => studio_agent::prompt::compile(root, project_id, &args)?,
         "file.export" => export_file(root, project_id, &args)?,
+        "film.render" => render_film(root, project_id)?,
         // status == Ready 的工具必须在这儿有分支，否则是注册表和实现对不上
         other => return Err(Error::UnknownTool(format!("{other} 标成已实现却没有实现"))),
     };
@@ -584,6 +623,67 @@ fn read_project(root: &Path, id: &str, args: &Value) -> Result<Value> {
             "assets": b.assets, "shots": b.shots,
         }),
     })
+}
+
+/// 拼成片。**这是整条链路的最后一截** —— 在它之前磁盘上没有能交给别人看的东西。
+///
+/// 三件事在这儿汇合：时间线（谁在第几秒）、`media/` 里那些下载下来的片段、
+/// 字幕轨。少任何一样都当场说清少什么，见 `render::plan_of`。
+///
+/// **同步跑**，因为 ffmpeg 是本机进程，几秒到几十秒。这一层不做队列 ——
+/// 关窗继续跑那件事要连着生成队列一起做，还没到。
+fn render_film(root: &Path, project_id: &str) -> Result<Value> {
+    use studio_doc::render;
+    let dir = studio_doc::project::project_dir(root, project_id)?;
+    let b = studio_doc::project::load(root, project_id)?;
+
+    if b.timeline.clips.is_empty() {
+        return Err(Error::Store(
+            "时间线是空的。先把可用的镜头排进时间线（「按节拍自动成片」那一步）".into(),
+        ));
+    }
+
+    // 镜号 → 那一镜的视频文件。**只认判定可用的那一版** ——
+    // shots.json 里记的是项目目录下的相对路径
+    let shots = b.shots.as_array().cloned().unwrap_or_default();
+    let file_of = |shot_id: &str| -> Option<std::path::PathBuf> {
+        shots
+            .iter()
+            .find(|s| s.get("id").and_then(Value::as_str) == Some(shot_id))
+            .and_then(|s| s.get("file").and_then(Value::as_str))
+            .map(|rel| dir.join(rel))
+    };
+
+    let out = dir.join("film.mp4");
+    let plan = render::plan_of(&dir, &b.timeline, &b.subtitles, &file_of, out)?;
+    let n = plan.pieces.len();
+    let ms: u32 = plan.pieces.iter().map(|p| p.dur).sum();
+    let got = render::run(&plan)?;
+    let size = std::fs::metadata(&got).map(|m| m.len()).unwrap_or(0);
+
+    Ok(json!({
+        // 相对路径：项目目录搬走之后这个值还是对的
+        "file": format!("film.mp4"),
+        "shots": n,
+        "durationMs": ms,
+        "bytes": size,
+        "hasSubtitles": plan.subs.is_some(),
+    }))
+}
+
+/// 这次生成的东西存成什么名字。
+///
+/// 名字里带上是哪一镜/哪个资产，**这样磁盘上那个目录人能看懂** ——
+/// 一堆 `a3f9c2.mp4` 的目录，出了问题没法对到是哪一镜。
+/// 真正的洗名字在 `media::safe_stem`，这里只负责「叫什么」。
+fn media_stem(tool: &str, args: &Value) -> String {
+    let get = |k: &str| args.get(k).and_then(Value::as_str).unwrap_or("").trim();
+    let who = [get("shotId"), get("assetId"), get("id")]
+        .into_iter()
+        .find(|s| !s.is_empty())
+        .unwrap_or("x");
+    let kind = tool.split('.').next().unwrap_or("out");
+    format!("{kind}-{who}")
 }
 
 /// 出图/出视频：拼 body → 走异步任务协议。
@@ -1063,12 +1163,24 @@ mod tests {
                     let mut buf = vec![0u8; 4096];
                     let n = sock.read(&mut buf).await.unwrap_or(0);
                     let req = String::from_utf8_lossy(&buf[..n]).to_string();
+                    // 生成完会下载结果，所以这个假厂商还得真把图片供出来 ——
+                    // 结果 URL 指回它自己
+                    if req.contains("GET /img/") {
+                        let png = b"\x89PNG\r\n\x1a\n-fake";
+                        let resp = format!(
+                            "HTTP/1.1 200 OK\r\nContent-Type: image/png\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
+                            png.len());
+                        let _ = sock.write_all(resp.as_bytes()).await;
+                        let _ = sock.write_all(png).await;
+                        return;
+                    }
                     let body = if req.starts_with("POST") {
                         // 顺带验证 body 真的带上了提示词与 batch
                         assert!(req.contains("\"prompt\""), "提交里没有 prompt");
                         json!({ "data": { "task_id": "t-9" } })
                     } else {
-                        json!({ "data": { "status": "succeeded", "urls": ["http://img/1.png"] } })
+                        json!({ "data": { "status": "succeeded",
+                            "urls": [format!("http://{addr}/img/1.png")] } })
                     };
                     let sbody = body.to_string();
                     let resp = format!(
@@ -1096,6 +1208,153 @@ mod tests {
         }
     }
 
+    /// **一句话到成片那条链的最后一段，端到端跑一遍。**
+    ///
+    /// 这条测的不是某个函数，是「这几步能不能接起来」：
+    /// 出视频 → 结果落进 media/ → 补丁把文件写回镜头 → 时间线 → 拼成 mp4。
+    /// 之前这条链在第二步就断了（只把厂商 URL 当文字甩出来），
+    /// 所以最后一步永远找不到片段。
+    ///
+    /// 机器上没有 ffmpeg 时只跑到拼片之前 —— 前面几段照样是真的。
+    #[tokio::test]
+    async fn 从出视频到成片_整条链端到端() {
+        let tmp = setup();
+        let dir = project::project_dir(tmp.path(), "p1").unwrap();
+
+        // 1. 出视频：假厂商把结果供出来，dispatch 应该下载并交回一份补丁
+        let base = fake_video_provider().await;
+        let m = ModelRef { provider: "volcengine".into(), model: "doubao-seedance".into() };
+        let o = dispatch(
+            tmp.path(), "p1", "video.generate",
+            json!({ "shotId": "s1-1", "prompt": "雨里的猫" }),
+            Gate::agent(Some(Risk::Spend), None),
+            Ctx::task(gen_ctx(&base, &m)),
+        )
+        .await
+        .unwrap();
+
+        let Outcome::Patch { patch, .. } = o else {
+            panic!("出视频该交回一份补丁，好让文件写回镜头：{o:?}")
+        };
+        assert_eq!(patch["t"], "shotFiles");
+        let rel = patch["edits"][0]["file"].as_str().unwrap().to_string();
+        assert_eq!(patch["edits"][0]["id"], "s1-1");
+
+        // 2. 文件真的落在项目目录里，而且是相对路径
+        assert!(!rel.starts_with('/'), "该是相对路径：{rel}");
+        assert!(dir.join(&rel).exists(), "{}", dir.join(&rel).display());
+
+        // 3. 把补丁应用到项目上（真实链路里这一步在前端 store 做）
+        let mut b = project::load(tmp.path(), "p1").unwrap();
+        b.shots[0]["file"] = json!(rel);
+        b.timeline = studio_doc::timeline::Timeline {
+            clips: vec![studio_doc::timeline::Clip {
+                shot_id: "s1-1".into(), at: 0, dur: 900,
+            }],
+            beat_ms: None,
+        };
+        project::save(tmp.path(), &b).unwrap();
+
+        // 4. 拼成片
+        if studio_doc::render::probe().is_err() {
+            eprintln!("跳过拼片那一段：这台机器上没有 ffmpeg");
+            return;
+        }
+        let o = dispatch(tmp.path(), "p1", "film.render", json!({}),
+            Gate::agent(Some(Risk::Write), None), Ctx { task: None, chat: None }).await.unwrap();
+        let Outcome::Ok { value } = o else { panic!("{o:?}") };
+
+        assert_eq!(value["file"], "film.mp4");
+        assert_eq!(value["shots"], 1);
+        assert!(value["bytes"].as_u64().unwrap() > 1000, "文件太小，像是没真编码");
+        assert!(dir.join("film.mp4").exists(), "成片不在项目目录里");
+    }
+
+    /// 时间线是空的时候不去跑 ffmpeg，而是说清下一步
+    #[tokio::test]
+    async fn 时间线空着时说去排时间线_不是一句拼片失败() {
+        let tmp = setup();
+        let e = dispatch(tmp.path(), "p1", "film.render", json!({}),
+            Gate::agent(Some(Risk::Write), None), Ctx { task: None, chat: None }).await.unwrap_err();
+        let msg = e.to_string();
+        assert!(msg.contains("时间线是空的"), "{msg}");
+        assert!(msg.contains("自动成片"), "要给下一步：{msg}");
+    }
+
+    /// 少哪几镜的视频就点名哪几镜 —— 不许拼出一个短片子交出去
+    #[tokio::test]
+    async fn 少片段时点名是哪几镜() {
+        let tmp = setup();
+        let mut b = project::load(tmp.path(), "p1").unwrap();
+        b.timeline = studio_doc::timeline::Timeline {
+            clips: vec![
+                studio_doc::timeline::Clip { shot_id: "s1-1".into(), at: 0, dur: 900 },
+                studio_doc::timeline::Clip { shot_id: "s1-2".into(), at: 900, dur: 900 },
+            ],
+            beat_ms: None,
+        };
+        project::save(tmp.path(), &b).unwrap();
+
+        let e = dispatch(tmp.path(), "p1", "film.render", json!({}),
+            Gate::agent(Some(Risk::Write), None), Ctx { task: None, chat: None }).await.unwrap_err();
+        let msg = e.to_string();
+        assert!(msg.contains("s1-1") && msg.contains("s1-2"), "两镜都没文件，都该点名：{msg}");
+        assert!(!project::project_dir(tmp.path(), "p1").unwrap().join("film.mp4").exists());
+    }
+
+    /// 假的出视频厂商：提交拿 task_id → 轮询说成了 → 再把 mp4 真供出来。
+    ///
+    /// **必须真供出文件**，因为 dispatch 现在会下载 —— 只回一串指向不存在主机的
+    /// URL 的话，测的就不是我们发出去的那条链了
+    async fn fake_video_provider() -> String {
+        use tokio::io::{AsyncReadExt, AsyncWriteExt};
+        let l = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = l.local_addr().unwrap();
+        // 一段真能被 ffmpeg 读的 mp4：用 ffmpeg 现造一个，没有 ffmpeg 就给个占位
+        // （拼片那一段本来就会被跳过）
+        let clip: Vec<u8> = {
+            let d = std::env::temp_dir().join(format!("hitv-fake-{}.mp4", addr.port()));
+            let ok = std::process::Command::new("ffmpeg")
+                .args(["-y", "-hide_banner", "-loglevel", "error", "-f", "lavfi",
+                       "-i", "color=c=red:s=320x568:r=25:d=1", "-c:v", "libx264",
+                       "-pix_fmt", "yuv420p", &d.to_string_lossy()])
+                .status()
+                .map(|s| s.success())
+                .unwrap_or(false);
+            if ok { std::fs::read(&d).unwrap_or_default() } else { b"not-a-video".to_vec() }
+        };
+        tokio::spawn(async move {
+            while let Ok((mut sock, _)) = l.accept().await {
+                let clip = clip.clone();
+                tokio::spawn(async move {
+                    let mut buf = vec![0u8; 4096];
+                    let n = sock.read(&mut buf).await.unwrap_or(0);
+                    let req = String::from_utf8_lossy(&buf[..n]).to_string();
+                    if req.contains("GET /vid/") {
+                        let head = format!(
+                            "HTTP/1.1 200 OK\r\nContent-Type: video/mp4\r\nContent-Length: {}\r\n\
+                             Connection: close\r\n\r\n", clip.len());
+                        let _ = sock.write_all(head.as_bytes()).await;
+                        let _ = sock.write_all(&clip).await;
+                        return;
+                    }
+                    let body = if req.starts_with("POST") {
+                        json!({ "data": { "task_id": "t-1" } })
+                    } else {
+                        json!({ "data": { "status": "succeeded",
+                            "urls": [format!("http://{addr}/vid/1.mp4")] } })
+                    };
+                    let sbody = body.to_string();
+                    let resp = format!(
+                        "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\n\
+                         Connection: close\r\n\r\n{}", sbody.len(), sbody);
+                    let _ = sock.write_all(resp.as_bytes()).await;
+                });
+            }
+        });
+        format!("http://{addr}")
+    }
+
     #[tokio::test]
     async fn 出图整条链跑通_闸门放行后真发请求拿回图() {
         let tmp = setup();
@@ -1104,8 +1363,12 @@ mod tests {
         let o = dispatch(tmp.path(), "p1", "image.generate",
             json!({ "prompt": "a cat in the rain", "batch": 2 }), Gate::agent(Some(Risk::Spend), None), Ctx::task(gen_ctx(&base, &m))).await.unwrap();
         let Outcome::Ok { value } = o else { panic!("{o:?}") };
-        assert_eq!(value["urls"][0], "http://img/1.png");
+        // **拿到的是落盘的相对路径，不是厂商那串 URL** —— 那串会过期
+        assert_eq!(value["files"][0], "media/image-x-1.png");
         assert_eq!(value["model"], "doubao-seedream");
+        // 文件真的在项目目录里
+        let f = studio_doc::project::project_dir(tmp.path(), "p1").unwrap().join("media/image-x-1.png");
+        assert!(f.exists(), "{}", f.display());
     }
 
     #[tokio::test]

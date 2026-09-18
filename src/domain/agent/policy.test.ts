@@ -119,7 +119,7 @@ describe('agent/policy · 自主执行的边界', () => {
       'outline.write': 'write', 'script.write': 'write', 'asset.write': 'write',
       'asset.lock': 'write', 'shot.write': 'write', 'prompt.compile': 'read',
       'style.apply': 'write', 'shot.rig': 'write',
-      'edit.timeline': 'write', 'edit.subtitle': 'write',
+      'edit.timeline': 'write', 'edit.subtitle': 'write', 'film.render': 'write',
 
       'image.generate': 'spend', 'image.edit': 'spend', 'image.upscale': 'spend',
       'video.generate': 'spend', 'video.extend': 'spend',

@@ -25,7 +25,7 @@ export type ToolId =
   // 镜头
   | 'stage.render' | 'shot.rig'
   // 成片
-  | 'edit.timeline' | 'edit.subtitle' | 'file.export'
+  | 'edit.timeline' | 'edit.subtitle' | 'film.render' | 'file.export'
   // 查资料
   | 'web.search' | 'web.fetch';
 
@@ -107,6 +107,7 @@ export const TOOLS: readonly ToolSpec[] = [
   /* 成片 */
   { id: 'edit.timeline', group: 'deliver', name: '排时间线', desc: '判定可用的片段按场次与镜号排进时间线；给卡点就对齐', writes: true, status: 'ready' },
   { id: 'edit.subtitle', group: 'deliver', name: '生成字幕', desc: '按剧本台词与时间线生成字幕；长句切成一眼能看完的短条', writes: true, status: 'ready' },
+  { id: 'film.render', group: 'deliver', name: '拼成片', desc: '时间线上的片段按顺序裁切拼成一个 mp4，字幕烧进画面；要本机装了 ffmpeg', writes: true, status: 'ready' },
   { id: 'file.export', group: 'deliver', name: '导出文件', desc: '大纲/剧本导 .md、分镜表导 .csv；只产出内容，保存位置由人在保存对话框里选', status: 'ready' },
 
   /* 查资料 */

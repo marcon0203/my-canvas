@@ -29,6 +29,11 @@ export function EditingPage() {
   // 否则「排时间线」这一步跑没跑过，界面上完全一样
   const planned = timeline.clips.length > 0;
   const filmMs = totalMs(timeline);
+  // 时间线上有、但本机没有视频文件的那几镜。**拼片之前就要说清** ——
+  // 让人点了才知道不行，等于把一次失败换成了一次困惑
+  const noFile = timeline.clips
+    .filter((c) => !shots.find((s) => s.id === c.shotId)?.file)
+    .map((c) => c.shotId);
   // 每毫秒多少像素：原来写死 22px/秒，长片会把轨道拉到几千像素宽
   const PPS = 22;
   const wOf = (ms: number) => Math.max(8, (ms / 1000) * PPS);
@@ -126,7 +131,7 @@ export function EditingPage() {
               </Button>
             </div>
           </div></div>
-          <div className="sec" style={{ marginTop: 20 }}>导出</div>
+          <div className="sec" style={{ marginTop: 20 }}>成片</div>
           <div className="blk"><div className="blk__body">
             <div className="row" style={{ marginBottom: 10 }}>
               <span className="t-cap muted">画幅</span><div className="spacer" /><Chip>{ratio}</Chip>
@@ -134,10 +139,29 @@ export function EditingPage() {
             <div className="row" style={{ marginBottom: 10 }}>
               <span className="t-cap muted">风格</span><div className="spacer" /><Chip>{style}</Chip>
             </div>
-            <div className="row">
-              <span className="t-cap muted">预计消耗</span><div className="spacer" />
-              <Chip tone="a"><Icon name="bolt" />12</Chip>
+            <div className="row" style={{ marginBottom: 12 }}>
+              <span className="t-cap muted">字幕</span><div className="spacer" />
+              <Chip>{subtitles.cues.length ? `${subtitles.cues.length} 条，烧进画面` : '没有'}</Chip>
             </div>
+            {/* **前置条件如实摆出来，不做一个点了才知道不行的按钮。**
+                拼片要三样：排过时间线、每一镜都有本地视频文件、本机有 ffmpeg。
+                前两样这儿能查；ffmpeg 在不在只有 Rust 侧知道，所以那一条
+                由它报错时说清（见 render::probe） */}
+            {!planned ? (
+              <p className="t-cap dim" style={{ margin: 0 }}>
+                还没排时间线。先点上面的「排时间线」—— 拼片要知道每一镜放多久。
+              </p>
+            ) : noFile.length ? (
+              <p className="t-cap dim" style={{ margin: 0 }}>
+                这 {noFile.length} 镜还没有视频文件：{noFile.slice(0, 4).join('、')}
+                {noFile.length > 4 ? ` 等 ${noFile.length} 镜` : ''}。
+                去分镜把它们出一遍视频，拼片要的是本机文件。
+              </p>
+            ) : (
+              <Button variant="primary" onClick={() => runTool('film.render')}>
+                <Icon name="play" />拼成 mp4
+              </Button>
+            )}
           </div></div>
         </div>
       </div></div>
