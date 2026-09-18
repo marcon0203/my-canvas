@@ -23,7 +23,7 @@ pub use studio_doc::{md, project, store, timeline, workspace};
 pub use studio_net::{generate, web};
 pub use studio_skill as skills;
 pub use studio_tools::{patch, tools};
-pub use studio_agent::{agent, outline, prompt, shotprompt};
+pub use studio_agent::{agent, expand, outline, prompt, shotprompt};
 
 /// 跑一轮：编排在 `studio_agent::run`，**取密钥的真实现在这儿**。
 ///

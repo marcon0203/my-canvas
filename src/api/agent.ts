@@ -6,8 +6,12 @@ import { canHandleConfigured, ownerOfConfigured } from '@/domain/agent/config';
 import type { Handoff, IntentKind, Plan, Proposal, ProposalPatch } from '@/domain/agent/types';
 import { TOOLS, type ToolId } from '@/domain/agent/tools';
 import { secText } from '@/domain/clips/model';
-import { isDesktop, outlineDraft, shotsPrompt, type OutlineDraft, type PromptDraft, type RunEvent, type ShotBrief } from './desktop';
-import { allBeats } from '@/domain/story/model';
+import {
+  isDesktop, outlineDraft, outlineExpand, shotsPrompt,
+  type AltsDraft, type ExpandInput, type OutlineDraft, type PromptDraft, type RunEvent,
+  type SceneBrief, type ShotBrief,
+} from './desktop';
+import { actOfBeat, allBeats } from '@/domain/story/model';
 import { useSettings } from '@/store/settings';
 import type { Shot } from '@/domain/shots/model';
 import { SIZE_EN, shotsMissingPrompt } from '@/domain/agent/drafts';
@@ -102,6 +106,12 @@ export async function* runAgent(
     yield* runShotPromptsOnDesktop(ctx, signal);
     return;
   }
+  // 大纲空着时没有「这一场」可延展 —— 让它落到本地那条路去说清前置条件，
+  // 别把一个空上下文送给模型
+  if (isDesktop() && resolved === 'outline.expand' && selectedBeat(ctx)) {
+    yield* runExpandOnDesktop(ctx, signal);
+    return;
+  }
 
   const p = plan(resolved, ctx);
   // 先只下发步骤：产物等正文说完再交付
@@ -135,11 +145,12 @@ export async function* runAgent(
 /**
  * 内置能力 → 真 skill 的对应关系。
  *
- * 只有这两件已经有 SKILL.md（在 `resources/skills/`），跑的时候会把那份正文
- * 展开进 preamble。其余十件还是写死在 plans.ts 里的本地逻辑，没有 skill 可展开。
+ * 只有这几件已经有 SKILL.md（在 `resources/skills/`），跑的时候会把那份正文
+ * 展开进 preamble。其余的还是 plans.ts 里的本地逻辑，没有 skill 可展开。
  */
 export const SKILL_FOR_INTENT: Partial<Record<IntentKind, string>> = {
   'outline.draft': 'draft-outline',
+  'outline.expand': 'expand-scene',
   'shots.prompt': 'write-shot-prompts',
 };
 
@@ -183,6 +194,86 @@ async function* runOutlineOnDesktop(
       (e) => emit(e, (d) => outlineProposal(d as OutlineDraft, fresh, ctx)),
     ),
   );
+}
+
+/* ---------------- 真模型：延展走向 ---------------- */
+
+const EXPAND_STEPS = [
+  { icon: 'map', label: '读这一场与前后场次' },
+  { icon: 'spark', label: '让模型给三条走向' },
+  { icon: 'book', label: '收拾成可选的几条' },
+];
+
+/** 选中的那一场。没选就取第一场；一场都没有返回 undefined */
+export const selectedBeat = (ctx: AgentContext) =>
+  allBeats(ctx.acts).find((b) => b.id === ctx.sel.beatId) ?? allBeats(ctx.acts)[0];
+
+/** 这一场前后各取几场。给多了没用：模型只需要知道它接在哪两件事之间 */
+const NEIGHBORS = 2;
+
+/**
+ * 这一场的上下文 → 送给模型的输入。
+ *
+ * **前后场次和已定稿角色必须送**：只给这一场的标题的话，模型给的三条和
+ * 上一版那份写死的模板差别不大（那一版就是三个固定句式套标题）。
+ * 走向之所以有意义，是因为它要接得上前后已经定了的东西。
+ */
+export function expandInput(ctx: AgentContext, beatId: string): ExpandInput {
+  const beats = allBeats(ctx.acts);
+  const at = beats.findIndex((b) => b.id === beatId);
+  const beat = beats[at]!;
+  const act = actOfBeat(ctx.acts, beatId);
+  const brief = (b: { k: string; t: string }): SceneBrief => ({ k: b.k, t: b.t });
+  return {
+    project: ctx.proj,
+    beatKey: beat.k,
+    beatT: beat.t,
+    actTitle: act?.t ?? '',
+    actSpan: act?.span ?? '',
+    before: beats.slice(Math.max(0, at - NEIGHBORS), at).map(brief),
+    after: beats.slice(at + 1, at + 1 + NEIGHBORS).map(brief),
+    // **只送定稿的**：草稿资产随时会改，让模型围着一个会变的设定写走向没意义
+    leads: ctx.assets.角色
+      .filter((a) => a.status === 'locked')
+      .map((a) => `${a.name}：${a.desc}`),
+    idea: ctx.input,
+  };
+}
+
+/** 桌面端的「延展走向」 */
+async function* runExpandOnDesktop(
+  ctx: AgentContext,
+  signal: AbortSignal,
+): AsyncGenerator<AgentEvent> {
+  yield { t: 'plan', plan: { kind: 'outline.expand', steps: EXPAND_STEPS, reply: '' } };
+
+  const beat = selectedBeat(ctx)!;
+  yield* pump(signal, (emit) =>
+    outlineExpand(
+      {
+        cfg: ctx.agents[ctx.agentId],
+        fallbackPreamble: personaById(ctx.agentId).preamble,
+        globals: ctx.globalModels,
+        providers: {},
+        input: expandInput(ctx, beat.id),
+        skill: SKILL_FOR_INTENT['outline.expand'],
+        workspace: useSettings.getState().workspace,
+      },
+      (e) => emit(e, (d) => altsProposal(d as AltsDraft, beat)),
+    ),
+  );
+}
+
+/** Rust 产物 → 前端产物卡。条数与长度 Rust 已经收拾过，这里只管怎么摆 */
+export function altsProposal(draft: AltsDraft, beat: { id: string; k: string }) {
+  return {
+    title: `${beat.k} · ${draft.alts.length} 条备选走向`,
+    rows: draft.alts.map((v, i) => ({ k: `走向 ${i + 1}`, v })),
+    patch: { t: 'alts' as const, beatId: beat.id, alts: draft.alts },
+    // 与本地那条路同一个消耗：同一件事在两条路上记不同的账，对不上
+    cost: 2,
+    goto: 'outline',
+  };
 }
 
 /* ---------------- 真模型：补写提示词 ---------------- */
@@ -287,6 +378,7 @@ async function* pump(
         break;
       case 'proposal':
       case 'prompts':
+      case 'alts':
         push({ t: 'proposal', proposal: toProposal(e.draft) });
         break;
       case 'done':

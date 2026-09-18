@@ -6,6 +6,7 @@
 use crate::agent::{self, AgentSpec};
 use studio_conf::config::{AgentConfig, ModelRef, ProviderSetting};
 use studio_error::Error;
+use crate::expand::{self, AltsDraft, ExpandInput};
 use crate::outline::{self, OutlineDraft, OutlineInput};
 use crate::shotprompt::{self, PromptDraft, PromptInput};
 use studio_skill::{SkillStore, compose_preamble};
@@ -18,9 +19,11 @@ pub enum RunEvent {
     Step { index: usize },
     Delta { text: String },
     Proposal { draft: OutlineDraft },
-    /// 补写提示词的产物。**刻意与 Proposal 分开**：两种产物形状不同，
+    /// 补写提示词的产物。**刻意与 Proposal 分开**：几种产物形状不同，
     /// 合成一个 untagged 字段会让前端靠猜字段来分辨。
     Prompts { draft: PromptDraft },
+    /// 延展走向的产物
+    Alts { draft: AltsDraft },
     Done,
     /// **失败也走事件**，不走 Result —— 否则前端要同时处理
     /// 「Promise reject」和「事件里的错误」两条路径。
@@ -79,6 +82,7 @@ fn preamble_of<I>(run: &Run<'_, I>, spec: &AgentSpec) -> String {
 
 pub type OutlineRun<'a> = Run<'a, OutlineInput>;
 pub type PromptRun<'a> = Run<'a, PromptInput>;
+pub type ExpandRun<'a> = Run<'a, ExpandInput>;
 
 /// 解析阶段：不发请求，所以能独立测。失败时发 Failed 并返回 None。
 fn prepare<I, S: Sink, K: Keys>(run: &Run<'_, I>, sink: &S, keys: &K) -> Option<(AgentSpec, String)> {
@@ -138,6 +142,23 @@ pub async fn shots_prompt<S: Sink, K: Keys>(run: PromptRun<'_>, sink: S, keys: K
     sink.emit(RunEvent::Step { index: 3 });
     stream_reply(&sink, &draft.reply);
     sink.emit(RunEvent::Prompts { draft });
+    sink.emit(RunEvent::Done);
+}
+
+/// 跑一次「延展走向」。步骤数与前端的步骤卡对齐。
+pub async fn outline_expand<S: Sink, K: Keys>(run: ExpandRun<'_>, sink: S, keys: K) {
+    let Some((spec, key)) = prepare(&run, &sink, &keys) else { return };
+
+    sink.emit(RunEvent::Step { index: 2 });
+    let preamble = preamble_of(&run, &spec);
+    let draft = match expand::expand(&spec, &key, &preamble, run.input).await {
+        Ok(d) => d,
+        Err(e) => return sink.emit(RunEvent::failed(&e)),
+    };
+
+    sink.emit(RunEvent::Step { index: 3 });
+    stream_reply(&sink, &draft.reply);
+    sink.emit(RunEvent::Alts { draft });
     sink.emit(RunEvent::Done);
 }
 
@@ -338,6 +359,18 @@ mod tests {
         let text = preamble_of(&run, &spec);
         assert!(text.contains("我能用的"));
         assert!(!text.contains("别人的"), "没授权的 skill 模型不该知道它存在");
+    }
+
+    #[test]
+    fn 三条链路的产物事件各走各的_前端不用猜字段() {
+        // 形状不同的产物合成一个 untagged 字段，前端就得靠「有没有 acts」这种
+        // 猜法来分辨。判别字段必须不一样。
+        let a = serde_json::to_value(RunEvent::Alts {
+            draft: AltsDraft { reply: "x".into(), alts: vec!["甲".into()] },
+        })
+        .unwrap();
+        assert_eq!(a["t"], "alts");
+        assert_eq!(a["draft"]["alts"][0], "甲");
     }
 
     #[test]

@@ -61,6 +61,7 @@ export type RunEvent =
   | { t: 'delta'; text: string }
   | { t: 'proposal'; draft: OutlineDraft }
   | { t: 'prompts'; draft: PromptDraft }
+  | { t: 'alts'; draft: AltsDraft }
   | { t: 'done' }
   | { t: 'failed'; code: string; message: string };
 
@@ -81,6 +82,32 @@ export interface OutlineInput {
 export interface PromptDraft {
   reply: string;
   prompts: { id: string; own: string }[];
+}
+
+/** 与 Rust 侧 `expand::AltsDraft` 同形 */
+export interface AltsDraft {
+  reply: string;
+  alts: string[];
+}
+
+/** 相邻场次的简报。只要场次键与功能，不要正文 */
+export interface SceneBrief {
+  k: string;
+  t: string;
+}
+
+export interface ExpandInput {
+  project: string;
+  beatKey: string;
+  beatT: string;
+  actTitle: string;
+  actSpan: string;
+  /** 前面几场（最近的排最后）与后面几场 —— 走向要接得上它们 */
+  before: SceneBrief[];
+  after: SceneBrief[];
+  /** 已定稿的角色，「名字：描述」。草稿资产不送 */
+  leads: string[];
+  idea: string;
 }
 
 /** 一镜的现状。**引用在前端展开成描述再送过去** —— Rust 不碰项目库 */
@@ -119,6 +146,17 @@ export async function outlineDraft(args: RunArgs<OutlineInput>, onEvent: (e: Run
   const ch = new Channel<RunEvent>();
   ch.onmessage = onEvent;
   await call('agent_outline_draft', { ...args, onEvent: ch });
+}
+
+/** 延展走向：同一条 Channel 机制，换命令与输入 */
+export async function outlineExpand(
+  args: RunArgs<ExpandInput>,
+  onEvent: (e: RunEvent) => void,
+): Promise<void> {
+  const { invoke: call, Channel } = await import('@tauri-apps/api/core');
+  const ch = new Channel<RunEvent>();
+  ch.onmessage = onEvent;
+  await call('agent_outline_expand', { ...args, onEvent: ch });
 }
 
 /** 补写提示词：同一条 Channel 机制，换命令与输入 */

@@ -59,8 +59,8 @@ export const SKILLS: readonly SkillSpec[] = [
     summary: '围绕选中的一场给三条不同走向，改的是谁在场、谁知情，不是换形容词。',
     needs: '大纲里至少有一场。',
     patch: 'alts', goto: 'outline',
-    impl: { by: 'local',
-      note: '目前是三个固定句式套上这一场的标题（drafts.ts 的 draftAlts），没有读上下文，也没有接模型。接模型时要把这一场的功能、所在幕、前后场次一起送过去 —— 不然模型给的三条和现在的模板差别不大。' },
+    impl: { by: 'model', module: 'agent/src/expand.rs',
+      note: '这一场的功能、所在幕、前后各两场、已定稿的角色都会送过去 —— 只给标题的话模型给的三条和模板差别不大。条数与长度由 Rust 收拾（去重、截断、最多 4 条）。浏览器里没有这条链路，会回落成三个固定句式套标题。' },
   },
   {
     id: 'script.draft', ...INTENT_META['script.draft'],

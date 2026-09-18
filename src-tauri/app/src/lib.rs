@@ -7,6 +7,7 @@ use std::collections::HashMap;
 use studio_core::Result;
 use studio_core::agent::{self, AgentSpec};
 use studio_core::config::{AgentConfig, ModelRef, ProviderSetting};
+use studio_core::expand::ExpandInput;
 use studio_core::outline::OutlineInput;
 use studio_core::run::{self, RunEvent};
 use studio_core::shotprompt::PromptInput;
@@ -465,6 +466,38 @@ async fn agent_shots_prompt(
     .await;
 }
 
+/// 延展走向。与起草大纲同一套编排，只换输入与产物。
+#[tauri::command]
+async fn agent_outline_expand(
+    cfg: AgentConfig,
+    fallback_preamble: String,
+    globals: HashMap<String, ModelRef>,
+    providers: HashMap<String, ProviderSetting>,
+    input: ExpandInput,
+    skill: Option<String>,
+    workspace: Option<String>,
+    on_event: tauri::ipc::Channel<RunEvent>,
+    app: tauri::AppHandle,
+) {
+    let skills = SkillStore::scan(&roots(&app, workspace.as_deref()));
+    run::outline_expand(
+        run::ExpandRun {
+            cfg: &cfg,
+            fallback_preamble: &fallback_preamble,
+            globals: &globals,
+            providers: &providers,
+            input: &input,
+            skills: &skills,
+            skill: skill.as_deref(),
+        },
+        move |e: RunEvent| {
+            let _ = on_event.send(e);
+        },
+        run::SystemKeys,
+    )
+    .await;
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -475,6 +508,7 @@ pub fn run() {
             agent_resolve,
             agent_outline_draft,
             agent_shots_prompt,
+            agent_outline_expand,
             skills_list,
             skill_body,
             skill_resource,

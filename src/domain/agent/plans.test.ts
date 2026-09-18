@@ -102,13 +102,13 @@ describe('agent/plans · 产物来自项目现状', () => {
   });
 
   /**
-   * 「延展走向」是目前唯一一个**不读上下文**的功能：三个固定句式套上这一场
-   * 的标题。这条测试把这个局限钉住，而不是让它只存在于注释里 ——
-   * 界面上的说明（skills.ts 的 impl.note）必须和它一致。
+   * 浏览器里没有 IPC，「延展走向」会回落成三个固定句式套上这一场的标题。
    *
-   * 接模型之后这条测试会失败，那时候它的作用是提醒：说明也该改了。
+   * 这条测试钉住那个回落的样子，以及**界面说明必须承认它** ——
+   * 桌面端走 expand.rs 真发请求，浏览器这条路没有，两者产物形状相同但
+   * 内容来源完全不同。不说清的话，在浏览器里试用的人会以为模型已经接上了。
    */
-  it('延展走向目前只套这一场的标题，没有读别的上下文', () => {
+  it('浏览器回落：延展走向只套这一场的标题，没有读别的上下文', () => {
     const base = plan('outline.expand', ctx());
     const alts = base.proposal!.rows.map((r) => r.v);
     expect(alts).toHaveLength(3);
@@ -124,10 +124,11 @@ describe('agent/plans · 产物来自项目现状', () => {
     }));
     expect(moved.proposal!.rows.map((r) => r.v)).toEqual(alts);
 
-    // 说明里必须承认这件事，别写成「按这一场的功能算出来」
+    // 说明里要同时讲清两件事：桌面端送了什么、浏览器里会回落
     const note = skillOf('outline.expand')!.impl.note;
-    expect(note).toContain('固定句式');
-    expect(note).toMatch(/没有读上下文|没读上下文/);
+    expect(note).toContain('前后');
+    expect(note).toMatch(/浏览器/);
+    expect(note).toMatch(/回落|固定句式/);
   });
 
   it('成本报告用的是真实记账口径', () => {

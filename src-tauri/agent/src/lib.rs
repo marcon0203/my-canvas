@@ -10,6 +10,7 @@
 //!
 //! 取密钥只有 trait（`run::Keys`）在这儿，**真实现不在** —— 见那段注释。
 pub mod agent;
+pub mod expand;
 pub mod outline;
 pub mod prompt;
 pub mod run;

@@ -84,6 +84,7 @@ serde 的 derive 本来就找不到，报假阳性一两次就没人看了。
 | `net` | `web` | 读网页：剥掉脚本样式、限长、如实标截断 |
 | `skill` | `skills` | Skill 加载：扫目录只读 frontmatter，正文与附件按需取 |
 | `agent` | `agent` | 配置 → `AgentSpec` → Rig agent。解析是纯函数，配置错误在花钱之前就报出来 |
+| `agent` | `expand` | 延展一场的走向。`tidy()` 去重截断，一条不剩就报错 |
 | `agent` | `outline` | 起草大纲。`number()` 补场次键 |
 | `agent` | `prompt` | 提示词三段式合成与中译英 |
 | `agent` | `run` | 编排：`Run<I>` 带公共入参，每条链路只换输入与产物事件 |
@@ -325,8 +326,23 @@ Skill 会被那份旧副本盖掉，而界面上看不出是副本在生效；`W
 `resource()` 按 canonicalize 之后的真实路径核前缀 —— skill 是用户往目录里放的东西，
 一个 `../../../.ssh/id_rsa` 就能把无关文件读进上下文再发给模型。
 
-现在只有起草大纲与补写提示词两条链路有 SKILL.md；其余十件内置能力还是写死在
-前端 `plans.ts` 里的逻辑，界面上如实标着「还没有」。
+现在有三条链路接了真模型，各带一份 SKILL.md：
+
+| 功能 | Rust 模块 | Skill |
+|---|---|---|
+| 起草大纲 | `agent/src/outline.rs` | `draft-outline` |
+| 延展这一场的走向 | `agent/src/expand.rs` | `expand-scene` |
+| 补写提示词 | `agent/src/shotprompt.rs` | `write-shot-prompts` |
+
+其余九件内置能力还是前端 `plans.ts` 里的本地逻辑，界面上如实标着实现方式。
+「哪几件接了模型」不是手写的清单 —— `skills.test.ts` 对着真实接线核：
+`impl.module` 指的文件在不在、对应的 SKILL.md 在不在、`SKILL_FOR_INTENT`
+与 `impl.by === 'model'` 两张表对不对得上。
+
+**送什么进去比接上模型更要紧。** 延展走向这条尤其明显：它的上一版是三个固定
+句式套上这一场的标题，如果接模型时只把标题送过去，模型给的三条和那份模板差别
+不大 —— 所以前后各两场、所在幕、已定稿的角色都要送（见 `expand::prompt_of`
+与前端 `expandInput`，两边都有测试盯着）。
 
 ## 还没做
 

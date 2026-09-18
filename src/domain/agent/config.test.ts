@@ -159,7 +159,7 @@ describe('agent/config · 配置真的改变分工', () => {
   });
 });
 
-describe('agent/config · 侧重方向与自主度', () => {
+describe('agent/config · 系统提示词与执行方式', () => {
   it('每位都有自己的系统提示词，不是同一段套话', () => {
     const texts = roster().map((p) => p.preamble);
     expect(new Set(texts).size).toBe(roster().length);

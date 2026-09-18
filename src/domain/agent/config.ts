@@ -25,7 +25,7 @@ export interface AgentConfig {
   readonly temperature?: number;
   /**
    * 改写后的系统提示词。undefined = 用 persona.preamble。
-   * 这是调 Agent「侧重方向」的主要手段 —— 比加几个技能有效得多。
+   * 这是调 Agent 判断倾向的主要手段 —— 比加几个技能有效得多。
    */
   readonly preamble?: string;
   /**

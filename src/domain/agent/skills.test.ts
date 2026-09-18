@@ -1,4 +1,7 @@
+import { existsSync } from 'node:fs';
+import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
+import { SKILL_FOR_INTENT } from '@/api/agent';
 import { MOCK_PROJECT } from '@/mock/project';
 import { defaultRig } from '@/domain/assets/model';
 import { INTENT_META } from './roster';
@@ -90,9 +93,36 @@ describe('agent/skills · 注册表不能是装饰', () => {
     expect([...covered].sort()).toEqual([...ALL].sort());
   });
 
-  it('标了 by: model 的只有真接上 Rust 链路的那两件', () => {
-    const wired = SKILLS.filter((s) => s.impl.by === 'model').map((s) => s.id);
-    expect(wired.sort()).toEqual(['outline.draft', 'shots.prompt']);
+  /**
+   * 「已接模型」不能是一个手写的清单 —— 原来这条测试就是写死的两个 id，
+   * 加一条链路时它拦不住任何东西（漏标 local 也一样过）。
+   * 改成对着真实的接线查：Rust 模块在不在、SKILL.md 在不在、
+   * 两张表对不对得上。
+   */
+  it('标了 by: model 的，Rust 模块与 SKILL.md 都真的在', () => {
+    const wired = SKILLS.filter((s) => s.impl.by === 'model');
+    expect(wired.length).toBeGreaterThan(0);
+    for (const s of wired) {
+      const mod = (s.impl as { module: string }).module;
+      expect(existsSync(join(process.cwd(), 'src-tauri', mod)), `缺 ${mod}`).toBe(true);
+      const skill = SKILL_FOR_INTENT[s.id];
+      expect(skill, `${s.id} 没有对应的 skill`).toBeTruthy();
+      expect(
+        existsSync(join(process.cwd(), 'resources/skills', skill!, 'SKILL.md')),
+        `缺 resources/skills/${skill}/SKILL.md`,
+      ).toBe(true);
+    }
+  });
+
+  it('两张表对得上：有 skill 的就是接了模型的，反之也成立', () => {
+    const wired = SKILLS.filter((s) => s.impl.by === 'model').map((s) => s.id).sort();
+    expect(Object.keys(SKILL_FOR_INTENT).sort()).toEqual(wired);
+  });
+
+  it('标了 by: local 的不指任何 Rust 模块 —— 那会让人以为它接上了', () => {
+    for (const s of SKILLS) {
+      if (s.impl.by === 'local') expect('module' in s.impl, s.id).toBe(false);
+    }
   });
 
   it('乱填的 id 不认 —— 路由靠它挡住白屏', () => {

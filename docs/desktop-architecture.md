@@ -78,7 +78,7 @@ Rust 侧 `keyring` crate 读写。**前端永远拿不到明文**，只拿到「
 | `cfg.models[modality]` | `.model()` | 用谁的脑子 |
 | `cfg.skills` | 路由与转交 | 接不接这个活 |
 
-侧重方向主要靠 `preamble` 拉开，不是靠多勾几个技能 —— 设置里这段可以整段改写。
+每位的判断倾向主要靠 `preamble` 拉开，不是靠多勾几个技能 —— 设置里这段可以整段改写。
 
 **但视觉任务不进 Rig。**
 火山 Seedance、智谱 CogVideoX、百炼万相都是各自的异步任务接口（提交拿 task_id 再轮询），
