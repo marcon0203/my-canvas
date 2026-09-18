@@ -10,6 +10,8 @@ serde.workspace = true
 serde_json.workspace = true
 tokio.workspace = true
 rig = "0.42"
+# 流式要 StreamExt::next。rig 的 StreamingResult 就是个 futures::Stream
+futures = "0.3"
 schemars = "1.2.2"
 studio-error = { path = "../error" }
 studio-conf = { path = "../conf" }

@@ -7,6 +7,8 @@
 //! | `outline` | 起草大纲那条链路 |
 //! | `shotprompt` | 补写提示词那条链路 |
 //! | `prompt` | 提示词合成与中译英 |
+//! | `structured` | 让模型填一个有 schema 的结构（两条路 + 换路判定） |
+//! | `stream` | 从没写完的 JSON 里一边生成一边刨出 `reply` |
 //!
 //! 取密钥只有 trait（`run::Keys`）在这儿，**真实现不在** —— 见那段注释。
 pub mod agent;
@@ -15,4 +17,5 @@ pub mod outline;
 pub mod prompt;
 pub mod run;
 pub mod shotprompt;
+pub mod stream;
 pub mod structured;

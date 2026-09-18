@@ -399,6 +399,18 @@ fn agent_resolve(
     agent::resolve(&cfg, &fallback_preamble, &globals, &providers)
 }
 
+/// 事件出口现在必须是 `Sync`：正文是流式吐出来的，编排那边要把 sink 按引用
+/// 交给一个跨 await 的闭包。
+///
+/// 钉在这儿是因为**这一层在容器里编不了**（缺 GUI 系统库），check-app.sh 只查
+/// 语法。真要哪天 tauri 的 Channel 不再是 Sync，报的错是这一行说
+/// 「Channel 不满足 Sync」，而不是三个命令各报一遍「future 不是 Send」——
+/// 后者看着像我们的 async 写错了。
+const _: fn() = || {
+    fn sync<T: Sync>() {}
+    sync::<tauri::ipc::Channel<RunEvent>>();
+};
+
 /// 起草大纲。
 ///
 /// 这里**只做转发**：事件类型与编排都在 studio_core::run —— 那边能编译能测，

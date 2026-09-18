@@ -104,60 +104,65 @@ fn prepare<I, S: Sink, K: Keys>(run: &Run<'_, I>, sink: &S, keys: &K) -> Option<
     }
 }
 
-/// 把正文按小块吐出去，观感与浏览器 mock 一致
-fn stream_reply<S: Sink>(sink: &S, reply: &str) {
-    for chunk in reply.chars().collect::<Vec<_>>().chunks(2) {
-        sink.emit(RunEvent::Delta { text: chunk.iter().collect() });
-    }
+/// 正文的出口：模型每吐出一点就发一个 Delta。
+///
+/// 原来这儿是「等模型答完，再把整段按两字一块切开发出去」。观感像流式，
+/// 实际上用户先对着空面板干等一整轮，反馈原话是「没有流式输出吗？」。
+/// 现在这个闭包交给 `structured::extract`，由它在收流的过程中调。
+fn deltas<S: Sink + Sync>(sink: &S) -> impl Fn(&str) + Sync {
+    move |text: &str| sink.emit(RunEvent::Delta { text: text.to_string() })
 }
 
 /// 跑一次「起草大纲」。
-pub async fn outline_draft<S: Sink, K: Keys>(run: OutlineRun<'_>, sink: S, keys: K) {
+pub async fn outline_draft<S: Sink + Sync, K: Keys>(run: OutlineRun<'_>, sink: S, keys: K) {
     let Some((spec, key)) = prepare(&run, &sink, &keys) else { return };
 
     sink.emit(RunEvent::Step { index: 2 });
     let preamble = preamble_of(&run, &spec);
-    let draft = match outline::draft(&spec, &key, &preamble, run.input).await {
+    // 正文在这一步里就往外流了 —— 第 3 步是收尾（编号、对齐、收拾），
+    // 它在正文说完之后才发
+    let draft = match outline::draft(&spec, &key, &preamble, run.input, &deltas(&sink)).await {
         Ok(d) => d,
         Err(e) => return sink.emit(RunEvent::failed(&e)),
     };
 
     sink.emit(RunEvent::Step { index: 3 });
-    stream_reply(&sink, &draft.reply);
     sink.emit(RunEvent::Proposal { draft });
     sink.emit(RunEvent::Done);
 }
 
 /// 跑一次「补写提示词」。步骤数与前端的步骤卡对齐。
-pub async fn shots_prompt<S: Sink, K: Keys>(run: PromptRun<'_>, sink: S, keys: K) {
+pub async fn shots_prompt<S: Sink + Sync, K: Keys>(run: PromptRun<'_>, sink: S, keys: K) {
     let Some((spec, key)) = prepare(&run, &sink, &keys) else { return };
 
     sink.emit(RunEvent::Step { index: 2 });
     let preamble = preamble_of(&run, &spec);
-    let draft = match shotprompt::draft(&spec, &key, &preamble, run.input).await {
+    // 正文在这一步里就往外流了 —— 第 3 步是收尾（编号、对齐、收拾），
+    // 它在正文说完之后才发
+    let draft = match shotprompt::draft(&spec, &key, &preamble, run.input, &deltas(&sink)).await {
         Ok(d) => d,
         Err(e) => return sink.emit(RunEvent::failed(&e)),
     };
 
     sink.emit(RunEvent::Step { index: 3 });
-    stream_reply(&sink, &draft.reply);
     sink.emit(RunEvent::Prompts { draft });
     sink.emit(RunEvent::Done);
 }
 
 /// 跑一次「延展走向」。步骤数与前端的步骤卡对齐。
-pub async fn outline_expand<S: Sink, K: Keys>(run: ExpandRun<'_>, sink: S, keys: K) {
+pub async fn outline_expand<S: Sink + Sync, K: Keys>(run: ExpandRun<'_>, sink: S, keys: K) {
     let Some((spec, key)) = prepare(&run, &sink, &keys) else { return };
 
     sink.emit(RunEvent::Step { index: 2 });
     let preamble = preamble_of(&run, &spec);
-    let draft = match expand::expand(&spec, &key, &preamble, run.input).await {
+    // 正文在这一步里就往外流了 —— 第 3 步是收尾（编号、对齐、收拾），
+    // 它在正文说完之后才发
+    let draft = match expand::expand(&spec, &key, &preamble, run.input, &deltas(&sink)).await {
         Ok(d) => d,
         Err(e) => return sink.emit(RunEvent::failed(&e)),
     };
 
     sink.emit(RunEvent::Step { index: 3 });
-    stream_reply(&sink, &draft.reply);
     sink.emit(RunEvent::Alts { draft });
     sink.emit(RunEvent::Done);
 }
@@ -274,12 +279,17 @@ mod tests {
         assert!(sink.codes().is_empty());
     }
 
+    /// 正文出口给出去的是一个闭包，链路在收流的过程中调它，**每调一次就是
+    /// 一个 Delta**。原来这儿测的是「等答完再按两字切开」那个函数 ——
+    /// 那个函数没了，剩下要保证的就是这条：转成事件时不吞字、不合并。
     #[test]
-    fn 正文按小块吐出_拼回去要和原文一致() {
+    fn 每来一块就发一个_delta_原样不动() {
         let sink = Collector::default();
-        let text = "补在第二幕：那里只有一场，撑不住转折。";
-        stream_reply(&sink, text);
-        let joined: String = sink
+        let out = deltas(&sink);
+        for c in ["补在第二幕：", "那里只有一场，", "撑不住转折。"] {
+            out(c);
+        }
+        let got: Vec<String> = sink
             .events()
             .into_iter()
             .filter_map(|e| match e {
@@ -287,7 +297,8 @@ mod tests {
                 _ => None,
             })
             .collect();
-        assert_eq!(joined, text, "流式切分不能吞字或串码");
+        assert_eq!(got, ["补在第二幕：", "那里只有一场，", "撑不住转折。"],
+            "来几块发几个事件，不攒也不切");
     }
 
     #[test]

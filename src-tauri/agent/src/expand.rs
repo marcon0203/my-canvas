@@ -143,9 +143,10 @@ pub async fn expand(
     api_key: &str,
     preamble: &str,
     input: &ExpandInput,
+    deltas: crate::structured::Deltas<'_>,
 ) -> Result<AltsDraft> {
     let mut draft: AltsDraft =
-        crate::structured::extract(spec, api_key, preamble, &prompt_of(input)).await?;
+        crate::structured::extract(spec, api_key, preamble, &prompt_of(input), deltas).await?;
     tidy(&mut draft)?;
     Ok(draft)
 }
@@ -295,7 +296,9 @@ mod tests {
             .unwrap(),
         )]);
         let spec = crate::agent::resolve(&cfg, "你是编剧。", &globals, &providers).unwrap();
-        let e = expand(&spec, "sk-x", "你是编剧。", &input()).await.unwrap_err();
+        let e = expand(&spec, "sk-x", "你是编剧。", &input(), crate::structured::silent())
+            .await
+            .unwrap_err();
         assert!(matches!(e.code(), "decode" | "http"), "报的是 {}", e.code());
     }
 

@@ -92,9 +92,15 @@ pub fn prompt_of(input: &OutlineInput) -> String {
 
 /// 跑一次。结构化输出走 `structured::extract` —— 工具调用不通时它会自动换成
 /// 提示词那条（思考模型不接受强制 tool_choice，见那个模块的说明）。
-pub async fn draft(spec: &AgentSpec, api_key: &str, preamble: &str, input: &OutlineInput) -> Result<OutlineDraft> {
+pub async fn draft(
+    spec: &AgentSpec,
+    api_key: &str,
+    preamble: &str,
+    input: &OutlineInput,
+    deltas: crate::structured::Deltas<'_>,
+) -> Result<OutlineDraft> {
     let mut draft: OutlineDraft =
-        crate::structured::extract(spec, api_key, preamble, &prompt_of(input)).await?;
+        crate::structured::extract(spec, api_key, preamble, &prompt_of(input), deltas).await?;
     number(&mut draft, input.beat_count);
     Ok(draft)
 }

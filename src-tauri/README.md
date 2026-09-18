@@ -85,7 +85,8 @@ serde 的 derive 本来就找不到，报假阳性一两次就没人看了。
 | `skill` | `skills` | Skill 加载：扫目录只读 frontmatter，正文与附件按需取 |
 | `agent` | `agent` | 配置 → `AgentSpec` → Rig agent。解析是纯函数，配置错误在花钱之前就报出来 |
 | `agent` | `expand` | 延展一场的走向。`tidy()` 去重截断，一条不剩就报错 |
-| `agent` | `structured` | 让模型填 schema：先工具调用，供应商不收就换提示词 + 自己解析 |
+| `agent` | `structured` | 让模型填 schema：先工具调用，供应商不收就换提示词 + 自己解析。两条路都流式 |
+| `agent` | `stream` | 从还没写完的 JSON 里把 `reply` 已经到手的那截刨出来 |
 | `agent` | `outline` | 起草大纲。`number()` 补场次键 |
 | `agent` | `prompt` | 提示词三段式合成与中译英 |
 | `agent` | `run` | 编排：`Run<I>` 带公共入参，每条链路只换输入与产物事件 |
@@ -138,13 +139,13 @@ serde 的 derive 本来就找不到，报假阳性一两次就没人看了。
 技能卡「为缺提示词的镜头补写」
   └ api/agent.ts  isDesktop() && 确实有镜头缺提示词 ? IPC : 本地 mock
       └ agent_shots_prompt
-          └ core::run::shots_prompt    ← 与起草大纲共用 prepare / stream_reply
+          └ core::run::shots_prompt    ← 与起草大纲共用 prepare / deltas
               ├ shotprompt::draft      Rig Extractor
               └ shotprompt::reconcile  核对镜号，纯函数
   └ RunEvent::Prompts → 产物卡 → 采纳 → shotPrompts 补丁
 ```
 
-与第一条链路共用 `prepare`（解析 Agent + 取密钥）与 `stream_reply`，
+与第一条链路共用 `prepare`（解析 Agent + 取密钥）与正文出口 `deltas`，
 `Run<'a, I>` 把输入参数化 —— 新链路只要给自己的输入类型和产物事件。
 
 **Rust 不认识项目库。** 资产引用在前端展开成「名字：描述」再送过去，
@@ -376,6 +377,23 @@ Thinking mode does not support this tool_choice
 解析必须自己做 —— rig 的文档明写这条路的文本「不保证是干净 JSON，可能带解释
 或 markdown 围栏」。`json_of` 负责剥 ``` 围栏、剥 `<think>` 块、按括号配对取出
 第一段完整对象（不是贪婪匹配到最后一个 `}`，那样 JSON 后面跟一句解释就会被吞进来）。
+
+**三、两条路都是真流式。** 产物里那段给人看的话（`reply`）必须边生成边出来。
+原来是等模型答完再把整段按两字一块发出去 —— 观感像流式，实际上用户先对着空
+面板干等一整轮（思考模型能等半分钟），反馈原话是「没有流式输出吗？」。
+
+现在两条路都走 `stream_prompt`，`stream::ReplyScan` 边收边从没写完的 JSON 里
+把 `reply` 刨出来：工具那条它在输出工具的参数片段里，提示词那条就在模型正文里。
+解不完的转义（`\` 后面还没来、`\uXXXX` 只来了两位、代理对只来了高位）就停下
+等下一块 —— 宁可这一帧少吐几个字，也不能把半个码点拼成乱码。
+这也给换路加了个前提：**已经吐过字就不能换路**，换一条路是从头再说一遍。
+
+**输出工具的名字不是我们说了算。** `Extractor` 把它改成 `submit`，靠的是
+`pub(crate)` 的 `AgentRunner::output_tool()`，外面用不了。所以照抄它那段「调
+`submit`」的提示词就会出事：请求里登记的是 `final_result`，模型照提示词调
+`submit`，rig 判成「调了一个不存在的工具」。现在让模型调哪个工具交给 rig 自己
+那句（`OutputMode::Tool` 默认会补，名字由它填），我们只补一句「每个字段都要填」。
+「提示词说的和登记的是同一个」留成了测试。
 
 **接口家族也踩过**：`openai::Client` 在 rig 0.42 里是 Responses API
 （`/responses`）的客户端，目录里这几家只提供 `/chat/completions`，

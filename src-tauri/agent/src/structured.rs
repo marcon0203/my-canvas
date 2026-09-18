@@ -23,6 +23,20 @@
 //!    直接走第二条。不记的话每次生成都要先白挨一个 400
 //!
 //! 不反过来「一律走第二条」：工具调用那条的结构可靠性明显更高，能用就该用。
+//!
+//! # 两条路都是流式的
+//!
+//! 产物里有一段给人看的话（`reply`）。它必须边生成边出来 —— 否则用户先对着
+//! 空面板干等一整轮（思考模型能等半分钟），然后一下子出现一整段。原来的做法
+//! 是等模型答完再把整段按两字一块发出去，观感像流式，实际上等的时间一点没少，
+//! 反馈原话是「没有流式输出吗？」
+//!
+//! 所以这两条路走的都是 `stream_prompt`，边收边用 `stream::ReplyScan` 从还没
+//! 写完的 JSON 里把 `reply` 已经到手的那截刨出来。工具那条 `reply` 在 `submit`
+//! 的参数片段里，提示词那条就在模型正文里，位置不同、刨法一样。
+//!
+//! 也正因为会边跑边吐字，**换路多了一个前提**：已经往界面上发过字就不能换 ——
+//! 换一条路是从头再说一遍。
 
 use crate::agent::AgentSpec;
 use schemars::JsonSchema;
@@ -61,7 +75,7 @@ pub fn wants_plain_json(msg: &str) -> bool {
 /// 从模型的回答里刨出那段 JSON。
 ///
 /// 要对付三种情况，都是真见过的：
-/// - ```json 围栏
+/// - markdown 围栏（三个反引号，有时还带 json）
 /// - JSON 前后带一段解释（「好的，这是结果：」）
 /// - 思考模型把推理过程也吐出来（`<think>…</think>`）
 ///
@@ -113,19 +127,153 @@ pub fn json_of(raw: &str) -> Option<&str> {
     None
 }
 
-/// 走工具调用那条：Rig 的 Extractor，模型只能填 schema，填错 Rig 会重试。
-async fn by_tool<T>(spec: &AgentSpec, api_key: &str, preamble: &str, prompt: &str) -> Result<T>
+/// 正文一到手就往外发的出口。
+///
+/// `&dyn` 而不是泛型参数：三条链路的签名上再套一层泛型只会更难读，而这里
+/// 每轮也就调几百次，虚调用的开销不值得计较。
+pub type Deltas<'a> = &'a (dyn Fn(&str) + Sync);
+
+/// 不要流式时传它。测试里用得上 —— 那些用例关心的是结构，不是观感
+pub fn silent() -> Deltas<'static> {
+    &|_: &str| {}
+}
+
+/// 正文从流里的哪儿来。
+///
+/// 两条路的正文在流里的位置不一样：工具调用那条它在 `submit` 的参数里，
+/// 提示词那条它就在模型的正文里。**不能两边都收** —— 工具那条模型可能
+/// 在调工具之前先说一句闲话，把那句也当正文，界面上就会先冒出一段
+/// 跟产物无关的话。
+#[derive(Clone, Copy, PartialEq)]
+enum Src {
+    ToolArgs,
+    Text,
+}
+
+/// 驱动一次流式运行：边收边把 `reply` 刨出来发出去。
+///
+/// 返回 (模型最终给的那段输出, 已经发出去多少字节)。**字节数要带回去** ——
+/// 换路的判定要用它：已经往界面上吐过字了就不能再换一条路重说一遍。
+async fn drive(
+    agent: rig::Agent,
+    prompt: &str,
+    from: Src,
+    deltas: Deltas<'_>,
+) -> (Result<String>, usize) {
+    use crate::stream::ReplyScan;
+    use futures::StreamExt;
+    use rig::agent::MultiTurnStreamItem;
+    use rig::streaming::{StreamedAssistantContent, StreamingPrompt, ToolCallDeltaContent};
+
+    let mut stream = agent.stream_prompt(prompt.to_string()).await;
+    let mut scan = ReplyScan::default();
+    // 盯住第一个工具调用。并发的几路参数拌在一起，刨出来的就是一段乱码
+    let mut call: Option<String> = None;
+    let mut out = String::new();
+
+    while let Some(item) = stream.next().await {
+        let item = match item {
+            Ok(i) => i,
+            Err(e) => return (Err(classify(&e.to_string())), scan.sent()),
+        };
+        let chunk = match (from, item) {
+            (Src::Text, MultiTurnStreamItem::StreamAssistantItem(
+                StreamedAssistantContent::Text(t),
+            )) => Some(t.text),
+            (Src::ToolArgs, MultiTurnStreamItem::StreamAssistantItem(
+                StreamedAssistantContent::ToolCallDelta { internal_call_id, content },
+            )) => {
+                if call.get_or_insert(internal_call_id.clone()) != &internal_call_id {
+                    None
+                } else if let ToolCallDeltaContent::Delta(d) = content {
+                    Some(d)
+                } else {
+                    None
+                }
+            }
+            (_, MultiTurnStreamItem::FinalResponse(r)) => {
+                out = r.output;
+                None
+            }
+            _ => None,
+        };
+        if let Some(c) = chunk {
+            let add = scan.push(&c);
+            if !add.is_empty() {
+                deltas(&add);
+            }
+        }
+    }
+    (Ok(out), scan.sent())
+}
+
+/// 把最终那段输出解析成 `T`。
+///
+/// 两条路都过 `json_of`：工具那条拿到的本来就该是干净的参数 JSON，但真见过
+/// 模型不调工具、直接把 JSON 写在正文里的情况 —— 那时候 `output` 就是一段
+/// 裹着围栏的文本，刨一下能救回来，白报一个错没必要。
+fn parse<T: DeserializeOwned>(out: &str) -> Result<T> {
+    let body =
+        json_of(out).ok_or_else(|| Error::Decode(format!("模型没返回 JSON：{}", head(out))))?;
+    serde_json::from_str(body).map_err(|e| Error::Decode(format!("{e}：{}", head(body))))
+}
+
+/// 装一个「有一个输出工具、并且强制它调」的 agent。
+///
+/// 这正是 rig 的 `ExtractorBuilder::from_model_handle` 内部做的事（那句
+/// `ToolChoice::Required` + `OutputMode::Tool` 是写死的）。**不直接用
+/// `Extractor` 是因为它只有 `extract()`，没有流式出口** —— 而产物里那段给人
+/// 看的话必须边生成边出来，不能等整轮跑完再假装打字。
+///
+/// **不抄它那段提示词**：它写的是「调 `submit`」，而 `submit` 这个名字是它
+/// 通过 `AgentRunner::output_tool()` 改的，那个方法是 `pub(crate)`，外面用不了。
+/// 照抄的结果是提示词让模型调 `submit`、请求里登记的却是 `final_result`，
+/// 模型照着提示词调，rig 当场判成「调了一个不存在的工具」——
+/// 这个洞是真踩过的，所以那条「提示词说的和登记的必须是同一个」留成了测试。
+///
+/// 让模型调哪个工具，交给 rig 自己那句（`OutputMode::Tool` 默认会往提示词里
+/// 补一句「call the `xxx` tool exactly once…」，名字由它填）。我们只补一句
+/// 「每个字段都要填」—— 那是 extractor 那段提示词里真正管用的部分。
+fn tool_agent<T>(spec: &AgentSpec, api_key: &str, preamble: &str) -> rig::Agent
 where
     T: JsonSchema + DeserializeOwned + Serialize + Send + Sync + 'static,
 {
-    rig::extractor::ExtractorBuilder::<T>::from_model_handle(
-        crate::agent::model_handle(spec, api_key),
-    )
-    .preamble(preamble)
-    .build()
-    .extract(prompt.to_string())
-    .await
-    .map_err(|e| classify(&e.to_string()))
+    use rig::agent::{AgentBuilder, OutputMode};
+    use rig::completion::message::ToolChoice;
+
+    let mut b = AgentBuilder::from_model_handle(crate::agent::model_handle(spec, api_key))
+        .name(&spec.agent_id)
+        .preamble(preamble)
+        .append_preamble(FILL_EVERY_FIELD)
+        .output_schema::<T>()
+        .tool_choice(ToolChoice::Required)
+        .output_mode(OutputMode::Tool);
+    if let Some(t) = spec.temperature {
+        b = b.temperature(t);
+    }
+    b.build()
+}
+
+/// 用英文是因为这句是给 schema 那套机制看的，和人格那段中文不是一回事；
+/// 模型对这类指令的英文版服从度也更稳
+const FILL_EVERY_FIELD: &str =
+    "\n\nFill out EVERY field of the structured result, even with default values. \
+     Do not return the final answer as plain text.";
+
+/// 走工具调用那条：模型只能填 schema，可靠性最好。正文从 `submit` 的参数里流出来
+async fn by_tool<T>(
+    spec: &AgentSpec,
+    api_key: &str,
+    preamble: &str,
+    prompt: &str,
+    deltas: Deltas<'_>,
+) -> (Result<T>, usize)
+where
+    T: JsonSchema + DeserializeOwned + Serialize + Send + Sync + 'static,
+{
+    let agent = tool_agent::<T>(spec, api_key, preamble);
+    let (out, sent) = drive(agent, prompt, Src::ToolArgs, deltas).await;
+    (out.and_then(|o| parse(&o)), sent)
 }
 
 /// 供应商的错误分两类：**不支持强制工具调用**要换路，其它要如实报。
@@ -147,29 +295,29 @@ fn classify(msg: &str) -> Error {
 ///
 /// 但**解析必须自己做** —— rig 自己的文档就写着这条路返回的文本「不保证是干净
 /// 的 JSON，可能带解释或 markdown 围栏」，所以 `json_of` 留着。
-async fn by_prompt<T>(spec: &AgentSpec, api_key: &str, preamble: &str, prompt: &str) -> Result<T>
+async fn by_prompt<T>(
+    spec: &AgentSpec,
+    api_key: &str,
+    preamble: &str,
+    prompt: &str,
+    deltas: Deltas<'_>,
+) -> Result<T>
 where
     T: JsonSchema + DeserializeOwned + Serialize + Send + Sync + 'static,
 {
-    use rig::agent::run::OutputMode;
-    use rig::completion::Prompt;
+    use rig::agent::{AgentBuilder, OutputMode};
 
-    let mut b = rig::agent::AgentBuilder::from_model_handle(
-        crate::agent::model_handle(spec, api_key),
-    )
-    .name(&spec.agent_id)
-    .preamble(preamble)
-    .output_schema::<T>()
-    .output_mode(OutputMode::Prompted);
+    let mut b = AgentBuilder::from_model_handle(crate::agent::model_handle(spec, api_key))
+        .name(&spec.agent_id)
+        .preamble(preamble)
+        .output_schema::<T>()
+        .output_mode(OutputMode::Prompted);
     if let Some(t) = spec.temperature {
         b = b.temperature(t);
     }
 
-    let out = b.build().prompt(prompt).await.map_err(|e| classify(&e.to_string()))?;
-
-    let body =
-        json_of(&out).ok_or_else(|| Error::Decode(format!("模型没返回 JSON：{}", head(&out))))?;
-    serde_json::from_str(body).map_err(|e| Error::Decode(format!("{e}：{}", head(body))))
+    let (out, _) = drive(b.build(), prompt, Src::Text, deltas).await;
+    parse(&out?)
 }
 
 /// 错误里带上模型原话的开头，方便排查；但别把整段几千字都塞进错误
@@ -181,24 +329,36 @@ fn head(s: &str) -> String {
     t.chars().take(200).collect::<String>() + "…"
 }
 
-/// 让模型填一个 `T`。先试工具调用，不行就换提示词那条。
-pub async fn extract<T>(spec: &AgentSpec, api_key: &str, preamble: &str, prompt: &str) -> Result<T>
+/// 让模型填一个 `T`，同时把里面给人看的那段话边生成边发出去。
+///
+/// 先试工具调用，不行就换提示词那条。
+pub async fn extract<T>(
+    spec: &AgentSpec,
+    api_key: &str,
+    preamble: &str,
+    prompt: &str,
+    deltas: Deltas<'_>,
+) -> Result<T>
 where
     T: JsonSchema + DeserializeOwned + Serialize + Send + Sync + 'static,
 {
     let key = key_of(spec);
     let skip_tool = plain_only().lock().map(|s| s.contains(&key)).unwrap_or(false);
     if skip_tool {
-        return by_prompt(spec, api_key, preamble, prompt).await;
+        return by_prompt(spec, api_key, preamble, prompt, deltas).await;
     }
 
-    match by_tool(spec, api_key, preamble, prompt).await {
+    let (got, sent) = by_tool(spec, api_key, preamble, prompt, deltas).await;
+    match got {
         Ok(v) => Ok(v),
-        Err(e) if wants_plain_json(&e.to_string()) => {
+        // **已经吐过字就不换路**：换一条路是从头再说一遍，界面上会出现两段
+        // 前半截一样的正文。判定那几条 400 是请求被拒，在任何内容之前就回来了，
+        // 所以这个条件正常永远成立 —— 它挡的是不正常的情况
+        Err(e) if sent == 0 && wants_plain_json(&e.to_string()) => {
             if let Ok(mut s) = plain_only().lock() {
                 s.insert(key);
             }
-            by_prompt(spec, api_key, preamble, prompt).await
+            by_prompt(spec, api_key, preamble, prompt, deltas).await
         }
         Err(e) => Err(e),
     }
@@ -343,6 +503,8 @@ mod http_tests {
 
     /// 收到过的请求路径。用来核「我们问的是 chat/completions 那个接口」
     type Paths = Arc<Mutex<Vec<String>>>;
+    /// 收到过的请求体。用来核「提示词说的工具和登记的是同一个」
+    type Bodies = Arc<Mutex<Vec<String>>>;
 
     /// 起一个假的 OpenAI 兼容端点。返回 base_url、请求计数、收到的路径
     async fn provider_paths(mode: Mode) -> (String, Arc<AtomicUsize>, Paths) {
@@ -356,7 +518,95 @@ mod http_tests {
         (base, hits)
     }
 
+    /// 产物 JSON。两条路给的都是这一份 —— 形状一样，位置不同
+    const ARGS: &str = r#"{"reply":"差别在谁动手","alts":["甲去了","乙去了"]}"#;
+
+    /// 把一段文本按每 n 字节切开（切点对齐到字符边界）。
+    /// **故意切得碎**：真实的流就是这样，切在汉字和转义中间才是常态
+    fn pieces(s: &str, n: usize) -> Vec<String> {
+        let mut out = Vec::new();
+        let mut at = 0;
+        while at < s.len() {
+            let mut end = (at + n).min(s.len());
+            while end < s.len() && !s.is_char_boundary(end) {
+                end += 1;
+            }
+            out.push(s[at..end].to_string());
+            at = end;
+        }
+        out
+    }
+
+    /// 一个 chunk 的骨架。`delta` 是这一帧真正的内容
+    fn chunk(delta: serde_json::Value, finish: Option<&str>) -> String {
+        let mut c = serde_json::json!({
+            "id": "1", "object": "chat.completion.chunk", "created": 0, "model": "m",
+            "choices": [{ "index": 0, "delta": delta, "finish_reason": finish }],
+        });
+        if finish.is_some() {
+            // DeepSeek 的 usage 还要缓存命中那两个字段，真接口都带。
+            // 漏了会被报成「供应商返回格式不对」，而那是假象
+            c["usage"] = serde_json::json!({
+                "prompt_tokens": 1, "completion_tokens": 1, "total_tokens": 2,
+                "prompt_cache_hit_tokens": 0, "prompt_cache_miss_tokens": 1,
+            });
+        }
+        c.to_string()
+    }
+
+    /// 请求里登记的那个输出工具叫什么。
+    ///
+    /// **不写死成 `final_result`** —— 那是 rig 自己挑的名字，写死了就等于
+    /// 在测 rig 的命名而不是测我们的行为。照请求里登记的那个回，
+    /// 才是真供应商的做法
+    fn advertised_tool(body: &str) -> String {
+        let at = body.find("\"tools\":[").unwrap_or(0);
+        let tail = &body[at..];
+        let k = "\"name\":\"";
+        let i = tail.find(k).map(|i| i + k.len());
+        i.and_then(|i| tail[i..].find('"').map(|j| tail[i..i + j].to_string()))
+            .unwrap_or_else(|| "final_result".to_string())
+    }
+
+    /// 工具那条的 SSE：输出工具的参数分好几帧来
+    fn tool_frames(tool: &str) -> Vec<String> {
+        let mut f = Vec::new();
+        for (i, p) in pieces(ARGS, 7).into_iter().enumerate() {
+            // 第一帧才带 id 与函数名，后面只带参数片段 —— 真接口就是这样
+            let call = if i == 0 {
+                serde_json::json!({
+                    "index": 0, "id": "c1", "type": "function",
+                    "function": { "name": tool, "arguments": p },
+                })
+            } else {
+                serde_json::json!({ "index": 0, "function": { "arguments": p } })
+            };
+            f.push(chunk(serde_json::json!({ "tool_calls": [call] }), None));
+        }
+        f.push(chunk(serde_json::json!({}), Some("tool_calls")));
+        f
+    }
+
+    /// 提示词那条的 SSE：正文分好几帧来，还裹着思考块和围栏
+    fn text_frames() -> Vec<String> {
+        let body = format!("<think>先想想给哪三条</think>\n```json\n{ARGS}\n```");
+        let mut f: Vec<String> = pieces(&body, 9)
+            .into_iter()
+            .map(|p| chunk(serde_json::json!({ "content": p }), None))
+            .collect();
+        f.push(chunk(serde_json::json!({}), Some("stop")));
+        f
+    }
+
     async fn provider_with(mode: Mode, paths: Paths) -> (String, Arc<AtomicUsize>) {
+        provider_full(mode, paths, Arc::new(Mutex::new(Vec::new()))).await
+    }
+
+    async fn provider_full(
+        mode: Mode,
+        paths: Paths,
+        bodies: Bodies,
+    ) -> (String, Arc<AtomicUsize>) {
         let hits = Arc::new(AtomicUsize::new(0));
         let l = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
         let addr = l.local_addr().unwrap();
@@ -365,6 +615,7 @@ mod http_tests {
             while let Ok((mut sock, _)) = l.accept().await {
                 let h = h.clone();
                 let ps = paths.clone();
+                let bs = bodies.clone();
                 tokio::spawn(async move {
                     // 请求体可能分包到达，按 Content-Length 读齐再判断
                     let mut raw = Vec::new();
@@ -405,63 +656,44 @@ mod http_tests {
                     // 真供应商也不会拒。判成「出现过这个键就算」的话，
                     // 「走内置 provider 有没有用」这条测试永远看不出差别
                     let body = req.split("\r\n\r\n").nth(1).unwrap_or("");
+                    if let Ok(mut v) = bs.lock() {
+                        v.push(body.to_string());
+                    }
                     let forced = body.contains("\"tool_choice\":\"required\"")
                         || body.contains("\"tool_choice\":{")
                         || body.contains("\"tool_choice\": \"required\"");
                     let wants_tool = body.contains("\"tools\":[");
 
-                    let (status, body) = match (mode, forced) {
-                        (Mode::Thinking, true) | (Mode::Broken, _) => (
-                            400,
-                            "{\"error\":{\"message\":\"Thinking mode does not support this \
-                             tool_choice\",\"type\":\"invalid_request_error\"}}"
-                                .to_string(),
-                        ),
-                        _ if wants_tool => {
-                            // 工具那条：回一个真的 tool_call，参数就是那份结构。
-                            // 这段要同时满足通用 openai 与 DeepSeek 两套结构：
-                            // DeepSeek 的 `tool_calls[].index` 不是可选的、`content`
-                            // 不是 Option、`usage` 还要缓存命中那两个字段（真接口都带）。
-                            // 漏一个就被报成「供应商返回格式不对」，而那是假象
-                            let args = "{\\\"reply\\\":\\\"差别在谁动手\\\",\
-                                \\\"alts\\\":[\\\"甲去了\\\",\\\"乙去了\\\"]}";
-                            (200, format!(
-                                "{{\"id\":\"1\",\"object\":\"chat.completion\",\"created\":0,\
-                                 \"model\":\"m\",\"choices\":[{{\"index\":0,\"message\":{{\
-                                 \"role\":\"assistant\",\"content\":\"\",\"tool_calls\":[{{\
-                                 \"id\":\"c1\",\"index\":0,\"type\":\"function\",\"function\":{{\
-                                 \"name\":\"submit\",\"arguments\":\"{args}\"}}}}]}},\
-                                 \"finish_reason\":\"tool_calls\"}}],\"usage\":{{\
-                                 \"prompt_tokens\":1,\"completion_tokens\":1,\"total_tokens\":2,\
-                                 \"prompt_cache_hit_tokens\":0,\"prompt_cache_miss_tokens\":1}}}}"
-                            ))
-                        }
-                        _ => {
-                            // 提示词那条：故意裹上思考块与围栏，`json_of` 要能刨出来
-                            let content = "<think>先想想给哪三条</think>\\n\
-                                ```json\\n{\\\"reply\\\":\\\"差别在谁动手\\\",\
-                                \\\"alts\\\":[\\\"甲去了\\\",\\\"乙去了\\\"]}\\n```";
-                            (
-                                200,
-                                format!(
-                                    "{{\"id\":\"1\",\"object\":\"chat.completion\",\"created\":0,\
-                                     \"model\":\"m\",\"choices\":[{{\"index\":0,\"message\":\
-                                     {{\"role\":\"assistant\",\"content\":\"{content}\"}},\
-                                     \"finish_reason\":\"stop\"}}],\"usage\":\
-                                     {{\"prompt_tokens\":1,\"completion_tokens\":1,\
-                                     \"total_tokens\":2}}}}"
-                                ),
-                            )
-                        }
+                    // 两条路现在都是流式的，所以这里也必须真的回 SSE。
+                    // 回一整个 JSON 的话，rig 那边等的是 event-stream，
+                    // 测出来的就不是我们发出去的那个请求了
+                    if (mode == Mode::Thinking && forced) || mode == Mode::Broken {
+                        let body = "{\"error\":{\"message\":\"Thinking mode does not support \
+                                    this tool_choice\",\"type\":\"invalid_request_error\"}}";
+                        let head = format!(
+                            "HTTP/1.1 400 Bad Request\r\nContent-Type: application/json\r\n\
+                             Content-Length: {}\r\nConnection: close\r\n\r\n",
+                            body.len()
+                        );
+                        let _ = sock.write_all(head.as_bytes()).await;
+                        let _ = sock.write_all(body.as_bytes()).await;
+                        let _ = sock.flush().await;
+                        return;
+                    }
+
+                    let frames = if wants_tool {
+                        tool_frames(&advertised_tool(body))
+                    } else {
+                        text_frames()
                     };
-                    let reason = if status == 200 { "OK" } else { "Bad Request" };
-                    let head = format!(
-                        "HTTP/1.1 {status} {reason}\r\nContent-Type: application/json\r\n\
-                         Content-Length: {}\r\nConnection: close\r\n\r\n",
-                        body.len()
-                    );
+                    let head = "HTTP/1.1 200 OK\r\nContent-Type: text/event-stream\r\n\
+                                Cache-Control: no-cache\r\nConnection: close\r\n\r\n";
                     let _ = sock.write_all(head.as_bytes()).await;
-                    let _ = sock.write_all(body.as_bytes()).await;
+                    for f in frames {
+                        let _ = sock.write_all(format!("data: {f}\n\n").as_bytes()).await;
+                        let _ = sock.flush().await;
+                    }
+                    let _ = sock.write_all(b"data: [DONE]\n\n").await;
                     let _ = sock.flush().await;
                 });
             }
@@ -494,16 +726,41 @@ mod http_tests {
         crate::agent::resolve(&cfg, "你是编剧。", &globals, &providers).unwrap()
     }
 
+    /// 收流式正文，**按块记**。`Fn(&str)`，所以内部得自己加锁。
+    ///
+    /// 只记一整段的话，「真流式」和「等答完再一次性发出来」看起来一模一样 ——
+    /// 而那正是这次要改掉的东西，所以块数得留下来
+    #[derive(Default)]
+    struct Said(Mutex<Vec<String>>);
+
+    impl Said {
+        fn sink(&self) -> impl Fn(&str) + Sync + '_ {
+            move |t: &str| self.0.lock().unwrap().push(t.to_string())
+        }
+        fn text(&self) -> String {
+            self.0.lock().unwrap().concat()
+        }
+        fn chunks(&self) -> usize {
+            self.0.lock().unwrap().len()
+        }
+    }
+
     #[tokio::test]
     async fn 思考模型那条_400_会自动换成提示词那条并拿到结构() {
         let (base, hits) = provider(Mode::Thinking).await;
         let s = spec(&base, "thinking-1");
-        let got: Alts = extract(&s, "sk-x", "你是编剧。", "给三条走向").await.unwrap();
+        let said = Said::default();
+        let got: Alts =
+            extract(&s, "sk-x", "你是编剧。", "给三条走向", &said.sink()).await.unwrap();
 
         assert_eq!(got.reply, "差别在谁动手");
         assert_eq!(got.alts, ["甲去了", "乙去了"]);
         // 两次请求：先工具调用挨了 400，再走提示词那条
         assert!(hits.load(Ordering::SeqCst) >= 2, "应该试过两条路");
+        // 换路之后那条也得是流式的 —— 这条路上正文裹在思考块和围栏里，
+        // 刨出来的只该是 reply，不该带上 `<think>` 和 ```
+        assert_eq!(said.text(), "差别在谁动手", "提示词那条也要边跑边吐字");
+        assert!(said.chunks() > 1, "该是分好几块来的，实际 {} 块", said.chunks());
     }
 
     #[tokio::test]
@@ -511,9 +768,9 @@ mod http_tests {
         let (base, hits) = provider(Mode::Thinking).await;
         let s = spec(&base, "thinking-2");
 
-        let _: Alts = extract(&s, "sk-x", "p", "q").await.unwrap();
+        let _: Alts = extract(&s, "sk-x", "p", "q", silent()).await.unwrap();
         let first = hits.load(Ordering::SeqCst);
-        let _: Alts = extract(&s, "sk-x", "p", "q").await.unwrap();
+        let _: Alts = extract(&s, "sk-x", "p", "q", silent()).await.unwrap();
         let second = hits.load(Ordering::SeqCst) - first;
 
         assert!(first >= 2, "第一次要试两条路，实际 {first}");
@@ -534,10 +791,18 @@ mod http_tests {
     async fn 内置的_deepseek_客户端自己躲开了强制_tool_choice() {
         let (base, hits) = provider(Mode::Thinking).await;
         let s = spec_of("deepseek", &base, "deepseek-reasoner");
-        let got: Alts = extract(&s, "sk-x", "你是编剧。", "给三条走向").await.unwrap();
+        let said = Said::default();
+        let got: Alts =
+            extract(&s, "sk-x", "你是编剧。", "给三条走向", &said.sink()).await.unwrap();
 
         assert_eq!(got.alts, ["甲去了", "乙去了"]);
         assert_eq!(hits.load(Ordering::SeqCst), 1, "该一次就成，不用换路");
+        // 工具那条的正文在 `submit` 的参数里，要能从没写完的参数里刨出来。
+        // 产物那几条（甲去了/乙去了）不该混进正文
+        assert_eq!(said.text(), "差别在谁动手", "工具那条也要边跑边吐字");
+        // **这条是「真流式」和「等答完再假装打字」的分界线**：一块就到齐，
+        // 说明我们又在等整轮跑完了
+        assert!(said.chunks() > 1, "该是分好几块来的，实际 {} 块", said.chunks());
     }
 
     #[tokio::test]
@@ -545,7 +810,8 @@ mod http_tests {
         let (base, hits) = provider(Mode::Thinking).await;
         // 火山方舟、阿里百炼、腾讯混元、自定义端点 rig 都没有专属模块
         let s = spec_of("custom", &base, "generic-1");
-        let got: Alts = extract(&s, "sk-x", "你是编剧。", "给三条走向").await.unwrap();
+        let got: Alts =
+            extract(&s, "sk-x", "你是编剧。", "给三条走向", silent()).await.unwrap();
 
         assert_eq!(got.alts, ["甲去了", "乙去了"]);
         assert!(hits.load(Ordering::SeqCst) >= 2, "这几家只能靠换路兜住");
@@ -561,7 +827,7 @@ mod http_tests {
     async fn 两条路都问的是_chat_completions_不是_responses() {
         let (base, _, paths) = provider_paths(Mode::Thinking).await;
         let s = spec(&base, "paths-1");
-        let _: Alts = extract(&s, "sk-x", "p", "q").await.unwrap();
+        let _: Alts = extract(&s, "sk-x", "p", "q", silent()).await.unwrap();
 
         let got = paths.lock().unwrap().clone();
         assert!(got.len() >= 2, "两条路都该发过请求：{got:?}");
@@ -570,11 +836,50 @@ mod http_tests {
         }
     }
 
+    /// **提示词让模型调的那个工具，必须就是请求里登记的那个。**
+    ///
+    /// 这个洞真踩过：照抄 rig `ExtractorBuilder` 的提示词（里面写死了「调
+    /// `submit`」），而 `submit` 这个名字是它用 `pub(crate)` 的
+    /// `AgentRunner::output_tool()` 改的，外面改不了 —— 于是请求里登记的是
+    /// `final_result`，提示词却让模型调 `submit`。模型照着提示词调，rig 判成
+    /// 「调了一个不存在的工具」，报错原话是：
+    ///
+    /// ```text
+    /// model attempted to call unknown or disallowed tool `submit`.
+    /// Allowed tools for this turn: ["final_result"]
+    /// ```
+    ///
+    /// 看着像模型不听话，其实是我们自己把提示词和工具表说成了两件事。
+    #[tokio::test]
+    async fn 提示词里让模型调的工具_和请求里登记的是同一个() {
+        let bodies: Bodies = Arc::new(Mutex::new(Vec::new()));
+        let (base, _) =
+            provider_full(Mode::Thinking, Arc::new(Mutex::new(Vec::new())), bodies.clone()).await;
+        // deepseek 那支躲开了强制 tool_choice，所以第一次请求就是带工具表的那条
+        let s = spec_of("deepseek", &base, "toolname-1");
+        let _: Alts = extract(&s, "sk-x", "你是编剧。", "q", silent()).await.unwrap();
+
+        let body = bodies.lock().unwrap().first().cloned().unwrap();
+        assert!(body.contains("\"tools\":["), "这条请求该带工具表：{body}");
+        let tool = advertised_tool(&body);
+        assert!(
+            body.contains(&format!("`{tool}`")),
+            "提示词里没提到登记的那个工具 `{tool}`"
+        );
+        // 反面：提示词里不该出现别的工具名。写死 `submit` 就是这么漏的
+        assert!(
+            tool == "submit" || !body.contains("`submit`"),
+            "提示词里让模型调 `submit`，可登记的是 `{tool}`"
+        );
+    }
+
     #[tokio::test]
     async fn 两条路都不通时如实报错_不假装成功() {
         let (base, _) = provider(Mode::Broken).await;
         let s = spec(&base, "broken-1");
-        let e = extract::<Alts>(&s, "sk-x", "p", "q").await.unwrap_err();
+        let said = Said::default();
+        let e = extract::<Alts>(&s, "sk-x", "p", "q", &said.sink()).await.unwrap_err();
+        assert_eq!(said.text(), "", "一个字都没吐过，界面上不该留下半句话");
         // 换路之后仍然失败，报的是真实原因而不是「解析不出来」
         assert!(matches!(e.code(), "http" | "decode"), "报的是 {}", e.code());
         assert!(e.to_string().contains("400") || e.to_string().contains("Thinking"),

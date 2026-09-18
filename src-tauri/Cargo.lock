@@ -7833,6 +7833,7 @@ dependencies = [
 name = "studio-agent"
 version = "0.1.0"
 dependencies = [
+ "futures",
  "rig",
  "schemars 1.2.2",
  "serde",
