@@ -122,6 +122,7 @@ function MessageView({ msg }: { msg: AgentMessage }) {
     <div className="amsg amsg--ai">
       {who && <SpeakerTag p={who} />}
       {!!msg.steps?.length && <StepList steps={msg.steps} done={msg.stepDone ?? 0} />}
+      {msg.think && <ThinkBlock text={msg.think} open={!msg.text} />}
       {msg.text
         ? <div className="amsg__body">{renderRich(msg.text)}{msg.streaming && <span className="caret" />}</div>
         : msg.streaming && !msg.steps?.length ? <span className="caret" /> : null}
@@ -132,6 +133,28 @@ function MessageView({ msg }: { msg: AgentMessage }) {
           verdict={msg.verdict ?? 'pending'} hold={msg.hold} />
       )}
     </div>
+  );
+}
+
+/**
+ * 思考模型的推理过程。
+ *
+ * **为什么要摆出来**：思考模型在开口之前会先想很久，只流正文的话那半分钟
+ * 界面上一个字都没有 —— 「没有流式输出」这个观感只解掉一半。
+ *
+ * **为什么正文一开口就折起来**：这是模型的草稿，不是它的回答。摊着比正文
+ * 还长，会把真正要读的那段挤下去；但也不能等它想完才出现，那就白摆了。
+ * 所以还没出正文时展开、出了正文就收起来，标题上如实写多少字。
+ */
+function ThinkBlock({ text, open }: { text: string; open: boolean }) {
+  return (
+    <details className="athink" open={open}>
+      <summary className="athink__sum">
+        <Icon name="spark" />
+        思考过程 · {text.length} 字
+      </summary>
+      <div className="athink__body">{text}</div>
+    </details>
   );
 }
 

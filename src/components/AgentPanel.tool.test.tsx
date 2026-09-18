@@ -14,7 +14,7 @@ function renderWith(tool: ToolRun): string {
   const host = document.createElement('div');
   document.body.appendChild(host);
   const root = createRoot(host);
-  // step 要和 ui store 一致：面板挂载时会 syncStep，换了环节就清会话（这是对的）
+  // step 要和 ui store 一致：面板挂载时会 syncStep，换了环节会换掉当班的那位
   useAgent.setState({
     messages: [{ id: 1, who: 'ai', agentId: 'editor', text: '', tool }],
     runningId: null,
@@ -33,7 +33,7 @@ const base = { id: 'file.export' as const, name: '导出文件', args: {} };
  * 渲染当前 store 状态下的面板。
  *
  * 各组自己 setState 之后调它 —— `step` 必须和 ui store 对齐，
- * 否则面板挂载时 syncStep 会认为换了环节，把注入的消息清掉（那是对的行为）。
+ * 否则面板挂载时 syncStep 会认为换了环节，把注入消息的 agentId 换成别人。
  */
 function render(): string {
   useAgent.setState({ step: useUi.getState().step, runningId: null });

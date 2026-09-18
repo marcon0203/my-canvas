@@ -133,9 +133,21 @@ pub fn json_of(raw: &str) -> Option<&str> {
 /// 每轮也就调几百次，虚调用的开销不值得计较。
 pub type Deltas<'a> = &'a (dyn Fn(&str) + Sync);
 
+/// 一轮运行往外发的两股文字。
+///
+/// **分成两股而不是拌在一起**：思考模型在开口之前会先想很久，那段推理不是
+/// 产物的一部分，混进正文就等于把模型的草稿当成了它的回答。但它也不能扔掉 ——
+/// 不然思考的那半分钟界面上一个字都没有，「没有流式输出」这个观感只解了一半。
+pub struct Out<'a> {
+    /// 产物里给人看的那段话（JSON 里的 `reply` 字段）
+    pub reply: Deltas<'a>,
+    /// 思考模型的推理过程。不是所有模型都有
+    pub think: Deltas<'a>,
+}
+
 /// 不要流式时传它。测试里用得上 —— 那些用例关心的是结构，不是观感
-pub fn silent() -> Deltas<'static> {
-    &|_: &str| {}
+pub fn silent() -> Out<'static> {
+    Out { reply: &|_: &str| {}, think: &|_: &str| {} }
 }
 
 /// 正文从流里的哪儿来。
@@ -158,7 +170,7 @@ async fn drive(
     agent: rig::Agent,
     prompt: &str,
     from: Src,
-    deltas: Deltas<'_>,
+    out: &Out<'_>,
 ) -> (Result<String>, usize) {
     use crate::stream::ReplyScan;
     use futures::StreamExt;
@@ -169,7 +181,7 @@ async fn drive(
     let mut scan = ReplyScan::default();
     // 盯住第一个工具调用。并发的几路参数拌在一起，刨出来的就是一段乱码
     let mut call: Option<String> = None;
-    let mut out = String::new();
+    let mut final_out = String::new();
 
     while let Some(item) = stream.next().await {
         let item = match item {
@@ -177,6 +189,13 @@ async fn drive(
             Err(e) => return (Err(classify(&e.to_string())), scan.sent()),
         };
         let chunk = match (from, item) {
+            // 推理过程：两条路都收。它在 `reply` 之前就来了，正是要填上的那段空白
+            (_, MultiTurnStreamItem::StreamAssistantItem(
+                StreamedAssistantContent::ReasoningDelta { reasoning, .. },
+            )) => {
+                (out.think)(&reasoning);
+                None
+            }
             (Src::Text, MultiTurnStreamItem::StreamAssistantItem(
                 StreamedAssistantContent::Text(t),
             )) => Some(t.text),
@@ -192,7 +211,7 @@ async fn drive(
                 }
             }
             (_, MultiTurnStreamItem::FinalResponse(r)) => {
-                out = r.output;
+                final_out = r.output;
                 None
             }
             _ => None,
@@ -200,11 +219,11 @@ async fn drive(
         if let Some(c) = chunk {
             let add = scan.push(&c);
             if !add.is_empty() {
-                deltas(&add);
+                (out.reply)(&add);
             }
         }
     }
-    (Ok(out), scan.sent())
+    (Ok(final_out), scan.sent())
 }
 
 /// 把最终那段输出解析成 `T`。
@@ -266,14 +285,14 @@ async fn by_tool<T>(
     api_key: &str,
     preamble: &str,
     prompt: &str,
-    deltas: Deltas<'_>,
+    out: &Out<'_>,
 ) -> (Result<T>, usize)
 where
     T: JsonSchema + DeserializeOwned + Serialize + Send + Sync + 'static,
 {
     let agent = tool_agent::<T>(spec, api_key, preamble);
-    let (out, sent) = drive(agent, prompt, Src::ToolArgs, deltas).await;
-    (out.and_then(|o| parse(&o)), sent)
+    let (got, sent) = drive(agent, prompt, Src::ToolArgs, out).await;
+    (got.and_then(|o| parse(&o)), sent)
 }
 
 /// 供应商的错误分两类：**不支持强制工具调用**要换路，其它要如实报。
@@ -300,7 +319,7 @@ async fn by_prompt<T>(
     api_key: &str,
     preamble: &str,
     prompt: &str,
-    deltas: Deltas<'_>,
+    out: &Out<'_>,
 ) -> Result<T>
 where
     T: JsonSchema + DeserializeOwned + Serialize + Send + Sync + 'static,
@@ -316,8 +335,8 @@ where
         b = b.temperature(t);
     }
 
-    let (out, _) = drive(b.build(), prompt, Src::Text, deltas).await;
-    parse(&out?)
+    let (got, _) = drive(b.build(), prompt, Src::Text, out).await;
+    parse(&got?)
 }
 
 /// 错误里带上模型原话的开头，方便排查；但别把整段几千字都塞进错误
@@ -337,7 +356,7 @@ pub async fn extract<T>(
     api_key: &str,
     preamble: &str,
     prompt: &str,
-    deltas: Deltas<'_>,
+    out: &Out<'_>,
 ) -> Result<T>
 where
     T: JsonSchema + DeserializeOwned + Serialize + Send + Sync + 'static,
@@ -345,10 +364,10 @@ where
     let key = key_of(spec);
     let skip_tool = plain_only().lock().map(|s| s.contains(&key)).unwrap_or(false);
     if skip_tool {
-        return by_prompt(spec, api_key, preamble, prompt, deltas).await;
+        return by_prompt(spec, api_key, preamble, prompt, out).await;
     }
 
-    let (got, sent) = by_tool(spec, api_key, preamble, prompt, deltas).await;
+    let (got, sent) = by_tool(spec, api_key, preamble, prompt, out).await;
     match got {
         Ok(v) => Ok(v),
         // **已经吐过字就不换路**：换一条路是从头再说一遍，界面上会出现两段
@@ -358,7 +377,7 @@ where
             if let Ok(mut s) = plain_only().lock() {
                 s.insert(key);
             }
-            by_prompt(spec, api_key, preamble, prompt, deltas).await
+            by_prompt(spec, api_key, preamble, prompt, out).await
         }
         Err(e) => Err(e),
     }
@@ -568,9 +587,20 @@ mod http_tests {
             .unwrap_or_else(|| "final_result".to_string())
     }
 
+    /// 思考模型开口之前那段推理。**两条路前面都加上** ——
+    /// 真接口就是这样，而且它正是「等待期一片空白」要填的那段
+    const THINKING: &str = "先看前后两场定了什么，再想三条差别落在哪";
+
+    fn think_frames() -> Vec<String> {
+        pieces(THINKING, 11)
+            .into_iter()
+            .map(|p| chunk(serde_json::json!({ "reasoning_content": p }), None))
+            .collect()
+    }
+
     /// 工具那条的 SSE：输出工具的参数分好几帧来
     fn tool_frames(tool: &str) -> Vec<String> {
-        let mut f = Vec::new();
+        let mut f = think_frames();
         for (i, p) in pieces(ARGS, 7).into_iter().enumerate() {
             // 第一帧才带 id 与函数名，后面只带参数片段 —— 真接口就是这样
             let call = if i == 0 {
@@ -590,10 +620,12 @@ mod http_tests {
     /// 提示词那条的 SSE：正文分好几帧来，还裹着思考块和围栏
     fn text_frames() -> Vec<String> {
         let body = format!("<think>先想想给哪三条</think>\n```json\n{ARGS}\n```");
-        let mut f: Vec<String> = pieces(&body, 9)
-            .into_iter()
-            .map(|p| chunk(serde_json::json!({ "content": p }), None))
-            .collect();
+        let mut f = think_frames();
+        f.extend(
+            pieces(&body, 9)
+                .into_iter()
+                .map(|p| chunk(serde_json::json!({ "content": p }), None)),
+        );
         f.push(chunk(serde_json::json!({}), Some("stop")));
         f
     }
@@ -726,6 +758,11 @@ mod http_tests {
         crate::agent::resolve(&cfg, "你是编剧。", &globals, &providers).unwrap()
     }
 
+    /// 只关心正文时用它：推理过程扔掉
+    fn reply_only<'a>(reply: &'a (dyn Fn(&str) + Sync)) -> Out<'a> {
+        Out { reply, think: &|_: &str| {} }
+    }
+
     /// 收流式正文，**按块记**。`Fn(&str)`，所以内部得自己加锁。
     ///
     /// 只记一整段的话，「真流式」和「等答完再一次性发出来」看起来一模一样 ——
@@ -737,6 +774,7 @@ mod http_tests {
         fn sink(&self) -> impl Fn(&str) + Sync + '_ {
             move |t: &str| self.0.lock().unwrap().push(t.to_string())
         }
+
         fn text(&self) -> String {
             self.0.lock().unwrap().concat()
         }
@@ -751,7 +789,7 @@ mod http_tests {
         let s = spec(&base, "thinking-1");
         let said = Said::default();
         let got: Alts =
-            extract(&s, "sk-x", "你是编剧。", "给三条走向", &said.sink()).await.unwrap();
+            extract(&s, "sk-x", "你是编剧。", "给三条走向", &reply_only(&said.sink())).await.unwrap();
 
         assert_eq!(got.reply, "差别在谁动手");
         assert_eq!(got.alts, ["甲去了", "乙去了"]);
@@ -768,9 +806,9 @@ mod http_tests {
         let (base, hits) = provider(Mode::Thinking).await;
         let s = spec(&base, "thinking-2");
 
-        let _: Alts = extract(&s, "sk-x", "p", "q", silent()).await.unwrap();
+        let _: Alts = extract(&s, "sk-x", "p", "q", &silent()).await.unwrap();
         let first = hits.load(Ordering::SeqCst);
-        let _: Alts = extract(&s, "sk-x", "p", "q", silent()).await.unwrap();
+        let _: Alts = extract(&s, "sk-x", "p", "q", &silent()).await.unwrap();
         let second = hits.load(Ordering::SeqCst) - first;
 
         assert!(first >= 2, "第一次要试两条路，实际 {first}");
@@ -793,7 +831,7 @@ mod http_tests {
         let s = spec_of("deepseek", &base, "deepseek-reasoner");
         let said = Said::default();
         let got: Alts =
-            extract(&s, "sk-x", "你是编剧。", "给三条走向", &said.sink()).await.unwrap();
+            extract(&s, "sk-x", "你是编剧。", "给三条走向", &reply_only(&said.sink())).await.unwrap();
 
         assert_eq!(got.alts, ["甲去了", "乙去了"]);
         assert_eq!(hits.load(Ordering::SeqCst), 1, "该一次就成，不用换路");
@@ -811,7 +849,7 @@ mod http_tests {
         // 火山方舟、阿里百炼、腾讯混元、自定义端点 rig 都没有专属模块
         let s = spec_of("custom", &base, "generic-1");
         let got: Alts =
-            extract(&s, "sk-x", "你是编剧。", "给三条走向", silent()).await.unwrap();
+            extract(&s, "sk-x", "你是编剧。", "给三条走向", &silent()).await.unwrap();
 
         assert_eq!(got.alts, ["甲去了", "乙去了"]);
         assert!(hits.load(Ordering::SeqCst) >= 2, "这几家只能靠换路兜住");
@@ -827,13 +865,36 @@ mod http_tests {
     async fn 两条路都问的是_chat_completions_不是_responses() {
         let (base, _, paths) = provider_paths(Mode::Thinking).await;
         let s = spec(&base, "paths-1");
-        let _: Alts = extract(&s, "sk-x", "p", "q", silent()).await.unwrap();
+        let _: Alts = extract(&s, "sk-x", "p", "q", &silent()).await.unwrap();
 
         let got = paths.lock().unwrap().clone();
         assert!(got.len() >= 2, "两条路都该发过请求：{got:?}");
         for p in &got {
             assert!(p.ends_with("/chat/completions"), "问错接口了：{p}");
         }
+    }
+
+    /// **思考模型的等待期不该是一片空白。**
+    ///
+    /// reply 是真流式了，但思考模型在开口之前会先想很久 —— 那段时间产物 JSON
+    /// 里一个字都没有。推理过程得单独接出来，而且**不能混进正文**：那是模型
+    /// 的草稿，不是它的回答。
+    #[tokio::test]
+    async fn 推理过程单独一路出来_不混进正文() {
+        let (base, _) = provider(Mode::Thinking).await;
+        let s = spec_of("deepseek", &base, "reason-1");
+        let reply = Said::default();
+        let think = Said::default();
+        let r = reply.sink();
+        let t = think.sink();
+        let got: Alts = extract(&s, "sk-x", "p", "q", &Out { reply: &r, think: &t })
+            .await
+            .unwrap();
+
+        assert_eq!(got.reply, "差别在谁动手");
+        assert_eq!(think.text(), THINKING, "推理过程该完整地走 think 这一路");
+        assert!(think.chunks() > 1, "也该是分好几块来的");
+        assert_eq!(reply.text(), "差别在谁动手", "推理过程不该漏进正文");
     }
 
     /// **提示词让模型调的那个工具，必须就是请求里登记的那个。**
@@ -857,7 +918,7 @@ mod http_tests {
             provider_full(Mode::Thinking, Arc::new(Mutex::new(Vec::new())), bodies.clone()).await;
         // deepseek 那支躲开了强制 tool_choice，所以第一次请求就是带工具表的那条
         let s = spec_of("deepseek", &base, "toolname-1");
-        let _: Alts = extract(&s, "sk-x", "你是编剧。", "q", silent()).await.unwrap();
+        let _: Alts = extract(&s, "sk-x", "你是编剧。", "q", &silent()).await.unwrap();
 
         let body = bodies.lock().unwrap().first().cloned().unwrap();
         assert!(body.contains("\"tools\":["), "这条请求该带工具表：{body}");
@@ -878,7 +939,7 @@ mod http_tests {
         let (base, _) = provider(Mode::Broken).await;
         let s = spec(&base, "broken-1");
         let said = Said::default();
-        let e = extract::<Alts>(&s, "sk-x", "p", "q", &said.sink()).await.unwrap_err();
+        let e = extract::<Alts>(&s, "sk-x", "p", "q", &reply_only(&said.sink())).await.unwrap_err();
         assert_eq!(said.text(), "", "一个字都没吐过，界面上不该留下半句话");
         // 换路之后仍然失败，报的是真实原因而不是「解析不出来」
         assert!(matches!(e.code(), "http" | "decode"), "报的是 {}", e.code());

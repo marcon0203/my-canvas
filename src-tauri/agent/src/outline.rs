@@ -97,10 +97,10 @@ pub async fn draft(
     api_key: &str,
     preamble: &str,
     input: &OutlineInput,
-    deltas: crate::structured::Deltas<'_>,
+    out: &crate::structured::Out<'_>,
 ) -> Result<OutlineDraft> {
     let mut draft: OutlineDraft =
-        crate::structured::extract(spec, api_key, preamble, &prompt_of(input), deltas).await?;
+        crate::structured::extract(spec, api_key, preamble, &prompt_of(input), out).await?;
     number(&mut draft, input.beat_count);
     Ok(draft)
 }

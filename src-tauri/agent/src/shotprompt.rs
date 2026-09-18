@@ -125,10 +125,10 @@ pub async fn draft(
     api_key: &str,
     preamble: &str,
     input: &PromptInput,
-    deltas: crate::structured::Deltas<'_>,
+    out: &crate::structured::Out<'_>,
 ) -> Result<PromptDraft> {
     let mut draft: PromptDraft =
-        crate::structured::extract(spec, api_key, preamble, &prompt_of(input), deltas).await?;
+        crate::structured::extract(spec, api_key, preamble, &prompt_of(input), out).await?;
     reconcile(&mut draft, input);
     Ok(draft)
 }

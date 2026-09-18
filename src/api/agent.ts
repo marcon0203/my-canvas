@@ -27,6 +27,14 @@ export type AgentEvent =
   | { t: 'plan'; plan: Plan }
   | { t: 'step'; index: number }
   | { t: 'delta'; text: string }
+  /**
+   * 思考模型开口之前的推理过程。**与 delta 分开**：那是模型的草稿，不是它的
+   * 回答，混进正文就等于把草稿当答案。界面上单独摆一块，正文一开口就折起来。
+   *
+   * 浏览器 mock 那条路不发这个 —— 本地草稿没有「思考」这回事，假造一段
+   * 只会让人以为它真在想。
+   */
+  | { t: 'think'; text: string }
   /** 产物在正文说完之后才交付 —— 先解释，再给东西 */
   | { t: 'proposal'; proposal: NonNullable<Plan['proposal']> }
   /** 当班 Agent 接不了，交给对的那位 */
@@ -375,6 +383,9 @@ async function* pump(
         break;
       case 'delta':
         push({ t: 'delta', text: e.text });
+        break;
+      case 'think':
+        push({ t: 'think', text: e.text });
         break;
       case 'proposal':
       case 'prompts':

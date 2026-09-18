@@ -1067,6 +1067,29 @@ body { background: var(--color-bg-canvas); overflow: hidden; }
 }
 .atool__act { display: flex; align-items: center; gap: var(--space-2); margin-top: var(--space-3); }
 
+/* ---- 思考过程（思考模型开口之前那段推理） ----
+   刻意比正文轻一档：这是模型的草稿，不该和它的回答抢注意力。
+   等宽小字 + 次要色 + 限高滚动，摊开也不会把正文挤下去 */
+.athink {
+  margin-top: var(--space-2);
+  border-left: 2px solid var(--color-border-default);
+  padding-left: var(--space-3);
+}
+.athink__sum {
+  display: flex; align-items: center; gap: var(--space-2);
+  font-size: 12px; color: var(--color-text-secondary);
+  cursor: pointer; user-select: none; list-style: none;
+}
+/* Safari 还认这个伪元素，不去掉会多一个三角 */
+.athink__sum::-webkit-details-marker { display: none; }
+.athink__sum > svg { width: 12px; height: 12px; flex: 0 0 auto; }
+.athink__sum:hover { color: var(--color-text-primary); }
+.athink__body {
+  margin-top: var(--space-2); max-height: 180px; overflow-y: auto;
+  font-size: 12px; line-height: 1.7; color: var(--color-text-secondary);
+  white-space: pre-wrap; overflow-wrap: anywhere;
+}
+
 /* ---- 设置页：服务商卡片 / Agent 配置卡片 ---- */
 .setgrid { display: grid; gap: var(--space-4); }
 

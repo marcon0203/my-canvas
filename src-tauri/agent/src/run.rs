@@ -18,6 +18,9 @@ use std::collections::HashMap;
 pub enum RunEvent {
     Step { index: usize },
     Delta { text: String },
+    /// 思考模型在开口之前的推理过程。**与 Delta 分开**：那不是产物的一部分，
+    /// 混进正文等于把模型的草稿当成了它的回答
+    Think { text: String },
     Proposal { draft: OutlineDraft },
     /// 补写提示词的产物。**刻意与 Proposal 分开**：几种产物形状不同，
     /// 合成一个 untagged 字段会让前端靠猜字段来分辨。
@@ -104,13 +107,23 @@ fn prepare<I, S: Sink, K: Keys>(run: &Run<'_, I>, sink: &S, keys: &K) -> Option<
     }
 }
 
-/// 正文的出口：模型每吐出一点就发一个 Delta。
+/// 文字的出口：模型每吐出一点就发一个事件。
 ///
 /// 原来这儿是「等模型答完，再把整段按两字一块切开发出去」。观感像流式，
 /// 实际上用户先对着空面板干等一整轮，反馈原话是「没有流式输出吗？」。
-/// 现在这个闭包交给 `structured::extract`，由它在收流的过程中调。
-fn deltas<S: Sink + Sync>(sink: &S) -> impl Fn(&str) + Sync {
-    move |text: &str| sink.emit(RunEvent::Delta { text: text.to_string() })
+/// 现在这两个闭包交给 `structured::extract`，由它在收流的过程中调。
+///
+/// **推理过程也要发。** 思考模型在开口之前会先想很久，只发正文的话那段时间
+/// 界面上还是一个字都没有 —— 只解了一半。
+/// **为什么是宏而不是函数**：`Out` 借着那两个闭包，闭包又借着 sink ——
+/// 一个返回 `Out` 的函数里，闭包是临时值，出了函数就没了。所以这两个绑定
+/// 必须落在调用方的作用域里，而三条链路又都要这三行。
+macro_rules! out_of {
+    ($sink:expr, $out:ident) => {
+        let reply = |t: &str| $sink.emit(RunEvent::Delta { text: t.to_string() });
+        let think = |t: &str| $sink.emit(RunEvent::Think { text: t.to_string() });
+        let $out = crate::structured::Out { reply: &reply, think: &think };
+    };
 }
 
 /// 跑一次「起草大纲」。
@@ -121,7 +134,8 @@ pub async fn outline_draft<S: Sink + Sync, K: Keys>(run: OutlineRun<'_>, sink: S
     let preamble = preamble_of(&run, &spec);
     // 正文在这一步里就往外流了 —— 第 3 步是收尾（编号、对齐、收拾），
     // 它在正文说完之后才发
-    let draft = match outline::draft(&spec, &key, &preamble, run.input, &deltas(&sink)).await {
+    out_of!(sink, out);
+    let draft = match outline::draft(&spec, &key, &preamble, run.input, &out).await {
         Ok(d) => d,
         Err(e) => return sink.emit(RunEvent::failed(&e)),
     };
@@ -139,7 +153,8 @@ pub async fn shots_prompt<S: Sink + Sync, K: Keys>(run: PromptRun<'_>, sink: S, 
     let preamble = preamble_of(&run, &spec);
     // 正文在这一步里就往外流了 —— 第 3 步是收尾（编号、对齐、收拾），
     // 它在正文说完之后才发
-    let draft = match shotprompt::draft(&spec, &key, &preamble, run.input, &deltas(&sink)).await {
+    out_of!(sink, out);
+    let draft = match shotprompt::draft(&spec, &key, &preamble, run.input, &out).await {
         Ok(d) => d,
         Err(e) => return sink.emit(RunEvent::failed(&e)),
     };
@@ -157,7 +172,8 @@ pub async fn outline_expand<S: Sink + Sync, K: Keys>(run: ExpandRun<'_>, sink: S
     let preamble = preamble_of(&run, &spec);
     // 正文在这一步里就往外流了 —— 第 3 步是收尾（编号、对齐、收拾），
     // 它在正文说完之后才发
-    let draft = match expand::expand(&spec, &key, &preamble, run.input, &deltas(&sink)).await {
+    out_of!(sink, out);
+    let draft = match expand::expand(&spec, &key, &preamble, run.input, &out).await {
         Ok(d) => d,
         Err(e) => return sink.emit(RunEvent::failed(&e)),
     };
@@ -285,9 +301,9 @@ mod tests {
     #[test]
     fn 每来一块就发一个_delta_原样不动() {
         let sink = Collector::default();
-        let out = deltas(&sink);
+        out_of!(sink, out);
         for c in ["补在第二幕：", "那里只有一场，", "撑不住转折。"] {
-            out(c);
+            (out.reply)(c);
         }
         let got: Vec<String> = sink
             .events()

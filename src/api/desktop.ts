@@ -59,6 +59,8 @@ export function maskHint(key: string): string {
 export type RunEvent =
   | { t: 'step'; index: number }
   | { t: 'delta'; text: string }
+  /** 思考模型开口之前的推理过程。与 delta 分开：那不是产物的一部分 */
+  | { t: 'think'; text: string }
   | { t: 'proposal'; draft: OutlineDraft }
   | { t: 'prompts'; draft: PromptDraft }
   | { t: 'alts'; draft: AltsDraft }

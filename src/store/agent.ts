@@ -233,6 +233,9 @@ export const useAgent = create<AgentState>((set, get) => ({
           case 'delta':
             patch((m) => ({ ...m, text: m.text + ev.text }));
             break;
+          case 'think':
+            patch((m) => ({ ...m, think: (m.think ?? '') + ev.text }));
+            break;
           case 'handoff': {
             patch((m) => ({ ...m, handoff: ev.handoff }));
             const to = personaById(ev.handoff.to);
