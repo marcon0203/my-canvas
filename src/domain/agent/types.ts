@@ -52,10 +52,6 @@ export type ProposalPatch =
   | { t: 'timeline'; timeline: Timeline }
   /** `edit.subtitle` 的产物 */
   | { t: 'subtitles'; subtitles: Subtitles }
-  /** `edit.timeline` 的产物：整条时间线换掉（顺序与时长是一起算出来的） */
-  | { t: 'timeline'; timeline: Timeline }
-  /** `edit.subtitle` 的产物 */
-  | { t: 'subtitles'; subtitles: Subtitles }
   | { t: 'run'; action: 'video.batch' | 'edit.autocut' };
 
 /** 产物预览行：采纳前给人看的 diff 摘要 */
@@ -113,6 +109,11 @@ export interface AgentMessage {
   readonly text: string;
   /** 这轮是一次转交，不是一次执行 */
   readonly handoff?: Handoff;
+  /**
+   * 这一轮做的是哪个任务。留着是为了产物采纳之后能说出「接着做什么」——
+   * 从技能卡点进来的那一轮没有队列，跑完就停在那儿，得有个明确的下一步入口
+   */
+  readonly kind?: IntentKind;
   /** ai 消息：这轮跑了哪些步骤，以及跑到第几步 */
   readonly steps?: readonly PlanStep[];
   readonly stepDone?: number;

@@ -150,7 +150,7 @@ function planShotsGenerate(c: AgentContext): Plan {
       step('layers', '每场按「环境 → 动作 → 情绪」拆三镜'),
       step('image', '挂上这场的资产引用'),
     ],
-    reply: `给 ${beats.length} 场各拆了三镜：交代环境、看清动作、靠近情绪。提示词留空了。下一步用「补写提示词」按每镜的景别和引用去写，比现在瞎编一版再改省。`,
+    reply: `给 ${beats.length} 场各拆了三镜：交代环境、看清动作、靠近情绪。提示词留空了。下一步用「补写提示词」按每镜的景别和引用去写，比先粗写一版再逐条改省事。`,
     proposal: {
       title: `新分镜 · ${shots.length} 镜`,
       rows: beats.map((b) => ({ k: b.k, v: `${b.t} · 3 镜` })),

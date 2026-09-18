@@ -913,6 +913,34 @@ body { background: var(--color-bg-canvas); overflow: hidden; }
 }
 @keyframes agent-spin { to { transform: rotate(360deg); } }
 
+/* ---- 计划进度：这一条把「你在一条七步的路上」说出来 ---- */
+.aplan {
+  flex: 0 0 auto; margin: 0 var(--space-4) var(--space-2);
+  padding: var(--space-3); border-radius: var(--radius-card);
+  border: 1px solid var(--color-accent-soft); background: var(--color-accent-soft);
+}
+.aplan__h { display: flex; align-items: center; gap: var(--space-2); }
+.aplan__h svg { width: 13px; height: 13px; color: var(--color-accent); flex: 0 0 auto; }
+.aplan__t { font-size: 13px; font-weight: 600; color: var(--color-text-primary); }
+.aplan__brief {
+  margin: var(--space-2) 0 0; font-size: 12px; line-height: 1.6;
+  color: var(--color-text-secondary);
+}
+/* 剩下几步。编号交给 CSS —— 队列里只有任务名，没有序号 */
+.aplan__rest {
+  margin: var(--space-2) 0 0; padding-left: 18px;
+  font-size: 12px; line-height: 1.9; color: var(--color-text-secondary);
+}
+.aplan__note {
+  margin: var(--space-2) 0 0; font-size: 11px; color: var(--color-text-tertiary);
+}
+
+/* 采纳之后接着做什么 */
+.aprop__next {
+  margin: 0; padding: 0 var(--space-3) var(--space-3);
+  font-size: 12px; line-height: 1.6; color: var(--color-text-secondary);
+}
+
 .aprop {
   margin-top: var(--space-3); border: 1px solid var(--color-border-default);
   border-radius: var(--radius-card); background: var(--color-bg-surface); overflow: hidden;

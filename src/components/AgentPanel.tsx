@@ -3,9 +3,10 @@ import { Icon } from '@/ui/Icon';
 import { useUi } from '@/store/ui';
 import { useAgent } from '@/store/agent';
 import { useSettings } from '@/store/settings';
-import { faceClass, personaById, skillsOfKinds } from '@/domain/agent/roster';
+import { faceClass, intentName, personaById, skillsOfKinds } from '@/domain/agent/roster';
+import { nextAfter } from '@/domain/agent/pipeline';
 import type { Persona } from '@/domain/agent/roster';
-import type { AgentMessage, Proposal, ToolRun } from '@/domain/agent/types';
+import type { AgentMessage, IntentKind, Proposal, ToolRun } from '@/domain/agent/types';
 import { useNavigate } from 'react-router';
 
 /**
@@ -59,6 +60,8 @@ export function AgentPanel() {
         <button className="tbtn" title="会话历史" aria-label="会话历史" style={{ padding: '0 8px' }}
           onClick={() => toast('会话历史：本地模拟阶段只保留当前会话')}><Icon name="hist" /></button>
       </div>
+
+      <PlanBar />
 
       <div className="agent__log" id="alog" ref={logRef}>
         {messages.length > 0
@@ -118,7 +121,10 @@ function MessageView({ msg }: { msg: AgentMessage }) {
         : msg.streaming && !msg.steps?.length ? <span className="caret" /> : null}
       {msg.tool && <ToolCard msgId={msg.id} t={msg.tool} />}
       {msg.handoff && <HandoffCard to={personaById(msg.handoff.to)} />}
-      {msg.proposal && <ProposalCard msgId={msg.id} p={msg.proposal} verdict={msg.verdict ?? 'pending'} hold={msg.hold} />}
+      {msg.proposal && (
+        <ProposalCard msgId={msg.id} p={msg.proposal} kind={msg.kind}
+          verdict={msg.verdict ?? 'pending'} hold={msg.hold} />
+      )}
     </div>
   );
 }
@@ -220,14 +226,62 @@ function StepList({ steps, done }: { steps: AgentMessage['steps'] & object; done
   );
 }
 
-function ProposalCard({ msgId, p, verdict, hold }: {
+/**
+ * 计划进度。
+ *
+ * 队列一直在 store 里，但界面上**一个字都没说** —— 用户看到的是一次孤立的
+ * 结果，不知道自己在一条七步的路上，也不知道点采纳之后会接着跑。
+ * 这一条就是把那件事说出来。
+ */
+function PlanBar() {
+  const queue = useAgent((s) => s.queue);
+  const total = useAgent((s) => s.planTotal);
+  const brief = useAgent((s) => s.brief);
+  const stopPlan = useAgent((s) => s.stopPlan);
+  if (!total || !queue.length) return null;
+
+  const at = total - queue.length;
+  return (
+    <div className="aplan">
+      <div className="aplan__h">
+        <Icon name="layers" />
+        <span className="aplan__t">计划 · 第 {at} / {total} 步</span>
+        <div className="spacer" />
+        <button className="tbtn" onClick={stopPlan} title="停下剩下的步骤，已采纳的产物都留着">
+          停止
+        </button>
+      </div>
+      {brief && <p className="aplan__brief">{brief}</p>}
+      <ol className="aplan__rest">
+        {queue.slice(0, 3).map((st) => (
+          <li key={st.kind}>{intentName(st.kind)}</li>
+        ))}
+        {queue.length > 3 && <li className="dim">还有 {queue.length - 3} 步</li>}
+      </ol>
+      <p className="aplan__note">每一步都等你点「采纳」才继续 —— 不会背着你往下跑。</p>
+    </div>
+  );
+}
+
+function ProposalCard({ msgId, p, verdict, hold, kind }: {
   msgId: number; p: Proposal;
   verdict: NonNullable<AgentMessage['verdict']>;
   /** 自主模式被边界挡住时的说明 */
   hold?: string;
+  /** 这一轮做的是哪个任务 —— 用来说「接着做什么」 */
+  kind?: IntentKind;
 }) {
   const accept = useAgent((s) => s.accept);
   const discard = useAgent((s) => s.discard);
+  const send = useAgent((s) => s.send);
+  const queue = useAgent((s) => s.queue);
+  const projectKind = useAgent((s) => s.kind);
+
+  // 有队列：采纳就接着跑下一步。没队列（单点一个技能）：跑完给个下一步入口，
+  // 不然用户盯着一张卡不知道往哪走
+  const queued = queue[0];
+  const loose = !queued && kind ? nextAfter(projectKind, kind) : undefined;
+
   return (
     <div className={`aprop aprop--${verdict}`}>
       <div className="aprop__h">
@@ -249,15 +303,33 @@ function ProposalCard({ msgId, p, verdict, hold }: {
         </div>
       )}
       {verdict === 'pending' ? (
-        <div className="aprop__act">
-          <button className="tbtn tbtn--pri" onClick={() => accept(msgId)}><Icon name="check" />采纳</button>
-          <button className="tbtn" onClick={() => discard(msgId)}><Icon name="x" />丢弃</button>
-        </div>
+        <>
+          <div className="aprop__act">
+            <button className="tbtn tbtn--pri" onClick={() => accept(msgId)}>
+              <Icon name="check" />{queued ? '采纳并继续' : '采纳'}
+            </button>
+            <button className="tbtn" onClick={() => discard(msgId)}><Icon name="x" />丢弃</button>
+          </div>
+          {queued && (
+            <p className="aprop__next">
+              采纳后接着做：<b>{intentName(queued.kind)}</b> —— {queued.why}
+            </p>
+          )}
+        </>
       ) : (
-        <div className="aprop__act aprop__act--settled">
-          <Icon name={verdict === 'accepted' ? 'check' : 'x'} />
-          {verdict === 'accepted' ? '已写入项目 · 可 Ctrl+Z 撤销' : '已丢弃'}
-        </div>
+        <>
+          <div className="aprop__act aprop__act--settled">
+            <Icon name={verdict === 'accepted' ? 'check' : 'x'} />
+            {verdict === 'accepted' ? '已写入项目 · 可 Ctrl+Z 撤销' : '已丢弃'}
+          </div>
+          {verdict === 'accepted' && loose && (
+            <div className="aprop__act">
+              <button className="tbtn" onClick={() => send(loose.why, loose.kind)}>
+                <Icon name="right" />接着做：{intentName(loose.kind)}
+              </button>
+            </div>
+          )}
+        </>
       )}
     </div>
   );

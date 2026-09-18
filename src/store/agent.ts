@@ -36,9 +36,19 @@ export interface AgentState {
    * 丢弃或中断就停在这儿，不会自己往下冲。
    */
   queue: Stage[];
+  /**
+   * 这条流水线一共几步。**不能用 queue.length 反推** —— 队列是边跑边弹空的，
+   * 弹完就说不出「第几步 / 共几步」了，而界面必须说得出，否则用户看到的是
+   * 一次孤立的结果，不知道自己在一条七步的路上
+   */
+  planTotal: number;
   /** 这条流水线要做什么，摆在会话开头，也写进项目的 brief.md */
   brief: string;
+  /** 这个项目是哪一类。决定主干跳哪几步，也决定「接着做什么」 */
+  kind: ProjectKind;
   startPipeline: (brief: string, kind: ProjectKind) => void;
+  /** 停下剩下的步骤，但不动已经采纳的产物 */
+  stopPlan: () => void;
   /** 环节变了就清空。send 会先认领当前环节，所以「跳页并发起」不会被清掉 */
   syncStep: (step: string) => void;
   stop: () => void;
@@ -99,7 +109,9 @@ export const useAgent = create<AgentState>((set, get) => ({
   step: '',
   agentId: 'writer',
   queue: [],
+  planTotal: 0,
   brief: '',
+  kind: '短剧',
 
   syncStep: (step) => {
     if (get().step === step) return;
@@ -127,7 +139,7 @@ export const useAgent = create<AgentState>((set, get) => ({
       messages: [
         ...(sameSession ? s.messages : []),
         ...(relayed ? [] : [{ id: meId, who: 'me' as const, text }]),
-        { id: aiId, who: 'ai', agentId, text: '', streaming: true, stepDone: 0 },
+        { id: aiId, who: 'ai', agentId, text: '', streaming: true, stepDone: 0, kind },
       ],
       runningId: aiId,
     }));
@@ -229,9 +241,15 @@ export const useAgent = create<AgentState>((set, get) => ({
 
   startPipeline: (brief, kind) => {
     const stages = pipelineFor(kind);
-    set({ brief, queue: stages.slice(1) });
+    set({ brief, kind, queue: stages.slice(1), planTotal: stages.length });
     // 第一步带上原始需求，后面几步靠项目里已有的内容推进
     get().send(brief, stages[0]!.kind);
+  },
+
+  stopPlan: () => {
+    if (!get().queue.length) return;
+    set({ queue: [] });
+    useUi.getState().toast('剩下的步骤停下了。已采纳的产物都留着，想接着跑再说一句。');
   },
 
   runTool: (tool, args = {}) => {

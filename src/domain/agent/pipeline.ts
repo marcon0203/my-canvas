@@ -43,6 +43,22 @@ export function pipelineFor(kind: ProjectKind): Stage[] {
   return BACKBONE.filter((s) => !skip[s.kind]);
 }
 
+/**
+ * 主干里这一步之后该做什么。
+ *
+ * 用在「单点一个技能跑完了，接着做什么」上 —— 从技能卡点进来的那一轮没有
+ * 队列，跑完就停在那儿，用户不知道下一步在哪。给一个明确的入口比让人自己
+ * 猜顺序好。
+ *
+ * 不在主干里的任务（润色、换画风、延展走向、成本报告）返回 undefined ——
+ * 它们是随时可做的旁支，不该假装有个「下一步」。
+ */
+export function nextAfter(kind: ProjectKind, task: string): Stage | undefined {
+  const line = pipelineFor(kind);
+  const at = line.findIndex((s) => s.kind === task);
+  return at < 0 ? undefined : line[at + 1];
+}
+
 /** 这个类型跳过了什么，界面上如实说一句 */
 export function skippedFor(kind: ProjectKind): { kind: string; name: string; why: string }[] {
   return Object.entries(SKIP[kind] ?? {}).map(([k, why]) => ({
