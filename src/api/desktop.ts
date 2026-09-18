@@ -127,8 +127,73 @@ export type RunEvent =
   | { t: 'proposal'; draft: OutlineDraft }
   | { t: 'prompts'; draft: PromptDraft }
   | { t: 'alts'; draft: AltsDraft }
+  /**
+   * 写剧本的产物。`body` 是 Rust 拼好的正文 Markdown —— 场次键与幕标题的
+   * 拼法只在那边有一份，前端不再实现一遍（两边漂移会让结构标记对不上）。
+   */
+  | { t: 'script'; draft: ScriptDraft; body: string }
+  | { t: 'assets'; draft: AssetsCandDraft }
+  /**
+   * 拆镜头的产物。`dropped` 是 Rust 侧核对时丢掉了几条（模型编的场次键、
+   * 不认识的景别）—— **界面上要如实说**，不然「20 镜里收了 17 镜」
+   * 看起来像模型只给了 17 镜。
+   */
+  | { t: 'shots'; draft: ShotsCandDraft; dropped: number }
   | { t: 'done' }
   | { t: 'failed'; code: string; message: string };
+
+/** 与 Rust 侧 `script::ScriptDraft` 同形。**正文的结构标记由 Rust 拼**，不是模型写的 */
+export interface ScriptDraft {
+  reply: string;
+  place: string;
+  time: string;
+  lines: string[];
+}
+
+/** 与 Rust 侧 `assets::AssetsDraft` 同形。aid 不在里面 —— 编号由程序分配 */
+export interface AssetsCandDraft {
+  reply: string;
+  assets: { group: string; name: string; desc: string }[];
+}
+
+/** 与 Rust 侧 `shots::ShotsDraft` 同形。镜号不在里面 —— 采纳时分配 */
+export interface ShotsCandDraft {
+  reply: string;
+  shots: { sceneKey: string; size: string; desc: string; dur: number }[];
+}
+
+/** 与 Rust 侧 `script::ScriptInput` 同形 */
+export interface ScriptInput {
+  project: string;
+  beatKey: string;
+  beatT: string;
+  actTitle?: string;
+  leads?: string[];
+  places?: string[];
+  /** 前一场正文的结尾几行 —— 这一场要接得上它 */
+  prevTail?: string;
+  idea?: string;
+}
+
+export interface AssetsInput {
+  project: string;
+  script?: string;
+  existing?: string[];
+  idea?: string;
+}
+
+export interface BeatBrief2 {
+  k: string;
+  t: string;
+  body?: string;
+}
+
+export interface ShotsInput {
+  project: string;
+  beats?: BeatBrief2[];
+  leads?: string[];
+  idea?: string;
+}
 
 /** 与 Rust 侧 `outline::OutlineDraft` 同形；采纳时直接进项目树 */
 export interface OutlineDraft {
@@ -233,6 +298,39 @@ export async function shotsPrompt(
   const ch = new Channel<RunEvent>();
   ch.onmessage = onEvent;
   await call('agent_shots_prompt', { ...args, onEvent: ch });
+}
+
+/** 写剧本：与起草大纲同一条 Channel 机制，换命令与输入 */
+export async function scriptDraft(
+  args: RunArgs<ScriptInput>,
+  onEvent: (e: RunEvent) => void,
+): Promise<void> {
+  const { invoke: call, Channel } = await import('@tauri-apps/api/core');
+  const ch = new Channel<RunEvent>();
+  ch.onmessage = onEvent;
+  await call('agent_script_draft', { ...args, onEvent: ch });
+}
+
+/** 提取资产 */
+export async function assetsExtract(
+  args: RunArgs<AssetsInput>,
+  onEvent: (e: RunEvent) => void,
+): Promise<void> {
+  const { invoke: call, Channel } = await import('@tauri-apps/api/core');
+  const ch = new Channel<RunEvent>();
+  ch.onmessage = onEvent;
+  await call('agent_assets_extract', { ...args, onEvent: ch });
+}
+
+/** 拆镜头 */
+export async function shotsGenerate(
+  args: RunArgs<ShotsInput>,
+  onEvent: (e: RunEvent) => void,
+): Promise<void> {
+  const { invoke: call, Channel } = await import('@tauri-apps/api/core');
+  const ch = new Channel<RunEvent>();
+  ch.onmessage = onEvent;
+  await call('agent_shots_generate', { ...args, onEvent: ch });
 }
 
 /* ---------------- Skill ---------------- */

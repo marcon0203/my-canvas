@@ -74,11 +74,11 @@ export const TASKS: readonly TaskSpec[] = [
   },
   {
     id: 'script.draft', ...INTENT_META['script.draft'],
-    summary: '为选中场次写正文块：场景描写 + 对白 + 动作。',
+    summary: '为选中场次写正文块：地点时间 + 动作 + 最必要的那几句台词。',
     needs: '大纲里至少有一场。',
     patch: 'blocks', goto: 'script',
-    impl: { by: 'local',
-      note: '本地按模板拼一个骨架：读这一场的标题、所在幕、已有的角色与场景资产，台词和旁白留空位。还没接模型。' },
+    impl: { by: 'model', module: 'agent/src/script.rs',
+      note: '**前一场的结尾会送进提示词**，这一场要接得上它 —— 这是它相对模板的意义。模型只填地点/时间/正文行，场次键与幕标题由 Rust 拼（body_of），块 id 由前端分配。' },
   },
   {
     id: 'script.polish', ...INTENT_META['script.polish'],
@@ -89,11 +89,11 @@ export const TASKS: readonly TaskSpec[] = [
   },
   {
     id: 'assets.extract', ...INTENT_META['assets.extract'],
-    summary: '从剧本正文中提取尚未入库的角色与场景，建立资产条目。',
-    needs: '剧本里出现了资产库里没有的名字。',
+    summary: '从剧本正文里找出反复出现的人、地方、关键道具，立成草稿资产。',
+    needs: '剧本里至少有一个非空的正文块。',
     patch: 'assets', goto: 'assets',
-    impl: { by: 'local',
-      note: '本地按两种写法认：「说话人：台词」里的说话人算角色，「地点 · 时间」这类场景头行里的片段算场景。认不出更复杂的写法，还没接模型。' },
+    impl: { by: 'model', module: 'agent/src/assets.rs',
+      note: '正文真送进去，所以能认出「他/老李/李明」是同一个人，也能写出出图用得上的外形描述。分组只认角色/场景/道具，不合法的整条丢掉；aid 由前端接着库里已有的号编。' },
   },
   {
     id: 'assets.views', ...INTENT_META['assets.views'],
@@ -111,10 +111,11 @@ export const TASKS: readonly TaskSpec[] = [
   },
   {
     id: 'shots.generate', ...INTENT_META['shots.generate'],
-    summary: '为尚无镜头的场次各拆三镜：交代环境、看清动作、靠近情绪。提示词保持留空。',
+    summary: '把尚无镜头的场次各拆成镜头，几镜由这场本身决定。提示词保持留空。',
     needs: '存在尚无任何镜头的场次。',
     patch: 'shots', goto: 'storyboard',
-    impl: { by: 'local', note: '三镜结构本地生成，还没接模型。' },
+    impl: { by: 'model', module: 'agent/src/shots.rs',
+      note: '**不再一律三镜** —— 送正文进去，拆几镜看画面变了几次。场次键与景别由 Rust 核对，模型编的整条丢掉并把丢了几条报到产物卡上；镜号与资产引用由前端分配。' },
   },
   {
     id: 'shots.prompt', ...INTENT_META['shots.prompt'],

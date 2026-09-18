@@ -6,9 +6,12 @@
 use crate::agent::{self, AgentSpec};
 use studio_conf::config::{AgentConfig, ModelRef, ProviderSetting};
 use studio_error::Error;
+use crate::assets::{self, AssetsDraft, AssetsInput};
 use crate::expand::{self, AltsDraft, ExpandInput};
 use crate::outline::{self, OutlineDraft, OutlineInput};
+use crate::script::{self, ScriptDraft, ScriptInput};
 use crate::shotprompt::{self, PromptDraft, PromptInput};
+use crate::shots::{self, ShotsDraft, ShotsInput};
 use studio_skill::{SkillStore, compose_preamble};
 use std::collections::HashMap;
 
@@ -27,6 +30,16 @@ pub enum RunEvent {
     Prompts { draft: PromptDraft },
     /// 延展走向的产物
     Alts { draft: AltsDraft },
+    /// 写剧本的产物。`body` 是拼好的正文 Markdown ——
+    /// **场次键与幕标题的拼法只在 Rust 侧有一份**（`script::body_of`），
+    /// 前端不再实现一遍，两边漂移的话结构标记会对不上
+    Script { draft: ScriptDraft, body: String },
+    /// 提取资产的产物
+    Assets { draft: AssetsDraft },
+    /// 拆镜头的产物。`dropped` 是核对时丢掉了几条（模型编的场次键、
+    /// 不认识的景别）—— **要带到界面上如实说**，不能让「20 镜里收了 17 镜」
+    /// 看起来像模型只给了 17 镜
+    Shots { draft: ShotsDraft, dropped: usize },
     Done,
     /// **失败也走事件**，不走 Result —— 否则前端要同时处理
     /// 「Promise reject」和「事件里的错误」两条路径。
@@ -86,6 +99,9 @@ fn preamble_of<I>(run: &Run<'_, I>, spec: &AgentSpec) -> String {
 pub type OutlineRun<'a> = Run<'a, OutlineInput>;
 pub type PromptRun<'a> = Run<'a, PromptInput>;
 pub type ExpandRun<'a> = Run<'a, ExpandInput>;
+pub type ScriptRun<'a> = Run<'a, ScriptInput>;
+pub type AssetsRun<'a> = Run<'a, AssetsInput>;
+pub type ShotsRun<'a> = Run<'a, ShotsInput>;
 
 /// 解析阶段：不发请求，所以能独立测。失败时发 Failed 并返回 None。
 fn prepare<I, S: Sink, K: Keys>(run: &Run<'_, I>, sink: &S, keys: &K) -> Option<(AgentSpec, String)> {
@@ -180,6 +196,58 @@ pub async fn outline_expand<S: Sink + Sync, K: Keys>(run: ExpandRun<'_>, sink: S
 
     sink.emit(RunEvent::Step { index: 3 });
     sink.emit(RunEvent::Alts { draft });
+    sink.emit(RunEvent::Done);
+}
+
+/// 跑一次「写剧本」。步骤数与前端的步骤卡对齐。
+pub async fn script_draft<S: Sink + Sync, K: Keys>(run: ScriptRun<'_>, sink: S, keys: K) {
+    let Some((spec, key)) = prepare(&run, &sink, &keys) else { return };
+
+    sink.emit(RunEvent::Step { index: 2 });
+    let preamble = preamble_of(&run, &spec);
+    out_of!(sink, out);
+    let draft = match script::draft(&spec, &key, &preamble, run.input, &out).await {
+        Ok(d) => d,
+        Err(e) => return sink.emit(RunEvent::failed(&e)),
+    };
+
+    sink.emit(RunEvent::Step { index: 3 });
+    let body = script::body_of(&draft, &run.input.act_title, &run.input.beat_key);
+    sink.emit(RunEvent::Script { draft, body });
+    sink.emit(RunEvent::Done);
+}
+
+/// 跑一次「提取资产」。步骤数与前端的步骤卡对齐。
+pub async fn assets_extract<S: Sink + Sync, K: Keys>(run: AssetsRun<'_>, sink: S, keys: K) {
+    let Some((spec, key)) = prepare(&run, &sink, &keys) else { return };
+
+    sink.emit(RunEvent::Step { index: 2 });
+    let preamble = preamble_of(&run, &spec);
+    out_of!(sink, out);
+    let draft = match assets::draft(&spec, &key, &preamble, run.input, &out).await {
+        Ok(d) => d,
+        Err(e) => return sink.emit(RunEvent::failed(&e)),
+    };
+
+    sink.emit(RunEvent::Step { index: 3 });
+    sink.emit(RunEvent::Assets { draft });
+    sink.emit(RunEvent::Done);
+}
+
+/// 跑一次「拆镜头」。步骤数与前端的步骤卡对齐。
+pub async fn shots_generate<S: Sink + Sync, K: Keys>(run: ShotsRun<'_>, sink: S, keys: K) {
+    let Some((spec, key)) = prepare(&run, &sink, &keys) else { return };
+
+    sink.emit(RunEvent::Step { index: 2 });
+    let preamble = preamble_of(&run, &spec);
+    out_of!(sink, out);
+    let (draft, dropped) = match shots::draft(&spec, &key, &preamble, run.input, &out).await {
+        Ok(d) => d,
+        Err(e) => return sink.emit(RunEvent::failed(&e)),
+    };
+
+    sink.emit(RunEvent::Step { index: 3 });
+    sink.emit(RunEvent::Shots { draft, dropped });
     sink.emit(RunEvent::Done);
 }
 
@@ -398,6 +466,59 @@ mod tests {
         .unwrap();
         assert_eq!(a["t"], "alts");
         assert_eq!(a["draft"]["alts"][0], "甲");
+    }
+
+    /// 六条链路的产物事件**判别字段各不一样**。
+    ///
+    /// 形状不同的产物合成一个 untagged 字段，前端就得靠「有没有 acts」这种
+    /// 猜法来分辨 —— 加一条链路就多一处猜。
+    #[test]
+    fn 六条链路的产物事件各走各的() {
+        use crate::assets::Cand;
+        use crate::script::ScriptDraft;
+        use crate::shots::{ShotCand, ShotsDraft};
+
+        let d = ScriptDraft {
+            reply: "x".into(), place: "客厅".into(), time: "深夜".into(),
+            lines: vec!["他推开门。".into()],
+        };
+        let body = crate::script::body_of(&d, "失衡", "场景3");
+        let v = serde_json::to_value(RunEvent::Script { draft: d, body }).unwrap();
+        assert_eq!(v["t"], "script");
+        assert_eq!(v["draft"]["lines"][0], "他推开门。");
+        // 拼好的正文跟着事件走 —— 前端不再实现一遍那套结构标记
+        assert!(v["body"].as_str().unwrap().contains("**场景3**"), "{v}");
+
+        let v = serde_json::to_value(RunEvent::Assets {
+            draft: AssetsDraft {
+                reply: "x".into(),
+                assets: vec![Cand { group: "角色".into(), name: "李明".into(), desc: "三十岁".into() }],
+            },
+        })
+        .unwrap();
+        assert_eq!(v["t"], "assets");
+        assert_eq!(v["draft"]["assets"][0]["name"], "李明");
+
+        // **dropped 要上到事件里**：否则「20 镜里收了 17 镜」在界面上
+        // 看起来像模型只给了 17 镜
+        let v = serde_json::to_value(RunEvent::Shots {
+            draft: ShotsDraft {
+                reply: "x".into(),
+                shots: vec![ShotCand {
+                    scene_key: "场景1".into(), size: "全景".into(),
+                    desc: "他推开门".into(), dur: 4,
+                }],
+            },
+            dropped: 3,
+        })
+        .unwrap();
+        assert_eq!(v["t"], "shots");
+        assert_eq!(v["dropped"], 3);
+        assert_eq!(v["draft"]["shots"][0]["sceneKey"], "场景1");
+
+        // 判别字段两两不同 —— 这才是分开定义的意义
+        let tags = ["proposal", "prompts", "alts", "script", "assets", "shots"];
+        assert_eq!(tags.iter().collect::<std::collections::HashSet<_>>().len(), 6);
     }
 
     #[test]

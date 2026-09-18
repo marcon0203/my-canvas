@@ -7,10 +7,13 @@ use std::collections::HashMap;
 use studio_core::Result;
 use studio_core::agent::{self, AgentSpec};
 use studio_core::config::{AgentConfig, ModelRef, ProviderSetting};
+use studio_core::assets::AssetsInput;
 use studio_core::expand::ExpandInput;
 use studio_core::outline::OutlineInput;
 use studio_core::run::{self, RunEvent};
+use studio_core::script::ScriptInput;
 use studio_core::shotprompt::PromptInput;
+use studio_core::shots::ShotsInput;
 use studio_core::skills::{Root, SkillMeta, SkillStore, SkillWarning};
 use studio_core::workspace::{self, Workspace};
 use studio_core::project::{self, Bundle, Meta};
@@ -568,6 +571,105 @@ async fn agent_outline_expand(
     .await;
 }
 
+/// 写剧本。与起草大纲同一套编排，只换输入与产物。
+#[tauri::command]
+async fn agent_script_draft(
+    cfg: AgentConfig,
+    fallback_preamble: String,
+    globals: HashMap<String, ModelRef>,
+    providers: HashMap<String, ProviderSetting>,
+    input: ScriptInput,
+    skill: Option<String>,
+    workspace: Option<String>,
+    on_event: tauri::ipc::Channel<RunEvent>,
+    app: tauri::AppHandle,
+) {
+    let skills = SkillStore::scan(&roots(&app, workspace.as_deref()));
+    let Some(root) = root_or_fail(workspace.as_deref(), &on_event) else { return };
+    run::script_draft(
+        run::ScriptRun {
+            cfg: &cfg,
+            fallback_preamble: &fallback_preamble,
+            globals: &globals,
+            providers: &providers,
+            input: &input,
+            skills: &skills,
+            skill: skill.as_deref(),
+        },
+        move |e: RunEvent| {
+            let _ = on_event.send(e);
+        },
+        run::SystemKeys(root),
+    )
+    .await;
+}
+
+/// 提取资产。与起草大纲同一套编排，只换输入与产物。
+#[tauri::command]
+async fn agent_assets_extract(
+    cfg: AgentConfig,
+    fallback_preamble: String,
+    globals: HashMap<String, ModelRef>,
+    providers: HashMap<String, ProviderSetting>,
+    input: AssetsInput,
+    skill: Option<String>,
+    workspace: Option<String>,
+    on_event: tauri::ipc::Channel<RunEvent>,
+    app: tauri::AppHandle,
+) {
+    let skills = SkillStore::scan(&roots(&app, workspace.as_deref()));
+    let Some(root) = root_or_fail(workspace.as_deref(), &on_event) else { return };
+    run::assets_extract(
+        run::AssetsRun {
+            cfg: &cfg,
+            fallback_preamble: &fallback_preamble,
+            globals: &globals,
+            providers: &providers,
+            input: &input,
+            skills: &skills,
+            skill: skill.as_deref(),
+        },
+        move |e: RunEvent| {
+            let _ = on_event.send(e);
+        },
+        run::SystemKeys(root),
+    )
+    .await;
+}
+
+/// 拆镜头。与起草大纲同一套编排，只换输入与产物。
+#[tauri::command]
+async fn agent_shots_generate(
+    cfg: AgentConfig,
+    fallback_preamble: String,
+    globals: HashMap<String, ModelRef>,
+    providers: HashMap<String, ProviderSetting>,
+    input: ShotsInput,
+    skill: Option<String>,
+    workspace: Option<String>,
+    on_event: tauri::ipc::Channel<RunEvent>,
+    app: tauri::AppHandle,
+) {
+    let skills = SkillStore::scan(&roots(&app, workspace.as_deref()));
+    let Some(root) = root_or_fail(workspace.as_deref(), &on_event) else { return };
+    run::shots_generate(
+        run::ShotsRun {
+            cfg: &cfg,
+            fallback_preamble: &fallback_preamble,
+            globals: &globals,
+            providers: &providers,
+            input: &input,
+            skills: &skills,
+            skill: skill.as_deref(),
+        },
+        move |e: RunEvent| {
+            let _ = on_event.send(e);
+        },
+        run::SystemKeys(root),
+    )
+    .await;
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -579,6 +681,9 @@ pub fn run() {
             agent_outline_draft,
             agent_shots_prompt,
             agent_outline_expand,
+            agent_script_draft,
+            agent_assets_extract,
+            agent_shots_generate,
             skills_list,
             skill_body,
             skill_resource,

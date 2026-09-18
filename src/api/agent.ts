@@ -7,14 +7,16 @@ import type { Handoff, IntentKind, Plan, Proposal, ProposalPatch } from '@/domai
 import { TOOLS, type ToolId } from '@/domain/agent/tools';
 import { secText } from '@/domain/clips/model';
 import {
-  isDesktop, outlineDraft, outlineExpand, shotsPrompt,
-  type AltsDraft, type ExpandInput, type OutlineDraft, type PromptDraft, type RunEvent,
-  type SceneBrief, type ShotBrief,
+  assetsExtract, isDesktop, outlineDraft, outlineExpand, scriptDraft, shotsGenerate, shotsPrompt,
+  type AltsDraft, type AssetsCandDraft, type AssetsInput, type ExpandInput, type OutlineDraft,
+  type PromptDraft, type RunEvent, type SceneBrief, type ScriptDraft, type ScriptInput,
+  type ShotBrief, type ShotsCandDraft, type ShotsInput,
 } from './desktop';
-import { actOfBeat, allBeats } from '@/domain/story/model';
+import { actOfBeat, allBeats, nextId } from '@/domain/story/model';
 import { useSettings } from '@/store/settings';
-import type { Shot } from '@/domain/shots/model';
-import { SIZE_EN, shotsMissingPrompt } from '@/domain/agent/drafts';
+import { makeShot, type Shot } from '@/domain/shots/model';
+import { AID_PREFIX, defaultRig, type AssetGroup } from '@/domain/assets/model';
+import { SIZE_EN, assetShell, beatsWithoutShots, shotsMissingPrompt } from '@/domain/agent/drafts';
 import { ctxAssets } from '@/domain/agent/context';
 
 /**
@@ -120,6 +122,23 @@ export async function* runAgent(
     yield* runExpandOnDesktop(ctx, signal);
     return;
   }
+  // 写剧本要有大纲 —— 没有「这一场」的话把一个空上下文送给模型没意义，
+  // 落到本地那条路去说清前置条件
+  if (isDesktop() && resolved === 'script.draft' && selectedBeat(ctx)) {
+    yield* runScriptOnDesktop(ctx, signal);
+    return;
+  }
+  // 提取资产要有正文 —— 只送场次标题的话模型只能瞎猜人物长什么样
+  if (isDesktop() && resolved === 'assets.extract'
+      && ctx.blocks.some((b) => b.type === 'text' && b.body.trim())) {
+    yield* runAssetsOnDesktop(ctx, signal);
+    return;
+  }
+  // 拆镜头要有还没拆的场次
+  if (isDesktop() && resolved === 'shots.generate' && beatsWithoutShots(ctx).length > 0) {
+    yield* runShotsOnDesktop(ctx, signal);
+    return;
+  }
 
   const p = plan(resolved, ctx);
   // 先只下发步骤：产物等正文说完再交付
@@ -160,6 +179,9 @@ export const SKILL_FOR_TASK: Partial<Record<IntentKind, string>> = {
   'outline.draft': 'draft-outline',
   'outline.expand': 'expand-scene',
   'shots.prompt': 'write-shot-prompts',
+  'script.draft': 'write-scene',
+  'assets.extract': 'extract-assets',
+  'shots.generate': 'break-shots',
 };
 
 /* ---------------- 真模型：起草大纲 ---------------- */
@@ -357,6 +379,261 @@ function promptProposal(draft: PromptDraft, asked: number) {
   };
 }
 
+/* ---------------- 真模型：写剧本 ---------------- */
+
+const SCRIPT_STEPS = [
+  { icon: 'book', label: '读这一场与前一场的结尾' },
+  { icon: 'users', label: '让模型写正文' },
+  { icon: 'text', label: '拼成正文块' },
+];
+
+/** 前一场正文的结尾几行。**这一场要接得上它** —— 见 Rust 侧 script.rs 的说明 */
+const PREV_TAIL_LINES = 6;
+
+/**
+ * 这一场的上下文 → 送给模型的输入。
+ *
+ * **前一场的结尾必须送**：只给「这一场承担什么功能」的话，模型写出来的和
+ * 本地那份模板差别不大。一场之所以能接得上，是因为它知道上一场停在哪儿。
+ */
+export function scriptInput(ctx: AgentContext, beatId: string): ScriptInput {
+  const beats = allBeats(ctx.acts);
+  const at = beats.findIndex((b) => b.id === beatId);
+  const beat = beats[at]!;
+  const act = actOfBeat(ctx.acts, beatId);
+  // 按场次键找前一场的正文块 —— 块的标签里带着场次键
+  const prev = at > 0 ? beats[at - 1] : undefined;
+  const prevBlock = prev
+    ? ctx.blocks.find((b) => b.type === 'text' && b.label.includes(prev.k))
+    : undefined;
+  const tail = prevBlock
+    ? prevBlock.body.split('\n').filter(Boolean).slice(-PREV_TAIL_LINES).join('\n')
+    : '';
+  const locked = (g: readonly { status: string; name: string; desc: string }[]) =>
+    g.filter((a) => a.status === 'locked').map((a) => `${a.name}：${a.desc}`);
+  return {
+    project: ctx.proj,
+    beatKey: beat.k,
+    beatT: beat.t,
+    actTitle: act?.t ?? '',
+    // **只送定稿的**：草稿资产随时会改，让模型围着一个会变的设定写正文没意义
+    leads: locked(ctx.assets.角色),
+    places: locked(ctx.assets.场景),
+    prevTail: tail,
+    idea: ctx.input,
+  };
+}
+
+async function* runScriptOnDesktop(
+  ctx: AgentContext,
+  signal: AbortSignal,
+): AsyncGenerator<AgentEvent> {
+  yield { t: 'plan', plan: { kind: 'script.draft', steps: SCRIPT_STEPS, reply: '' } };
+  const beat = selectedBeat(ctx)!;
+  yield* pump(signal, (emit) =>
+    scriptDraft(
+      {
+        cfg: ctx.agents[ctx.agentId],
+        fallbackPreamble: personaById(ctx.agentId).preamble,
+        globals: ctx.globalModels,
+        providers: {},
+        input: scriptInput(ctx, beat.id),
+        skill: SKILL_FOR_TASK['script.draft'],
+        workspace: useSettings.getState().workspace,
+      },
+      (e) => emit(e, () => scriptProposal(e, beat.k, ctx)),
+    ),
+  );
+}
+
+/** 正文块产物。`id` 由前端分配 —— 模型不编 id */
+function scriptProposal(e: RunEvent, beatKey: string, ctx: AgentContext) {
+  const { draft, body } = e as { draft: ScriptDraft; body: string };
+  const block = {
+    id: nextId('bk', ctx.blocks),
+    type: 'text' as const,
+    label: `正文 · ${beatKey}`,
+    body,
+  };
+  return {
+    title: `新正文块 · ${beatKey}`,
+    rows: [
+      { k: '地点时间', v: `${draft.place} · ${draft.time}` },
+      { k: '行数', v: `${draft.lines.length} 行` },
+      ...draft.lines.slice(0, 4).map((l, i) => ({ k: `第 ${i + 1} 行`, v: l })),
+    ],
+    patch: { t: 'blocks' as const, blocks: [block] },
+    cost: 3,
+    goto: 'script',
+  };
+}
+
+/* ---------------- 真模型：提取资产 ---------------- */
+
+const ASSETS_STEPS = [
+  { icon: 'book', label: '读剧本正文' },
+  { icon: 'users', label: '让模型找出反复出现的人和地方' },
+  { icon: 'layers', label: '比对资产库，建成草稿' },
+];
+
+/** 剧本正文送多少字。整本几万字送进去只是烧钱 —— 资产在前几场就出全了 */
+const SCRIPT_CHARS = 8000;
+
+export function assetsInput(ctx: AgentContext): AssetsInput {
+  const script = ctx.blocks
+    .filter((b) => b.type === 'text')
+    .map((b) => b.body)
+    .join('\n\n')
+    .slice(0, SCRIPT_CHARS);
+  return {
+    project: ctx.proj,
+    script,
+    // 已有的都告诉它，否则会重复立
+    existing: (['角色', '场景', '道具'] as const).flatMap((g) =>
+      ctx.assets[g].map((a) => `${g} · ${a.name}`),
+    ),
+    idea: ctx.input,
+  };
+}
+
+async function* runAssetsOnDesktop(
+  ctx: AgentContext,
+  signal: AbortSignal,
+): AsyncGenerator<AgentEvent> {
+  yield { t: 'plan', plan: { kind: 'assets.extract', steps: ASSETS_STEPS, reply: '' } };
+  yield* pump(signal, (emit) =>
+    assetsExtract(
+      {
+        cfg: ctx.agents[ctx.agentId],
+        fallbackPreamble: personaById(ctx.agentId).preamble,
+        globals: ctx.globalModels,
+        providers: {},
+        input: assetsInput(ctx),
+        skill: SKILL_FOR_TASK['assets.extract'],
+        workspace: useSettings.getState().workspace,
+      },
+      (e) => emit(e, (d) => assetsProposal(d as AssetsCandDraft, ctx)),
+    ),
+  );
+}
+
+/** 资产产物。**aid 在这儿编号** —— 模型不碰编号，它会重复会撞 */
+function assetsProposal(draft: AssetsCandDraft, ctx: AgentContext) {
+  const existing = [...ctx.assets.角色, ...ctx.assets.场景, ...ctx.assets.道具];
+  const used = new Set(existing.map((a) => a.aid));
+  const add = draft.assets
+    .filter((c) => (['角色', '场景', '道具'] as string[]).includes(c.group))
+    .map((c) => {
+      const group = c.group as AssetGroup;
+      const prefix = AID_PREFIX[group];
+      let n = 1;
+      let aid = `${prefix}-${String(n).padStart(3, '0')}`;
+      while (used.has(aid)) aid = `${prefix}-${String(++n).padStart(3, '0')}`;
+      used.add(aid);
+      return {
+        group,
+        asset: assetShell({ group, aid, name: c.name, desc: c.desc }, `${c.name} 的%s`),
+      };
+    });
+  return {
+    title: `新资产 · ${add.length} 个草稿`,
+    rows: add.map((x) => ({ k: `${x.group} · ${x.asset.aid}`, v: `${x.asset.name}：${x.asset.desc}` })),
+    patch: { t: 'assets' as const, add },
+    cost: 4,
+    goto: 'assets',
+  };
+}
+
+/* ---------------- 真模型：拆镜头 ---------------- */
+
+const SHOTS_STEPS = [
+  { icon: 'map', label: '找出没镜头的场次' },
+  { icon: 'layers', label: '让模型按这几场各自拆' },
+  { icon: 'image', label: '编号并挂上资产引用' },
+];
+
+export function shotsInput(ctx: AgentContext): ShotsInput {
+  const need = beatsWithoutShots(ctx);
+  return {
+    project: ctx.proj,
+    beats: need.map((b) => ({
+      k: b.k,
+      t: b.t,
+      // 有正文才拆得准 —— 没有就只能照功能猜
+      body: ctx.blocks.find((x) => x.type === 'text' && x.label.includes(b.k))?.body ?? '',
+    })),
+    leads: [...ctx.assets.角色, ...ctx.assets.场景]
+      .filter((a) => a.status === 'locked')
+      .map((a) => `${a.name}：${a.desc}`),
+    idea: ctx.input,
+  };
+}
+
+async function* runShotsOnDesktop(
+  ctx: AgentContext,
+  signal: AbortSignal,
+): AsyncGenerator<AgentEvent> {
+  yield { t: 'plan', plan: { kind: 'shots.generate', steps: SHOTS_STEPS, reply: '' } };
+  yield* pump(signal, (emit) =>
+    shotsGenerate(
+      {
+        cfg: ctx.agents[ctx.agentId],
+        fallbackPreamble: personaById(ctx.agentId).preamble,
+        globals: ctx.globalModels,
+        providers: {},
+        input: shotsInput(ctx),
+        skill: SKILL_FOR_TASK['shots.generate'],
+        workspace: useSettings.getState().workspace,
+      },
+      (e) => emit(e, () => shotsProposal(e, ctx)),
+    ),
+  );
+}
+
+/**
+ * 分镜产物。**镜号在这儿分配，资产引用也在这儿挂** —— 模型只说画面内容。
+ *
+ * `dropped` 如实写进产物卡：Rust 侧核对时丢掉的那几条（模型编的场次键、
+ * 不认识的景别）不能悄悄消失，否则「20 镜里收了 17 镜」看起来像模型只给了 17 镜。
+ */
+function shotsProposal(e: RunEvent, ctx: AgentContext) {
+  const { draft, dropped } = e as { draft: ShotsCandDraft; dropped: number };
+  const sceneAid = ctx.assets.场景[0]?.aid;
+  const leadAid = ctx.assets.角色[0]?.aid;
+  const pool = [...ctx.shots];
+  const out: Shot[] = [];
+  for (const c of draft.shots) {
+    const num = c.sceneKey.replace(/\D/g, '') || String(out.length + 1);
+    let n = 1;
+    let id = `s${num}-${n}`;
+    while (pool.some((s) => s.id === id) || out.some((s) => s.id === id)) id = `s${num}-${++n}`;
+    const s = makeShot(id, c.sceneKey);
+    s.size = c.size as Shot['size'];
+    s.desc = c.desc;
+    s.dur = c.dur;
+    s.rig = defaultRig(s.size);
+    // 全景交代环境只挂场景；近了就把人也挂上
+    const wide = c.size === '大远景' || c.size === '远景' || c.size === '全景';
+    s.refs = [sceneAid, wide ? undefined : leadAid].filter((x): x is string => !!x);
+    s.refVer = Object.fromEntries(s.refs.map((aid) => [aid, 1]));
+    out.push(s);
+  }
+  const byBeat = new Map<string, number>();
+  for (const s of out) byBeat.set(s.sceneKey, (byBeat.get(s.sceneKey) ?? 0) + 1);
+  return {
+    title: dropped > 0 ? `新分镜 · ${out.length} 镜（丢了 ${dropped} 条）` : `新分镜 · ${out.length} 镜`,
+    rows: [
+      ...[...byBeat].map(([k, n]) => ({ k, v: `${n} 镜` })),
+      ...(dropped > 0
+        ? [{ k: '丢掉', v: `${dropped} 条：场次键不在清单里，或景别不认识` }]
+        : []),
+    ],
+    patch: { t: 'shots' as const, shots: out },
+    cost: 3,
+    goto: 'storyboard',
+  };
+}
+
 /* ---------------- IPC 事件泵 ---------------- */
 
 /**
@@ -390,6 +667,9 @@ async function* pump(
       case 'proposal':
       case 'prompts':
       case 'alts':
+      case 'script':
+      case 'assets':
+      case 'shots':
         push({ t: 'proposal', proposal: toProposal(e.draft) });
         break;
       case 'done':
