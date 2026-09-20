@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Button, Chip, Icon, Input, Modal, Segmented, Switch, ToggleChip } from '@/ui';
-import { PROVIDERS, providerOf } from '@/domain/providers/catalog';
+import { PROVIDERS, isBuiltinProvider, specOf } from '@/domain/providers/catalog';
 import {
   CAPS_OF, MODALITIES, MODALITY_LABEL, defaultCaps, makeModel,
   type Modality, type ModelSpec, type ProviderId,
@@ -56,7 +56,10 @@ export function ProviderList({ onOpen }: { onOpen: (id: ProviderId) => void }) {
       <section className="pcard">
         <header className="pcard__h">
           <span className="pcard__n">已接入 · {added.length}</span>
-          <span className="t-cap dim">支持 {PROVIDERS.length} 家，接入哪家由你决定</span>
+          <span className="t-cap dim">
+            内置 {PROVIDERS.length} 家；往工作空间 <span className="mono">providers/</span> 里
+            丢一份 YAML 就是新接一家
+          </span>
           <div className="spacer" />
           <Button variant="primary" onClick={() => setAdding(true)}>
             <Icon name="plus" />新增供应商
@@ -88,8 +91,10 @@ export function ProviderList({ onOpen }: { onOpen: (id: ProviderId) => void }) {
  * 刚接入的正常状态，卡片得把下一步说出来，而不是显示成一个错误。
  */
 function ProviderTile({ id, onOpen }: { id: ProviderId; onOpen: (id: ProviderId) => void }) {
-  const spec = providerOf(id)!;
   const setting = useSettings((s) => providerSetting(s, id));
+  // specOf 而不是 providerOf(id)! —— 自建的那几家（工作空间里丢进去的 YAML）
+  // 在目录里查不到，那个非空断言会让详情页直接崩
+  const spec = specOf(id, setting);
   const toggle = useSettings((s) => s.toggleProvider);
 
   const models = setting.extraModels;
@@ -103,11 +108,20 @@ function ProviderTile({ id, onOpen }: { id: ProviderId; onOpen: (id: ProviderId)
         <header className="atile__h">
           <span className="atile__n">{spec.name}</span>
           <span className="atile__en">{spec.en}</span>
+          {/* 内置与自建要分得开：自建的名字、端点、模型全来自那份 YAML，
+              出问题该去看文件，而不是以为产品漏配了 */}
+          {!isBuiltinProvider(id) && <Chip>自建</Chip>}
         </header>
         <p className="atile__tag">
           {setting.hasKey ? `已接入 ${setting.keyHint}` : '还没填密钥'}
           {spec.userDefined && ' · 自定义端点'}
         </p>
+        {!isBuiltinProvider(id) && (
+          <p className="t-cap dim" style={{ margin: '4px 0 0' }}>
+            来自 <span className="mono">providers/{id}.yaml</span> · 文本可用；
+            出图出视频要各家自有的异步接口，自建的那条还没适配
+          </p>
+        )}
         <div className="chiprow" style={{ marginTop: 12 }}>
           {byModality.length
             ? byModality.map(({ m, n }) => (
@@ -120,9 +134,11 @@ function ProviderTile({ id, onOpen }: { id: ProviderId; onOpen: (id: ProviderId)
             ? '已停用，它的模型不会出现在选择列表里'
             : !setting.hasKey
               ? '未填写密钥，即使选了模型也无法调用'
-              : models.length
-                ? `${models.length} 个模型可用`
-                : '还没加模型，点进去加'}
+              : !spec.baseUrl
+                ? '这份 YAML 里没写 baseUrl —— 没有端点发不出请求'
+                : models.length
+                  ? `${models.length} 个模型可用`
+                  : '还没加模型，点进去加'}
         </p>
       </button>
       <div className="atile__sw">
@@ -155,7 +171,7 @@ function AddProviderModal({ open, onClose, onAdded }: {
   const [key, setK] = useState('');
   const [busy, setBusy] = useState(false);
 
-  const spec = pick ? providerOf(pick) : undefined;
+  const spec = pick ? specOf(pick) : undefined;
   // 自定义端点必须自己填；其余家留空就用默认
   const needUrl = !!spec?.userDefined;
   const ready = !!pick && (!needUrl || url.trim().length > 0);
@@ -243,8 +259,8 @@ function AddProviderModal({ open, onClose, onAdded }: {
 
 /** 模型设置 · 供应商详情：端点、密钥、模型清单 */
 export function ProviderDetail({ id, onBack }: { id: ProviderId; onBack: () => void }) {
-  const spec = providerOf(id)!;
   const setting = useSettings((s) => providerSetting(s, id));
+  const spec = specOf(id, setting);
   const baseUrl = useSettings((s) => baseUrlOf(s, id));
   const setKey = useSettings((s) => s.setKey);
   const clearKey = useSettings((s) => s.clearKey);
@@ -374,8 +390,8 @@ function AddModelModal({ open, providerId, onClose }: {
   providerId: ProviderId;
   onClose: () => void;
 }) {
-  const spec = providerOf(providerId)!;
   const setting = useSettings((s) => providerSetting(s, providerId));
+  const spec = specOf(providerId, setting);
   const add = useSettings((s) => s.addModel);
   const toast = useUi((s) => s.toast);
 

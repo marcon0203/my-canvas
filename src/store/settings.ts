@@ -10,7 +10,7 @@ import {
   setCustomPersonas, type NewAgent,
 } from '@/domain/agent/roster';
 import type { Modality, ModelRef, ModelSpec, ProviderId } from '@/domain/providers/model';
-import { PROVIDERS, defaultModel, providerOf } from '@/domain/providers/catalog';
+import { PROVIDERS, defaultModel, isBuiltinProvider, providerOf, specOf } from '@/domain/providers/catalog';
 import { MODALITIES } from '@/domain/providers/model';
 import { groupOf, toSpec } from '@/domain/providers/yaml';
 import { maskHint, provs, type ProvView } from '@/api/desktop';
@@ -41,6 +41,14 @@ export interface ProviderSetting {
   readonly extraModels: readonly ModelSpec[];
   /** 停用：不出现在模型选择里 */
   readonly disabled?: boolean;
+  /**
+   * YAML 里写的名字。
+   *
+   * 内置那几家的名字来自目录，这个字段是给**自建的那几家**用的 ——
+   * 用户往 `providers/` 里丢一个 `myvendor.yaml`，它叫什么只有那份文件
+   * 知道。空着就用 id。
+   */
+  readonly name?: string;
 }
 
 export interface SettingsState {
@@ -114,6 +122,7 @@ const ws = () => useSettings.getState().workspace;
 /** Rust 送来的那份 → store 里的形状 */
 const toSetting = (v: ProvView): ProviderSetting => ({
   ...(v.baseUrl ? { baseUrl: v.baseUrl } : {}),
+  ...(v.name ? { name: v.name } : {}),
   hasKey: v.hasKey,
   ...(v.keyHint ? { keyHint: v.keyHint } : {}),
   extraModels: MODALITIES.flatMap((m) =>
@@ -185,13 +194,12 @@ export const useSettings = create<SettingsState>()(
         if (!got) return;       // 浏览器回落：没有那些文件，localStorage 那份就是全部
         set(() => {
           const next: Partial<Record<ProviderId, ProviderSetting>> = {};
-          for (const v of got.items) {
-            // 内置目录里没有这个 id：现在的界面遍历的是目录那几家，
-            // 收进来会让详情页拿到一个 undefined 的 spec 然后崩掉。
-            // 「丢个文件进去就是全新一家」还没做，所以这里先跳过
-            if (!providerOf(v.id as ProviderId)) continue;
-            next[v.id as ProviderId] = toSetting(v);
-          }
+          // **内置目录里没有的 id 也收**：往工作空间的 providers/ 里丢一份
+          // YAML 就是新接一家，这本来就是「一家一个 YAML」的意思。
+          // 原来这儿跳过未知 id（因为界面用的是 providerOf(id)! 这个非空
+          // 断言），结果用户丢进去的文件不生效、也没有任何反馈。
+          // 现在界面走 specOf，自建的按 YAML 里的名字和端点显示。
+          for (const v of got.items) next[v.id] = toSetting(v);
           return { providers: next, badProviders: got.bad };
         });
       },
@@ -369,7 +377,7 @@ export const providerSetting = (s: SettingsState, id: ProviderId): ProviderSetti
 
 /** 实际用的端点：用户改过的优先 */
 export const baseUrlOf = (s: SettingsState, id: ProviderId): string =>
-  s.providers[id]?.baseUrl || providerOf(id)?.baseUrl || '';
+  s.providers[id]?.baseUrl || specOf(id, s.providers[id]).baseUrl || '';
 
 /**
  * 已接入的厂商，顺序按目录。
@@ -378,7 +386,13 @@ export const baseUrlOf = (s: SettingsState, id: ProviderId): string =>
  * 那种设计迟早出现「记录在但 added=false」这种说不清的中间态。
  */
 export function addedProviders(s: SettingsState): ProviderId[] {
-  return PROVIDERS.map((p) => p.id).filter((id) => !!s.providers[id]);
+  const builtin = PROVIDERS.map((p) => p.id).filter((id) => !!s.providers[id]);
+  // 自建的排在内置之后，各自按 id 排 —— 目录的顺序是有讲究的（常用的在前），
+  // 自建的没有这个信息，按名字排至少是稳定的
+  const custom = Object.keys(s.providers)
+    .filter((id) => !isBuiltinProvider(id))
+    .sort();
+  return [...builtin, ...custom];
 }
 
 /** 可用的厂商：接入了、配了 key、没停用。自定义端点还得填了 baseUrl */
@@ -386,7 +400,8 @@ export function readyProviders(s: SettingsState): ProviderId[] {
   return (Object.keys(s.providers) as ProviderId[]).filter((id) => {
     const p = s.providers[id]!;
     if (!p.hasKey || p.disabled) return false;
-    return providerOf(id)?.userDefined ? !!p.baseUrl : true;
+    // 自建的必须自己填端点，没有端点根本发不出请求
+    return specOf(id, p).userDefined ? !!p.baseUrl : true;
   });
 }
 

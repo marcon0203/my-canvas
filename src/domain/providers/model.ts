@@ -19,8 +19,21 @@ export type Protocol =
   /** 各家自有的异步任务接口：提交拿 task_id，再轮询 */
   | 'async-task';
 
-export type ProviderId =
+/** 内置目录里那几家。改这里要同时改 `resources/models/providers.json` */
+export type BuiltinProviderId =
   | 'volcengine' | 'deepseek' | 'zhipu' | 'bailian' | 'hunyuan' | 'moonshot' | 'custom';
+
+/**
+ * 供应商 id。
+ *
+ * **开放的**：用户往工作空间的 `providers/` 里丢一个 `myvendor.yaml`，
+ * 它就是一家供应商 —— 这件事本来是设计里说好的（「一家一个 YAML」），
+ * 但界面遍历的是内置目录，`providerOf(id)!` 又是非空断言，于是未知 id
+ * 被 syncProviders 直接跳过，用户拿不到任何反馈。
+ *
+ * `(string & {})` 这个写法保留内置那几家的自动补全，同时接受任意字符串。
+ */
+export type ProviderId = BuiltinProviderId | (string & {});
 
 /** 模型能力。界面按它过滤「这个 Agent 能选哪些模型」 */
 export interface ModelCaps {

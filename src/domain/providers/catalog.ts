@@ -47,7 +47,37 @@ export const PROVIDERS: readonly ProviderSpec[] = parse(catalog.providers);
 
 const BY_ID = new Map(PROVIDERS.map((p) => [p.id, p]));
 
+/** 内置目录里的那一家。自建的查不到 —— 要连自建的一起查用 `specOf` */
 export const providerOf = (id: ProviderId): ProviderSpec | undefined => BY_ID.get(id);
+
+/** 这家是不是内置目录里的 */
+export const isBuiltinProvider = (id: ProviderId): boolean => BY_ID.has(id);
+
+/**
+ * 一家供应商的展示信息，**内置和自建都能查**。
+ *
+ * 自建的（工作空间 `providers/` 里那个 YAML）没有目录条目，就按 YAML 里
+ * 写的名字和端点凑一份出来。名字空着时用 id —— 不替用户编一个名字。
+ *
+ * 界面一律用这个，不要用 `providerOf(id)!`：那个非空断言是原来「丢个文件
+ * 进去就是新接一家」做不了的根因。
+ */
+export function specOf(
+  id: ProviderId,
+  stored?: { readonly name?: string; readonly baseUrl?: string },
+): ProviderSpec {
+  const builtin = BY_ID.get(id);
+  if (builtin) return builtin;
+  return {
+    id,
+    name: stored?.name?.trim() || id,
+    en: '',
+    baseUrl: stored?.baseUrl ?? '',
+    // 自建的一律算「要自己填端点」：没有端点它跑不起来，
+    // 而 readyProviders 就是靠这个标记去要求 baseUrl 的
+    userDefined: true,
+  };
+}
 
 /**
  * 查一个模型。**只查用户自己加的** —— 没有内置模型可查。

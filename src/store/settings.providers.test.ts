@@ -31,8 +31,9 @@ vi.mock('@/api/desktop', async (orig) => ({
   },
 }));
 
-const { useSettings } = await import('./settings');
+const { useSettings, addedProviders, readyProviders } = await import('./settings');
 const { makeModel } = await import('@/domain/providers/model');
+const { isBuiltinProvider, specOf } = await import('@/domain/providers/catalog');
 
 const view = (over: Partial<ProvView>): ProvView => ({
   id: 'deepseek', enabled: true, hasKey: false,
@@ -200,14 +201,46 @@ describe('从磁盘读回来', () => {
   });
 
   /**
-   * 内置目录里没有的 id：界面现在遍历的是目录那几家，`providerOf(id)!` 是
-   * 非空断言，收进来会让详情页拿到 undefined 然后崩。
-   * 「丢个文件进去就是全新一家」还没做，所以先跳过而不是崩掉。
+   * 丢一份 YAML 进去就是新接一家 —— 这本来就是「一家一个 YAML」的意思。
+   *
+   * 原来这儿是跳过：界面遍历的是内置目录、`providerOf(id)!` 是非空断言，
+   * 收进来会让详情页拿到 undefined 然后崩。于是用户丢进去的文件不生效，
+   * 而且**没有任何反馈**。现在界面走 specOf，自建的照 YAML 显示。
    */
-  it('目录里没有这家就跳过，不让设置页崩', async () => {
-    listing = { items: [view({ id: '我随手建的' })], bad: [] };
+  it('内置目录里没有的 id 也收进来，名字与端点照 YAML 里写的', async () => {
+    listing = {
+      items: [view({ id: 'myvendor', name: '我自己那家', baseUrl: 'https://api.mine.test/v1' })],
+      bad: [],
+    };
     await useSettings.getState().syncProviders();
-    expect(Object.keys(useSettings.getState().providers)).toEqual([]);
+    const p = useSettings.getState().providers.myvendor;
+    expect(p, '自建的那家该收进来').toBeTruthy();
+    expect(p!.name).toBe('我自己那家');
+    expect(p!.baseUrl).toBe('https://api.mine.test/v1');
+    expect(addedProviders(useSettings.getState())).toContain('myvendor');
+    // 界面查得到它，且标成自建
+    expect(isBuiltinProvider('myvendor')).toBe(false);
+    expect(specOf('myvendor', p).name).toBe('我自己那家');
+    expect(specOf('myvendor', p).userDefined).toBe(true);
+  });
+
+  it('自建的没写名字就用 id —— 不替用户编一个', async () => {
+    listing = { items: [view({ id: 'myvendor', baseUrl: 'https://x.test/v1' })], bad: [] };
+    await useSettings.getState().syncProviders();
+    expect(specOf('myvendor', useSettings.getState().providers.myvendor).name).toBe('myvendor');
+  });
+
+  it('自建的没写 baseUrl 就不算可用 —— 没有端点发不出请求', async () => {
+    listing = { items: [view({ id: 'myvendor', hasKey: true })], bad: [] };
+    await useSettings.getState().syncProviders();
+    expect(readyProviders(useSettings.getState())).not.toContain('myvendor');
+
+    listing = {
+      items: [view({ id: 'myvendor', hasKey: true, baseUrl: 'https://x.test/v1' })],
+      bad: [],
+    };
+    await useSettings.getState().syncProviders();
+    expect(readyProviders(useSettings.getState())).toContain('myvendor');
   });
 
   it('浏览器里没有那些文件，本地那份不该被清空', async () => {
