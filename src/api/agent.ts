@@ -17,7 +17,7 @@ import { actOfBeat, allBeats, nextId } from '@/domain/story/model';
 import { readyProviders, useSettings } from '@/store/settings';
 import { makeShot, type Shot } from '@/domain/shots/model';
 import { AID_PREFIX, defaultRig, type AssetGroup } from '@/domain/assets/model';
-import { SIZE_EN, assetShell, beatsWithoutShots, shotsMissingPrompt } from '@/domain/agent/drafts';
+import { SIZE_EN, assetShell, beatsWithoutScript, beatsWithoutShots, shotsMissingPrompt } from '@/domain/agent/drafts';
 import { needsClip } from '@/domain/shots/usable';
 import { ctxAssets } from '@/domain/agent/context';
 
@@ -126,7 +126,7 @@ export async function* runAgent(
   }
   // 写剧本要有大纲 —— 没有「这一场」的话把一个空上下文送给模型没意义，
   // 落到本地那条路去说清前置条件
-  if (isDesktop() && resolved === 'script.draft' && selectedBeat(ctx)) {
+  if (isDesktop() && resolved === 'script.draft' && (beatsWithoutScript(ctx).length || selectedBeat(ctx))) {
     yield* runScriptOnDesktop(ctx, signal);
     return;
   }
@@ -306,8 +306,9 @@ async function* runOutlineOnDesktop(
         skill: SKILL_FOR_TASK['outline.draft'],
         workspace: useSettings.getState().workspace,
       },
-      (e) => emit(e, (d) => outlineProposal(d as OutlineDraft, fresh, ctx)),
+      emit,
     ),
+    (e) => outlineProposal(e.draft as OutlineDraft, fresh, ctx),
   );
 }
 
@@ -374,8 +375,9 @@ async function* runExpandOnDesktop(
         skill: SKILL_FOR_TASK['outline.expand'],
         workspace: useSettings.getState().workspace,
       },
-      (e) => emit(e, (d) => altsProposal(d as AltsDraft, beat)),
+      emit,
     ),
+    (e) => altsProposal(e.draft as AltsDraft, beat),
   );
 }
 
@@ -428,8 +430,9 @@ async function* runShotPromptsOnDesktop(
         skill: SKILL_FOR_TASK['shots.prompt'],
         workspace: useSettings.getState().workspace,
       },
-      (e) => emit(e, (d) => promptProposal(d as PromptDraft, miss.length)),
+      emit,
     ),
+    (e) => promptProposal(e.draft as PromptDraft, miss.length),
   );
 }
 
@@ -481,18 +484,31 @@ const PREV_TAIL_LINES = 6;
  * **前一场的结尾必须送**：只给「这一场承担什么功能」的话，模型写出来的和
  * 本地那份模板差别不大。一场之所以能接得上，是因为它知道上一场停在哪儿。
  */
-export function scriptInput(ctx: AgentContext, beatId: string): ScriptInput {
+export function scriptInput(
+  ctx: AgentContext,
+  beatId: string,
+  /**
+   * 这一轮里刚写出来、还没采纳的正文：场次键 → 正文。
+   *
+   * 一次写六场时，第二场要接的是**刚写的第一场**，而它还没进项目
+   * （产物要人采纳才落库）。只从 ctx.blocks 找的话，第二场接的是空气，
+   * 六场之间就断开了。
+   */
+  fresh?: ReadonlyMap<string, string>,
+): ScriptInput {
   const beats = allBeats(ctx.acts);
   const at = beats.findIndex((b) => b.id === beatId);
   const beat = beats[at]!;
   const act = actOfBeat(ctx.acts, beatId);
-  // 按场次键找前一场的正文块 —— 块的标签里带着场次键
+  // 按场次键找前一场的正文 —— 先看这一轮刚写的，再看项目里已有的
+  // （块的标签里带着场次键）
   const prev = at > 0 ? beats[at - 1] : undefined;
-  const prevBlock = prev
-    ? ctx.blocks.find((b) => b.type === 'text' && b.label.includes(prev.k))
+  const prevBody = prev
+    ? fresh?.get(prev.k)
+      ?? ctx.blocks.find((b) => b.type === 'text' && b.label.includes(prev.k))?.body
     : undefined;
-  const tail = prevBlock
-    ? prevBlock.body.split('\n').filter(Boolean).slice(-PREV_TAIL_LINES).join('\n')
+  const tail = prevBody
+    ? prevBody.split('\n').filter(Boolean).slice(-PREV_TAIL_LINES).join('\n')
     : '';
   const locked = (g: readonly { status: string; name: string; desc: string }[]) =>
     g.filter((a) => a.status === 'locked').map((a) => `${a.name}：${a.desc}`);
@@ -509,49 +525,144 @@ export function scriptInput(ctx: AgentContext, beatId: string): ScriptInput {
   };
 }
 
+/**
+ * 写剧本 —— **把还没有正文的场次一场一场都写完**。
+ *
+ * 原来只写「选中的那一场」，写完流水线就往下走了：六场大纲跑完只有第一场
+ * 有正文，剩下五场空着，而后面的资产提取、拆镜头全建在这 1/6 上。
+ *
+ * 几处刻意的选择：
+ *
+ * - **一场一次请求**，不是把六场塞进一个 prompt：一场写崩了只重那一场，
+ *   而且后一场要读前一场的结尾，本来就得串着来。
+ * - 第二场接的是**刚写完的第一场**（`fresh`），不是项目里的 —— 产物还没
+ *   采纳，项目里还没有它。
+ * - 六场汇总成**一份产物**：每场弹一张卡的话，人要点六次采纳，中间任何
+ *   一次丢弃都会把后面几场的上下文弄乱。
+ * - 单场失败不牵连已写好的：失败的场次列在卡上，重跑这一步只会补它们
+ *   （`beatsWithoutScript` 会把已有正文的场次排除掉）。
+ */
 async function* runScriptOnDesktop(
   ctx: AgentContext,
   signal: AbortSignal,
 ): AsyncGenerator<AgentEvent> {
+  // 一场都没写过时按大纲全写；否则只补空着的那几场。
+  // 人明确选了某一场又只想写那一场 —— 那是「润色」的活儿，不走这儿
+  const todo = beatsWithoutScript(ctx);
+  const beats = todo.length ? todo : [selectedBeat(ctx)!];
+
   yield { t: 'plan', plan: { kind: 'script.draft', steps: SCRIPT_STEPS, reply: '' } };
-  const beat = selectedBeat(ctx)!;
-  yield* pump(signal, (emit) =>
-    scriptDraft(
-      {
-        cfg: ctx.agents[ctx.agentId],
-        fallbackPreamble: personaById(ctx.agentId).preamble,
-        globals: ctx.globalModels,
-        providers: {},
-        input: scriptInput(ctx, beat.id),
-        skill: SKILL_FOR_TASK['script.draft'],
-        workspace: useSettings.getState().workspace,
-      },
-      (e) => emit(e, () => scriptProposal(e, beat.k, ctx)),
-    ),
-  );
+  yield {
+    t: 'delta',
+    text: beats.length > 1
+      ? `${beats.length} 场没有正文，一场一场写，后一场接着前一场的结尾。\n\n`
+      : '',
+  };
+
+  const fresh = new Map<string, string>();
+  const wrote: { block: ScriptBlock; draft: ScriptDraft }[] = [];
+  const blocks: ScriptBlock[] = [];
+  const fails: { k: string; why: string }[] = [];
+  const taken = [...ctx.blocks];
+
+  for (const beat of beats) {
+    if (signal.aborted) { yield { t: 'aborted' }; return; }
+    yield { t: 'delta', text: `【${beat.k} · ${beat.t}】\n` };
+    let got: { draft: ScriptDraft; body: string } | null = null;
+    let why = '';
+    for await (const ev of pumpRaw(signal, (emit) =>
+      scriptDraft(
+        {
+          cfg: ctx.agents[ctx.agentId],
+          fallbackPreamble: personaById(ctx.agentId).preamble,
+          globals: ctx.globalModels,
+          providers: {},
+          input: scriptInput(ctx, beat.id, fresh),
+          skill: SKILL_FOR_TASK['script.draft'],
+          workspace: useSettings.getState().workspace,
+        },
+        emit,
+      ),
+    )) {
+      if (ev.t === 'draft') {
+        got = ev.event as { draft: ScriptDraft; body: string };
+        continue;
+      }
+      // 每一场的 done 不往上传：整轮只有最后那一个 done 才算跑完
+      if (ev.t === 'done') continue;
+      if (ev.t === 'aborted') { yield ev; return; }
+      // 这一场失败时，正文里那句解释同时留着当失败原因
+      if (ev.t === 'delta' && !got) why = ev.text;
+      yield ev;
+    }
+    if (!got) {
+      fails.push({ k: beat.k, why: why.trim() || '模型没给出可用的正文' });
+      yield { t: 'delta', text: `\n（${beat.k} 没写成，后面几场照原大纲接着走）\n\n` };
+      continue;
+    }
+    fresh.set(beat.k, got.body);
+    const block = {
+      id: nextId('bk', taken),
+      type: 'text' as const,
+      label: `正文 · ${beat.k}`,
+      body: got.body,
+    };
+    taken.push(block);
+    blocks.push(block);
+    wrote.push({ block, draft: got.draft });
+    yield { t: 'delta', text: `\n` };
+  }
+
+  if (!blocks.length) {
+    yield { t: 'delta', text: `\n${beats.length} 场都没写成，项目没有任何改动。` };
+    yield { t: 'done' };
+    return;
+  }
+  yield {
+    t: 'delta',
+    text: `\n写成 ${blocks.length} 场${fails.length ? `，${fails.length} 场没写成` : ''}。`,
+  };
+  yield { t: 'proposal', proposal: scriptProposal(wrote, fails) };
+  yield { t: 'done' };
 }
 
-/** 正文块产物。`id` 由前端分配 —— 模型不编 id */
-function scriptProposal(e: RunEvent, beatKey: string, ctx: AgentContext) {
-  const { draft, body } = e as { draft: ScriptDraft; body: string };
-  const block = {
-    id: nextId('bk', ctx.blocks),
-    type: 'text' as const,
-    label: `正文 · ${beatKey}`,
-    body,
-  };
+/**
+ * 正文块产物。`id` 由前端分配 —— 模型不编 id。
+ *
+ * 没写成的场次**列在卡上**：一份「写成 5 场」的产物如果不提第 6 场，
+ * 人会以为六场都齐了，等到拆镜头才发现少一场。
+ */
+function scriptProposal(
+  wrote: readonly { block: ScriptBlock; draft: ScriptDraft }[],
+  fails: readonly { k: string; why: string }[],
+) {
+  const key = (b: ScriptBlock) => b.label.replace('正文 · ', '');
+  // 只写了一场时把开头几行也摆出来 —— 一场的时候卡上有地方，
+  // 六场的时候摆开头几行会把卡撑成一屏
+  const detail = wrote.length === 1 && wrote[0]
+    ? wrote[0].draft.lines.slice(0, 4).map((l, i) => ({ k: `第 ${i + 1} 行`, v: l }))
+    : [];
   return {
-    title: `新正文块 · ${beatKey}`,
+    title: fails.length
+      ? `新正文 · ${wrote.length} 场（${fails.length} 场没写成）`
+      : `新正文 · ${wrote.length} 场`,
     rows: [
-      { k: '地点时间', v: `${draft.place} · ${draft.time}` },
-      { k: '行数', v: `${draft.lines.length} 行` },
-      ...draft.lines.slice(0, 4).map((l, i) => ({ k: `第 ${i + 1} 行`, v: l })),
+      ...wrote.map(({ block, draft }) => ({
+        k: key(block),
+        v: `${draft.place} · ${draft.time} · ${draft.lines.length} 行`,
+      })),
+      ...detail,
+      ...fails.map((f) => ({ k: `${f.k} 没写成`, v: f.why })),
     ],
-    patch: { t: 'blocks' as const, blocks: [block] },
-    cost: 3,
+    patch: { t: 'blocks' as const, blocks: wrote.map((w) => w.block) },
+    // 按场次数计费，不是按一次调用 —— 六场就是六次请求
+    cost: wrote.length * 3,
     goto: 'script',
   };
 }
+
+/** 正文块。id 与标签由前端拼，正文原样用 Rust 那份 */
+type ScriptBlock = { id: string; type: 'text'; label: string; body: string };
 
 /* ---------------- 真模型：提取资产 ---------------- */
 
@@ -581,11 +692,27 @@ export function assetsInput(ctx: AgentContext): AssetsInput {
   };
 }
 
+/**
+ * 还有场次没写正文时的一句提醒。
+ *
+ * 提取资产、拆镜头都建立在正文上。走查里「写剧本」只写了第一场就往下走，
+ * 后面几步照跑不误 —— 于是资产是从 1/6 的剧本里提的，而界面上完全看不出
+ * 这件事。这句话摆在那一轮的开头。
+ */
+function emptyScenesNote(ctx: AgentContext): string {
+  const empty = beatsWithoutScript(ctx);
+  if (!empty.length) return '';
+  return `⚠️ 还有 ${empty.length} 场没有正文（${empty.slice(0, 4).map((b) => b.k).join('、')}`
+    + `${empty.length > 4 ? ' 等' : ''}）。这一步只能按已有的正文做，`
+    + `补完剧本再跑一次会更准。\n\n`;
+}
+
 async function* runAssetsOnDesktop(
   ctx: AgentContext,
   signal: AbortSignal,
 ): AsyncGenerator<AgentEvent> {
   yield { t: 'plan', plan: { kind: 'assets.extract', steps: ASSETS_STEPS, reply: '' } };
+  yield { t: 'delta', text: emptyScenesNote(ctx) };
   yield* pump(signal, (emit) =>
     assetsExtract(
       {
@@ -597,8 +724,9 @@ async function* runAssetsOnDesktop(
         skill: SKILL_FOR_TASK['assets.extract'],
         workspace: useSettings.getState().workspace,
       },
-      (e) => emit(e, (d) => assetsProposal(d as AssetsCandDraft, ctx)),
+      emit,
     ),
+    (e) => assetsProposal(e.draft as AssetsCandDraft, ctx),
   );
 }
 
@@ -790,6 +918,7 @@ async function* runShotsOnDesktop(
   signal: AbortSignal,
 ): AsyncGenerator<AgentEvent> {
   yield { t: 'plan', plan: { kind: 'shots.generate', steps: SHOTS_STEPS, reply: '' } };
+  yield { t: 'delta', text: emptyScenesNote(ctx) };
   yield* pump(signal, (emit) =>
     shotsGenerate(
       {
@@ -801,8 +930,9 @@ async function* runShotsOnDesktop(
         skill: SKILL_FOR_TASK['shots.generate'],
         workspace: useSettings.getState().workspace,
       },
-      (e) => emit(e, () => shotsProposal(e, ctx)),
+      emit,
     ),
+    (e) => shotsProposal(e, ctx),
   );
 }
 
@@ -862,14 +992,46 @@ function shotsProposal(e: RunEvent, ctx: AgentContext) {
  */
 async function* pump(
   signal: AbortSignal,
-  start: (emit: (e: RunEvent, toProposal: (d: unknown) => NonNullable<Plan['proposal']>) => void) => Promise<void>,
+  start: (emit: (e: RunEvent) => void) => Promise<void>,
+  toProposal: (e: DraftEvent) => NonNullable<Plan['proposal']>,
 ): AsyncGenerator<AgentEvent> {
-  const queue: AgentEvent[] = [];
+  for await (const ev of pumpRaw(signal, start)) {
+    if (ev.t === 'draft') {
+      yield { t: 'proposal', proposal: toProposal(ev.event) };
+      continue;
+    }
+    yield ev;
+  }
+}
+
+/**
+ * pumpRaw 多出来的那一种：模型交回一份东西，还没变成卡片。
+ *
+ * 带的是**整条 RunEvent**，不是它里面的 `draft` —— 写剧本要 `body`，
+ * 拆镜头要 `dropped`，只交 draft 出去那两样就丢了。
+ */
+type Pumped = AgentEvent | { t: 'draft'; event: DraftEvent };
+
+/** 带产物的那几种 RunEvent。除了 `draft`，写剧本还要 `body`，拆镜头还要 `dropped` */
+export type DraftEvent = Extract<RunEvent, { draft: unknown }>;
+
+/**
+ * 泵的本体：把 Rust 的回调推送倒成异步生成器。
+ *
+ * 草稿**原样交出来**（`{ t: 'draft' }`），怎么变成卡片留给调用方 ——
+ * 一轮只出一份产物的那几条链路用 `pump` 包一层就行；要跑多轮再汇总成
+ * 一份产物的（写剧本要把每一场都写完）得自己收着草稿，不能每场弹一张卡。
+ */
+async function* pumpRaw(
+  signal: AbortSignal,
+  start: (emit: (e: RunEvent) => void) => Promise<void>,
+): AsyncGenerator<Pumped> {
+  const queue: Pumped[] = [];
   let finished = false;
   let wake: (() => void) | null = null;
-  const push = (e: AgentEvent) => { queue.push(e); wake?.(); };
+  const push = (e: Pumped) => { queue.push(e); wake?.(); };
 
-  const emit = (e: RunEvent, toProposal: (d: unknown) => NonNullable<Plan['proposal']>) => {
+  const emit = (e: RunEvent) => {
     switch (e.t) {
       case 'step':
         push({ t: 'step', index: e.index });
@@ -886,7 +1048,7 @@ async function* pump(
       case 'script':
       case 'assets':
       case 'shots':
-        push({ t: 'proposal', proposal: toProposal(e.draft) });
+        push({ t: 'draft', event: e as DraftEvent });
         break;
       case 'done':
         finished = true;

@@ -14,11 +14,13 @@ import type { RunEvent } from '@/api/desktop';
  */
 
 let script: RunEvent[] = [];
+/** 需要「每次调用给不同事件」时设这个（测单场失败）。返回 null 表示用 script */
+let fakeScript: (() => RunEvent[]) | null = null;
 
 vi.mock('@/api/desktop', async (orig) => {
   const real = await orig<typeof import('@/api/desktop')>();
   const run = async (_a: unknown, onEvent: (e: RunEvent) => void) => {
-    for (const e of script) onEvent(e);
+    for (const e of fakeScript ? fakeScript() : script) onEvent(e);
   };
   return { ...real, isDesktop: () => true, scriptDraft: run, assetsExtract: run, shotsGenerate: run };
 });
@@ -48,6 +50,7 @@ beforeEach(() => {
   t.resume();
   useUi.setState({ step: 'outline' });
   useAgent.getState().reset();
+  fakeScript = null;
 });
 
 /** 跑一轮并把产物卡拿出来 */
@@ -78,17 +81,63 @@ describe('写剧本', () => {
     expect(used.has(blocks[0]!.id)).toBe(false);
   });
 
-  it('产物卡上摆出地点时间和前几行 —— 采纳前要看得见写了什么', async () => {
+  it('产物卡上每一场都摆出地点时间与行数 —— 采纳前要看得见写了什么', async () => {
     script = [
       { t: 'step', index: 1 },
       { t: 'script', draft: { reply: 'x', place: '客厅', time: '深夜', lines: ['甲', '乙', '丙'] }, body: 'b' },
       { t: 'done' },
     ];
-    const rows = (await run('写这一场', 'script.draft')).proposal!.rows;
-    const flat = rows.map((r) => `${r.k}=${r.v}`).join('|');
+    const p = (await run('写剧本', 'script.draft')).proposal!;
+    const flat = p.rows.map((r) => `${r.k}=${r.v}`).join('|');
     expect(flat).toContain('客厅 · 深夜');
     expect(flat).toContain('3 行');
-    expect(flat).toContain('甲');
+    // seed 项目的大纲有 8 场，所以这一轮把 8 场都写了 —— 原来只写选中那一场，
+    // 剩下七场空着，而资产提取和拆镜头全建在那 1/8 上
+    const beats = useProject.getState().acts.flatMap((a) => a.beats);
+    const blocks = (p.patch as { t: 'blocks'; blocks: unknown[] }).blocks;
+    expect(blocks).toHaveLength(beats.length);
+    expect(p.title).toContain(`${beats.length} 场`);
+    // 按场次数计费，不是按一次调用
+    expect(p.cost).toBe(beats.length * 3);
+  });
+
+  it('只剩一场要写时，卡上连开头几行也摆出来', async () => {
+    // 先把除最后一场以外的正文都塞进项目，只留一场空着
+    const beats = useProject.getState().acts.flatMap((a) => a.beats);
+    useProject.setState({
+      blocks: beats.slice(0, -1).map((b, i) => ({
+        id: `bk9${i}`, type: 'text' as const, label: `正文 · ${b.k}`, body: '已经写过了',
+      })),
+    });
+    script = [
+      { t: 'script', draft: { reply: 'x', place: '客厅', time: '深夜', lines: ['甲', '乙', '丙'] }, body: 'b' },
+      { t: 'done' },
+    ];
+    const p = (await run('写剧本', 'script.draft')).proposal!;
+    expect((p.patch as { t: 'blocks'; blocks: unknown[] }).blocks).toHaveLength(1);
+    expect(p.rows.map((r) => `${r.k}=${r.v}`).join('|')).toContain('甲');
+  });
+
+  it('某一场没写成：已写好的照样收，卡上点名是哪一场、为什么', async () => {
+    let n = 0;
+    // 第二场让模型失败，其余成功
+    fakeScript = () => {
+      n += 1;
+      return n === 2
+        ? [{ t: 'failed', code: 'shape', message: '模型没按结构返回' } as RunEvent]
+        : [
+            { t: 'script', draft: { reply: 'x', place: '客厅', time: '深夜', lines: ['甲'] }, body: 'b' } as RunEvent,
+            { t: 'done' } as RunEvent,
+          ];
+    };
+    const beats = useProject.getState().acts.flatMap((a) => a.beats);
+    const p = (await run('写剧本', 'script.draft')).proposal!;
+    const blocks = (p.patch as { t: 'blocks'; blocks: unknown[] }).blocks;
+    expect(blocks).toHaveLength(beats.length - 1);
+    expect(p.title).toContain('1 场没写成');
+    expect(p.rows.map((r) => r.k).join('|')).toContain(`${beats[1]!.k} 没写成`);
+    // 只按真写成的那几场计费
+    expect(p.cost).toBe((beats.length - 1) * 3);
   });
 });
 

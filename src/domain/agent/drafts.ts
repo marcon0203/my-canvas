@@ -239,6 +239,17 @@ export const beatsWithoutShots = (c: AgentContext): Beat[] =>
   allBeats(c.acts).filter((b) => !c.shots.some((s) => s.sceneKey === b.k));
 
 /**
+ * 还没有正文的场次。正文块的标签里带着场次键（`正文 · 场景3`）。
+ *
+ * 「写剧本」原来只写选中的那一场，然后流水线就往下走了 —— 六场大纲跑完
+ * 只有第一场有正文，剩下五场空着，而后面的资产提取、拆镜头全建在这 1/6 上。
+ */
+export const beatsWithoutScript = (c: AgentContext): Beat[] =>
+  allBeats(c.acts).filter((b) => !c.blocks.some(
+    (x) => x.type === 'text' && x.label.includes(b.k) && x.body.trim(),
+  ));
+
+/**
  * 大纲 → 分镜。每场一个「交代环境 → 看清动作 → 靠近情绪」的三镜结构，
  * 引用这场已有的场景资产。提示词留空 —— 由 shots.prompt 补，形成可见的流水线。
  */
