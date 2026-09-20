@@ -32,7 +32,7 @@ async function flush(): Promise<void> {
   try {
     await projectSave(toBundleFrom(id, {
       proj: s.proj, ratio: s.ratio, style: s.style, stylePrompt: s.stylePrompt,
-      styles: s.styles, credits: s.credits, budget: s.budget,
+      styles: s.styles, credits: s.credits, budget: s.budget, usage: s.usage,
       acts: s.acts, blocks: s.blocks, assets: s.assets, shots: s.shots,
       timeline: s.timeline, subtitles: s.subtitles,
     }), workspace);

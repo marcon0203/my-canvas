@@ -28,8 +28,22 @@ export interface ProjectMeta {
   style: string;
   stylePrompt: string;
   styles: string[];
+  /**
+   * 剩余积分。**预估口径** —— 每步扣多少是本地常量拍的（大纲 2、分镜 3…），
+   * 和厂商真实计费没有关系。
+   */
   credits: number;
   budget: number;
+  /**
+   * 真实烧掉的 token，厂商报的那份，累计。
+   *
+   * 与 credits 分开记：积分是预估，这个是实际发生的量。走完一条流程看到
+   * 「已消耗 38 积分」，那个 38 不对应任何真实开销。
+   */
+  inputTokens?: number;
+  outputTokens?: number;
+  /** 有几轮没拿到用量（那家不报）。不记的话 token 偏低看起来像「很省」 */
+  unreportedRuns?: number;
   updatedAt: string;
   kind: string;
 }
@@ -55,6 +69,9 @@ export const defaultMeta = (id: string, proj: string): ProjectMeta => ({
   styles: ['水彩绘本', '胶片质感', '赛璐璐'],
   credits: 120,
   budget: 120,
+  inputTokens: 0,
+  outputTokens: 0,
+  unreportedRuns: 0,
   updatedAt: new Date().toISOString(),
   kind: '短剧',
 });

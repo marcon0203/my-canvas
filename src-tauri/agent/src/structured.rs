@@ -143,11 +143,35 @@ pub struct Out<'a> {
     pub reply: Deltas<'a>,
     /// 思考模型的推理过程。不是所有模型都有
     pub think: Deltas<'a>,
+    /// 这一轮真实烧了多少 token。**厂商报的那份**，不是我们估的
+    pub usage: &'a (dyn Fn(Usage) + Sync),
+}
+
+/// 一轮请求真实用掉的 token。
+///
+/// 为什么要它：界面上那个「消耗 N 积分」是本地常量拍的（大纲 2、分镜 3…），
+/// 和真实用量没有关系。走完一整条流程看到「已消耗 38 积分」，那个 38
+/// 不对应任何真实开销。积分留着当**预估**，真实用量单独记 —— 两个数
+/// 摆在一起，人才判断得出这条片子值不值。
+///
+/// 全 0 是「厂商没报」的意思（rig 的 `Usage` 就是这个约定），界面据此
+/// 显示「这家没报用量」而不是显示 0。
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Usage {
+    pub input_tokens: u64,
+    pub output_tokens: u64,
+}
+
+impl Usage {
+    pub fn is_missing(&self) -> bool {
+        self.input_tokens == 0 && self.output_tokens == 0
+    }
 }
 
 /// 不要流式时传它。测试里用得上 —— 那些用例关心的是结构，不是观感
 pub fn silent() -> Out<'static> {
-    Out { reply: &|_: &str| {}, think: &|_: &str| {} }
+    Out { reply: &|_: &str| {}, think: &|_: &str| {}, usage: &|_: Usage| {} }
 }
 
 /// 正文从流里的哪儿来。
@@ -211,6 +235,12 @@ async fn drive(
                 }
             }
             (_, MultiTurnStreamItem::FinalResponse(r)) => {
+                // 厂商报的真实用量。rig 把整轮的 usage 聚合在这儿 ——
+                // 换路重试时会报两次，调用方按「最后一次」算
+                (out.usage)(Usage {
+                    input_tokens: r.usage.input_tokens,
+                    output_tokens: r.usage.output_tokens,
+                });
                 final_out = r.output;
                 None
             }
@@ -760,7 +790,7 @@ mod http_tests {
 
     /// 只关心正文时用它：推理过程扔掉
     fn reply_only<'a>(reply: &'a (dyn Fn(&str) + Sync)) -> Out<'a> {
-        Out { reply, think: &|_: &str| {} }
+        Out { reply, think: &|_: &str| {}, usage: &|_: Usage| {} }
     }
 
     /// 收流式正文，**按块记**。`Fn(&str)`，所以内部得自己加锁。
@@ -887,7 +917,7 @@ mod http_tests {
         let think = Said::default();
         let r = reply.sink();
         let t = think.sink();
-        let got: Alts = extract(&s, "sk-x", "p", "q", &Out { reply: &r, think: &t })
+        let got: Alts = extract(&s, "sk-x", "p", "q", &Out { reply: &r, think: &t, usage: &|_: Usage| {} })
             .await
             .unwrap();
 

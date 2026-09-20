@@ -128,6 +128,13 @@ function MessageView({ msg }: { msg: AgentMessage }) {
         : msg.streaming && !msg.steps?.length ? <span className="caret" /> : null}
       {msg.tool && <ToolCard msgId={msg.id} t={msg.tool} />}
       {msg.handoff && <HandoffCard to={personaById(msg.handoff.to)} />}
+      {msg.usage && (msg.usage.inputTokens > 0 || msg.usage.outputTokens > 0) && (
+        <p className="ausage">
+          <Icon name="bolt" />
+          这一轮真实用了 {msg.usage.inputTokens + msg.usage.outputTokens} token
+          （进 {msg.usage.inputTokens} / 出 {msg.usage.outputTokens}）
+        </p>
+      )}
       {msg.proposal && (
         <ProposalCard msgId={msg.id} p={msg.proposal} kind={msg.kind}
           verdict={msg.verdict ?? 'pending'} hold={msg.hold} />

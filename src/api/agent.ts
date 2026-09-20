@@ -45,6 +45,14 @@ export type AgentEvent =
   | { t: 'proposal'; proposal: NonNullable<Plan['proposal']> }
   /** 当班 Agent 接不了，交给对的那位 */
   | { t: 'handoff'; handoff: Handoff }
+  /**
+   * 这一轮真实烧掉的 token（厂商报的）。一轮可能来几次 —— 写剧本是一场
+   * 一次请求，换路重试也会再报一次，所以**累加**而不是覆盖。
+   *
+   * 浏览器 mock 那条路不发这个：本地模板没有真实用量，造一个数出来就是
+   * 又一次「看起来像真的」。
+   */
+  | { t: 'usage'; inputTokens: number; outputTokens: number }
   | { t: 'done' }
   | { t: 'aborted' };
 
@@ -1045,6 +1053,9 @@ async function* pumpRaw(
         break;
       case 'think':
         push({ t: 'think', text: e.text });
+        break;
+      case 'usage':
+        push({ t: 'usage', inputTokens: e.inputTokens, outputTokens: e.outputTokens });
         break;
       case 'proposal':
       case 'prompts':

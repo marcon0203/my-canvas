@@ -69,6 +69,8 @@ export async function loadProject(id: string, workspace: string): Promise<Projec
       id: b.meta.id, proj: b.meta.proj, kind: b.meta.kind,
       ratio: b.meta.ratio, style: b.meta.style, stylePrompt: b.meta.stylePrompt,
       styles: b.meta.styles, credits: b.meta.credits, budget: b.meta.budget,
+      inputTokens: b.meta.inputTokens, outputTokens: b.meta.outputTokens,
+      unreportedRuns: b.meta.unreportedRuns,
       acts: b.acts, blocks: b.blocks, assets, shots,
       timeline: b.timeline, subtitles: b.subtitles,
       alts: {}, pins: [],
@@ -81,6 +83,7 @@ export async function loadProject(id: string, workspace: string): Promise<Projec
 export function toBundleFrom(id: string, s: {
   proj: string; ratio: string; style: string; stylePrompt: string; styles: string[];
   credits: number; budget: number;
+  usage: { inputTokens: number; outputTokens: number; unreported: number };
   acts: ProjectBundle['acts']; blocks: ProjectBundle['blocks'];
   assets: unknown; shots: unknown;
   timeline?: ProjectBundle['timeline']; subtitles?: ProjectBundle['subtitles'];
@@ -90,6 +93,11 @@ export function toBundleFrom(id: string, s: {
       ...defaultMeta(id, s.proj),
       ratio: s.ratio, style: s.style, stylePrompt: s.stylePrompt, styles: s.styles,
       credits: s.credits, budget: s.budget,
+      // 真实用量也落盘 —— 只存在内存里的话关掉应用就没了，
+      // 而「这条片子真实烧了多少」正是要跨会话累计的东西
+      inputTokens: s.usage.inputTokens,
+      outputTokens: s.usage.outputTokens,
+      unreportedRuns: s.usage.unreported,
       updatedAt: new Date().toISOString(),
     },
     acts: s.acts, blocks: s.blocks, assets: s.assets, shots: s.shots,

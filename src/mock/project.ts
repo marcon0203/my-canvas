@@ -16,9 +16,15 @@ export interface ProjectMock {
   proj: string;
   style: string;
   ratio: string;
+  /** 预估口径的余额。每步扣多少是本地常量拍的，与厂商计费无关 */
   credits: number;
   /** 积分预算（记账口径：消耗 = 预算 - 余额） */
   budget: number;
+  /** 真实烧掉的 token，厂商报的那份，累计。老项目没有这几个字段 */
+  inputTokens?: number;
+  outputTokens?: number;
+  /** 有几轮那家没报用量 */
+  unreportedRuns?: number;
   stylePrompt: string;
   styles: string[];
   acts: Act[];

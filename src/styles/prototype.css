@@ -577,6 +577,10 @@ body { background: var(--color-bg-canvas); overflow: hidden; }
 .mode-c--todo:hover { transform: none; box-shadow: none; }
 .mode-c__soon { font-size: 11px; font-weight: 600; padding: 2px 7px; border-radius: 999px; background: var(--color-bg-muted); color: var(--color-text-tertiary); }
 
+/* 这一轮真实烧了多少 token。和产物卡上那个「消耗 N 积分」是两件事 */
+.ausage { display: flex; gap: 6px; align-items: center; margin: 6px 0 0; font-size: 11px; color: var(--color-text-tertiary); font-variant-numeric: tabular-nums; }
+.ausage svg { width: 12px; height: 12px; flex: 0 0 auto; }
+
 /* 示例产物：与真产物在视觉上要一眼分得开 */
 .aprop--demo { border-style: dashed; }
 .aprop__demo { margin-left: auto; flex: 0 0 auto; font-size: 11px; font-weight: 600; padding: 2px 7px; border-radius: 999px; background: var(--color-bg-muted); color: var(--color-text-tertiary); white-space: nowrap; }

@@ -40,6 +40,19 @@ pub enum RunEvent {
     /// 不认识的景别）—— **要带到界面上如实说**，不能让「20 镜里收了 17 镜」
     /// 看起来像模型只给了 17 镜
     Shots { draft: ShotsDraft, dropped: usize },
+    /// 这一轮真实烧了多少 token，**厂商报的那份**。
+    ///
+    /// 界面上的「消耗 N 积分」是本地常量拍的，和真实用量没关系 ——
+    /// 走完一整条流程看到「已消耗 38 积分」，那个 38 不对应任何真实开销。
+    /// 积分留着当预估，这个事件带的是实际发生的量，两个数摆在一起。
+    ///
+    /// 全 0 = 这家没报用量（rig 的 Usage 就是这个约定），前端据此显示
+    /// 「这家没报」而不是显示 0。
+    /// 变体上单独标 camelCase：枚举顶上那个 `rename_all` 只管变体名，
+    /// 不管字段名（要字段也跟着得用 `rename_all_fields`）。
+    /// 其余变体的字段都是单个词，看不出来这件事。
+    #[serde(rename_all = "camelCase")]
+    Usage { input_tokens: u64, output_tokens: u64 },
     Done,
     /// **失败也走事件**，不走 Result —— 否则前端要同时处理
     /// 「Promise reject」和「事件里的错误」两条路径。
@@ -138,7 +151,11 @@ macro_rules! out_of {
     ($sink:expr, $out:ident) => {
         let reply = |t: &str| $sink.emit(RunEvent::Delta { text: t.to_string() });
         let think = |t: &str| $sink.emit(RunEvent::Think { text: t.to_string() });
-        let $out = crate::structured::Out { reply: &reply, think: &think };
+        let usage = |u: crate::structured::Usage| $sink.emit(RunEvent::Usage {
+            input_tokens: u.input_tokens,
+            output_tokens: u.output_tokens,
+        });
+        let $out = crate::structured::Out { reply: &reply, think: &think, usage: &usage };
     };
 }
 
@@ -534,5 +551,32 @@ mod tests {
         .unwrap();
         assert_eq!(v["t"], "failed");
         assert_eq!(v["code"], "no_key");
+    }
+}
+
+#[cfg(test)]
+mod usage_tests {
+    use super::*;
+
+    /// 事件形状是前端的契约。`inputTokens` 拼错的话前端读到 undefined，
+    /// 记账就悄悄归零 —— 那种错不会报，只会让数字变成 0。
+    #[test]
+    fn 用量事件按_camel_case_序列化() {
+        let v = serde_json::to_value(RunEvent::Usage {
+            input_tokens: 1234,
+            output_tokens: 56,
+        })
+        .unwrap();
+        assert_eq!(v["t"], "usage");
+        assert_eq!(v["inputTokens"], 1234);
+        assert_eq!(v["outputTokens"], 56);
+    }
+
+    /// 全 0 是「厂商没报」的约定，不是「花了 0 个 token」
+    #[test]
+    fn 全零表示没报_不是真的零() {
+        let u = crate::structured::Usage::default();
+        assert!(u.is_missing());
+        assert!(!crate::structured::Usage { input_tokens: 0, output_tokens: 7 }.is_missing());
     }
 }

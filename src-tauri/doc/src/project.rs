@@ -21,8 +21,20 @@ pub struct Meta {
     pub style: String,
     pub style_prompt: String,
     pub styles: Vec<String>,
+    /// 剩余积分。**这是预估口径** —— 每一步扣多少是本地常量拍的
+    /// （大纲 2、分镜 3…），和厂商真实计费没有关系
     pub credits: u32,
     pub budget: u32,
+    /// 真实烧掉的 token，厂商报的那份，累计。
+    ///
+    /// 与 credits 分开记：积分是预估，这个是实际发生的量。走完一条流程
+    /// 看到「已消耗 38 积分」，那个 38 不对应任何真实开销 —— 两个数都摆出来，
+    /// 人才判断得出这条片子值不值。
+    pub input_tokens: u64,
+    pub output_tokens: u64,
+    /// 有几轮请求**没拿到用量**（那家不报）。不记这个的话，token 数偏低
+    /// 看起来像「很省」，实际上是有几轮没算进去
+    pub unreported_runs: u32,
     /// RFC3339；只用来排「最近的项目」
     pub updated_at: String,
     pub kind: String,
@@ -39,6 +51,9 @@ impl Default for Meta {
             styles: vec!["水彩绘本".into(), "胶片质感".into(), "赛璐璐".into()],
             credits: 120,
             budget: 120,
+            input_tokens: 0,
+            output_tokens: 0,
+            unreported_runs: 0,
             updated_at: String::new(),
             kind: "短剧".into(),
         }

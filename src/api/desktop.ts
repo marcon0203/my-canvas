@@ -140,6 +140,16 @@ export type RunEvent =
    * 看起来像模型只给了 17 镜。
    */
   | { t: 'shots'; draft: ShotsCandDraft; dropped: number }
+  /**
+   * 这一轮真实烧了多少 token，**厂商报的那份**。
+   *
+   * 界面上的「消耗 N 积分」是本地常量拍的，和真实用量无关 —— 走完一整条
+   * 流程看到「已消耗 38 积分」，那个 38 不对应任何真实开销。积分留着当
+   * 预估，这个事件带的是实际发生的量。
+   *
+   * 两个都是 0 = 这家没报用量（rig 的约定），要显示「没报」而不是 0。
+   */
+  | { t: 'usage'; inputTokens: number; outputTokens: number }
   | { t: 'done' }
   | { t: 'failed'; code: string; message: string };
 

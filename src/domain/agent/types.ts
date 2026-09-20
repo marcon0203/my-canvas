@@ -149,6 +149,11 @@ export interface AgentMessage {
   /** 正在流式输出 */
   readonly streaming?: boolean;
   /**
+   * 这一轮真实烧掉的 token（厂商报的）。没有这个字段 = 本地模板那条路，
+   * 或者那家不报用量。
+   */
+  readonly usage?: { readonly inputTokens: number; readonly outputTokens: number };
+  /**
    * 思考模型开口之前的推理过程。**不是正文的一部分** —— 分开存是因为它
    * 界面上要另摆一块（正文一开口就折起来），也不该进产物。
    */

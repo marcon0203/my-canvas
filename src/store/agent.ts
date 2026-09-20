@@ -237,6 +237,20 @@ export const useAgent = create<AgentState>((set, get) => ({
           case 'think':
             patch((m) => ({ ...m, think: (m.think ?? '') + ev.text }));
             break;
+          case 'usage':
+            // **立刻记，不等采纳**：token 在请求发出去的那一刻就烧掉了，
+            // 产物丢弃也退不回来。积分是采纳时才扣（那是预估口径，
+            // 表达的是「你打算为这份产物付多少」）—— 两个数记在不同时机，
+            // 正因为它们是两件事
+            useProject.getState().addUsage(ev);
+            patch((m) => ({
+              ...m,
+              usage: {
+                inputTokens: (m.usage?.inputTokens ?? 0) + ev.inputTokens,
+                outputTokens: (m.usage?.outputTokens ?? 0) + ev.outputTokens,
+              },
+            }));
+            break;
           case 'handoff': {
             patch((m) => ({ ...m, handoff: ev.handoff }));
             const to = personaById(ev.handoff.to);

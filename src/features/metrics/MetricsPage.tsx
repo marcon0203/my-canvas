@@ -8,6 +8,13 @@ import { useProject, useAssetList } from '@/store/project';
 import { useUi, type Step } from '@/store/ui';
 
 /** 数据看板：原型 viewMetrics 同构（.mhero__ring/.mstats/.mcharts/.mstep） */
+/** token 数好读一点。到万位就换单位 —— 一串八位数字没人读得出量级 */
+function fmtTokens(n: number): string {
+  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(2)}M`;
+  if (n >= 10_000) return `${(n / 1000).toFixed(1)}k`;
+  return String(n);
+}
+
 export function MetricsPage() {
   const shots = useProject((s) => s.shots);
   const acts = useProject((s) => s.acts);
@@ -18,6 +25,8 @@ export function MetricsPage() {
   const setStep = useUi((s) => s.setStep);
 
   const spent = budget - credits;
+  const usage = useProject((s) => s.usage);
+  const tokens = usage.inputTokens + usage.outputTokens;
   const hit = hitRate(shots);
   const tries = totalTries(shots);
   const usable = countUsable(shots);
@@ -68,13 +77,33 @@ export function MetricsPage() {
           <div style={{ flex: 1, minWidth: 0 }}>
             <div style={{ fontSize: 18, fontWeight: 600, letterSpacing: '-.01em' }}>生产记账</div>
             <div className="t-cap dim" style={{ margin: '3px 0 18px' }}>
-              命中率 = 可用镜头 ÷ 累计生成次数。这个数字决定第二部片能不能比第一部便宜。
+              命中率 = 判定可用的镜头 ÷ 累计生成次数。这个数字决定第二部片能不能比第一部便宜。
             </div>
             <div className="mstats">
               <MetricCard label="累计生成" value={tries} />
               <MetricCard label="判定可用" value={usable} />
-              <MetricCard label="单条可用成本" value={usable ? (spent / usable).toFixed(1) : '—'} unit="积分" />
+              <MetricCard label="单条可用成本（预估）"
+                value={usable ? (spent / usable).toFixed(1) : '—'} unit="积分" />
             </div>
+            {/* 预估与实际并排摆着。积分是本地常量拍的（大纲 2、分镜 3…），
+                和厂商真实计费没有关系 —— 只摆积分的话，「已消耗 38 积分」
+                会被当成真实开销 */}
+            <div className="mstats" style={{ marginTop: 10 }}>
+              <MetricCard label="预估消耗" value={spent} unit="积分" />
+              <MetricCard label="实际用量"
+                value={tokens ? fmtTokens(tokens) : '—'} unit={tokens ? 'token' : undefined} />
+              <MetricCard label="进出比"
+                value={usage.outputTokens ? `${(usage.inputTokens / usage.outputTokens).toFixed(1)}:1` : '—'} />
+            </div>
+            <p className="t-cap dim" style={{ margin: '8px 0 0' }}>
+              「预估消耗」是本地按步数算的，和厂商计费无关。
+              「实际用量」是厂商报回来的 token：
+              进 {fmtTokens(usage.inputTokens)} / 出 {fmtTokens(usage.outputTokens)}。
+              {usage.unreported > 0
+                && ` 另有 ${usage.unreported} 轮那家没报用量，没算进上面这个数 —— 实际比它更多。`}
+              {!tokens && ' 还没有真实用量：这个项目里的产物都是本地模板出的，或者那几家都不报用量。'}
+            </p>
+
             {awaiting > 0 && (
               <button className="mhint" onClick={() => setStep('storyboard')}>
                 <Icon name="eye" />

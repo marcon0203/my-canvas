@@ -19,7 +19,22 @@ export type { AssetGroup } from '@/domain/assets/model';
 /** 项目内容态：全部可撤销（产品无确认闸口，靠历史兜底） */
 export interface ProjectState {
   proj: string;
+  /**
+   * 剩余积分。**预估口径** —— 每步扣多少是本地常量拍的（大纲 2、分镜 3…），
+   * 和厂商真实计费没有关系。真实用量看 `usage`。
+   */
   credits: number;
+  /**
+   * 真实烧掉的 token，厂商报的那份，累计。
+   *
+   * 与 credits 分开记：积分是预估，这个是实际发生的量。走完一条流程看到
+   * 「已消耗 38 积分」，那个 38 不对应任何真实开销 —— 两个数都摆出来，
+   * 人才判断得出这条片子值不值。
+   *
+   * `unreported` 是「有几轮那家没报用量」。不记这个的话 token 数偏低
+   * 看起来像「很省」，实际上是有几轮没算进去。
+   */
+  usage: { inputTokens: number; outputTokens: number; unreported: number };
   style: string;
   ratio: string;
   stylePrompt: string;
@@ -48,6 +63,13 @@ export interface ProjectState {
   /* ---- 内容变更 ---- */
   hydrate: (b: ProjectBootstrap) => void;
   spend: (n: number) => void;
+  /**
+   * 记一轮真实用量。全 0 = 那家没报，记进 `unreported`。
+   *
+   * **累加而不是覆盖**：一轮里可能发几次请求（写剧本是一场一次，
+   * 换路重试也会再报一次）。
+   */
+  addUsage: (u: { inputTokens: number; outputTokens: number }) => void;
   setStyle: (s: string) => void;
   updateBlock: (id: string, body: string) => void;
   setViewStyle: (assetId: string, viewName: string, style: string) => void;
@@ -92,6 +114,7 @@ export const useProject = create<ProjectState>()(
     immer((set) => ({
       proj: '',
       credits: 0,
+      usage: { inputTokens: 0, outputTokens: 0, unreported: 0 },
       style: '',
       ratio: '9:16',
       stylePrompt: '',
@@ -111,6 +134,11 @@ export const useProject = create<ProjectState>()(
       hydrate: (b) => set((s) => {
         s.proj = b.project.proj;
         s.credits = b.project.credits;
+        s.usage = {
+          inputTokens: b.project.inputTokens ?? 0,
+          outputTokens: b.project.outputTokens ?? 0,
+          unreported: b.project.unreportedRuns ?? 0,
+        };
         s.style = b.project.style;
         s.ratio = b.project.ratio;
         s.stylePrompt = b.project.stylePrompt;
@@ -130,6 +158,11 @@ export const useProject = create<ProjectState>()(
       }),
 
       spend: (n) => set((s) => { s.credits = Math.max(0, s.credits - n); }),
+      addUsage: (u) => set((s) => {
+        if (!u.inputTokens && !u.outputTokens) { s.usage.unreported += 1; return; }
+        s.usage.inputTokens += u.inputTokens;
+        s.usage.outputTokens += u.outputTokens;
+      }),
       setStyle: (v) => set((s) => { s.style = v; }),
       updateBlock: (id, body) => set((s) => { const b = s.blocks.find((x) => x.id === id); if (b) b.body = body; }),
 
