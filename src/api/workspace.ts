@@ -135,13 +135,31 @@ export async function projectDelete(id: string, workspace: string): Promise<void
 }
 
 /**
+ * id 里那截名字最多几个字。
+ *
+ * 走查里 URL 长这样：`/project/%E4%B8%80%E4%B8%AA%E4%BF%AE...-20260918/outline` ——
+ * 一句十几个汉字的需求，URL 编码之后是四五十个字符，既读不出来也不好分享。
+ * 八个字足够在 `projects/` 里认出是哪个项目，标题仍然是完整那句。
+ */
+const ID_SLUG = 8;
+
+/**
  * 新项目 id：可读、可当目录名、不撞车。
- * 用名字 + 时间戳而不是 uuid —— 用户打开 projects/ 时要认得出哪个目录是哪个项目。
+ *
+ * # id 和标题是两件事
+ *
+ * **id 一旦定下就不再变**：它是磁盘目录名，也是 URL 的一部分。改标题只改
+ * `meta.proj`，不动 id —— 否则一改名字，已有的链接失效、目录要搬家、
+ * 落在里面的媒体文件路径全错。所以任何地方都不要从 id 反推标题，
+ * 也不要在改名时重算 id（`workspace.rename.test.ts` 守着这条）。
+ *
+ * 用名字 + 日期而不是 uuid：用户打开 `projects/` 时要认得出哪个目录是哪个项目。
+ * 同一天同一句话建两次靠尾号区分。
  */
 export function newProjectId(name: string, taken: readonly string[]): string {
   const cleaned = name.trim().replace(/[/\\:*?"<>|]/g, '_').replace(/^[.\s]+|[.\s]+$/g, '');
   // 全是非法字符时会剩一串下划线 —— 那种目录名等于没名字，不如直接叫「未命名」
-  const base = /^[_\s.]*$/.test(cleaned) ? '未命名' : cleaned;
+  const base = (/^[_\s.]*$/.test(cleaned) ? '未命名' : cleaned).slice(0, ID_SLUG);
   const stamp = new Date().toISOString().slice(0, 10).replace(/-/g, '');
   let id = `${base}-${stamp}`;
   let n = 2;
