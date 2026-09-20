@@ -10,8 +10,10 @@ export function Rail({ active, onPick }: {
   return (
     <nav className="rail" aria-label="主导航">
       {SECTIONS.map((s) => (
-        <button key={s.id} className="rail__b" aria-current={s.id === active}
-          title={s.todo ? `${s.n}（还没实现）` : s.n} onClick={() => onPick(s.id)}>
+        <button key={s.id} className={`rail__b${s.todo ? ' rail__b--todo' : ''}`}
+          aria-current={s.id === active}
+          title={s.todo ? `${s.n}（还没做，点进去说明将来放什么）` : s.n}
+          onClick={() => onPick(s.id)}>
           <Icon name={s.icon} />
           <span className="rail__n">{s.n}</span>
         </button>

@@ -150,13 +150,28 @@ export function SettingsRoute() {
   );
 }
 
-/** 资源管理：入口先放着，点进来说明白还没实现 —— 比灰掉一个按钮诚实 */
+/**
+ * 资源管理：入口先放着，点进来说清将来放什么 —— 比灰掉一个按钮诚实。
+ *
+ * 走查时这儿只有一句「还没实现，先占个入口」。一句「没实现」不给人任何
+ * 信息；说清它将来管什么、现在那些东西在哪，人才知道要不要等它。
+ */
 export function ResourcesRoute() {
   return (
     <Shell section="resources">
-      <div className="stage"><div className="stage__body"><div className="pad">
-        <EmptyState icon="image"
-          text="资源管理还没实现，先占个入口。" />
+      <div className="stage"><div className="stage__body"><div className="pad" style={{ maxWidth: 720 }}>
+        <EmptyState icon="image" text="资源管理还没做" />
+        <div className="blk"><div className="blk__body" style={{ padding: '16px 20px' }}>
+          <p className="t-cap" style={{ margin: '0 0 10px' }}>
+            这里将来集中管跨项目复用的东西：可以拿到别的项目里用的角色形象、
+            场景参考图、画风预设，以及生成出来的媒体文件。
+          </p>
+          <p className="t-cap dim" style={{ margin: 0 }}>
+            现在它们还是按项目存的 —— 资产在项目的「资产」页，生成出来的文件在
+            工作空间目录下各项目自己的 <span className="mono">media/</span> 里。
+            Skill 与供应商配置已经是跨项目的，在「设置」里。
+          </p>
+        </div></div>
       </div></div></div>
     </Shell>
   );

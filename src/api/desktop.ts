@@ -14,6 +14,7 @@ import type { SkillMeta, SkillWarning } from '@/domain/skills/loader';
 import type { ProposalPatch } from '@/domain/agent/types';
 import type { Risk } from '@/domain/agent/policy';
 import type { ToolId, ToolStatus } from '@/domain/agent/tools';
+import { SUBDIRS } from '@/domain/workspace/subdirs';
 
 /* ---------------- 供应商：一家一个 YAML ---------------- */
 
@@ -383,10 +384,7 @@ export async function workspaceInfo(configured: string): Promise<WorkspaceInfo> 
     return {
       root, source: configured.trim() ? 'user' : 'default', defaultRoot: '~/.hitv',
       exists: false, writable: false,
-      subdirs: [
-        { name: 'skills', desc: '用户自己放的 skill，与内置同名时盖过内置', used: true, exists: false },
-        { name: 'projects', desc: '项目数据', used: false, exists: false },
-      ],
+      subdirs: SUBDIRS.map((d) => ({ ...d, exists: false })),
     };
   }
   return invoke<WorkspaceInfo>('workspace_info', { configured });

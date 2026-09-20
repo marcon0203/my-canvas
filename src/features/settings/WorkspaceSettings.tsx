@@ -100,13 +100,20 @@ export function WorkspaceSettings() {
           </div>
           {info?.subdirs.map((d) => (
             <div key={d.name} className={`skrow${d.used ? '' : ' atile--off'}`}>
-              <span className="skrow__ic"><Icon name="image" /></span>
+              <span className="skrow__ic"><Icon name={d.name === 'providers' ? 'gear' : d.name === 'skills' ? 'wand' : 'layers'} /></span>
               <span className="skrow__main" style={{ cursor: 'default' }}>
                 <span className="skrow__n mono">{d.name}/</span>
                 <span className="dim skrow__k">{d.desc}</span>
               </span>
               <span className="skrow__out">
                 {!d.used ? '还没用上' : d.exists ? '已建好' : '待创建'}
+                {/* api key 在哪个文件，用户该看得到 —— 走查时这一行整个不在，
+                    因为前端硬编码的清单漏了 providers/ */}
+                {d.name === 'providers' && (
+                  <span className="dim" style={{ display: 'block', fontSize: 11 }}>
+                    文件权限 0600
+                  </span>
+                )}
               </span>
               <span /><span />
             </div>

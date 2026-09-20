@@ -93,6 +93,26 @@ pub fn prompt_of(input: &AssetsInput) -> String {
 ///
 /// **分组不合法的整条丢掉**，不要猜一个默认分组 —— 猜错的后果是一个角色被立
 /// 成道具，而它在界面上出现在错的那一栏里，人得自己发现。
+/// 占位词。剧本模板、未填写的表单、模型偷懒时都会冒出这些。
+///
+/// 只比对**名字**，不比对描述：描述里出现「待定」是正常的
+/// （「一间待定风格的客厅」），名字叫「待定场景」就不是一个资产。
+const PLACEHOLDERS: &[&str] = &[
+    "待定", "待补", "待填", "未定", "未命名", "无", "空",
+    "tbd", "todo", "n/a", "na", "none", "unknown", "untitled", "placeholder",
+];
+
+/// 名字整体就是个占位词，或者以占位词开头（「待定场景」「待定时间」）
+fn is_placeholder(name: &str) -> bool {
+    let low = name.trim().to_lowercase();
+    if low.is_empty() {
+        return true;
+    }
+    PLACEHOLDERS
+        .iter()
+        .any(|p| low == *p || low.starts_with(p) || low.ends_with(p))
+}
+
 pub fn tidy(d: &mut AssetsDraft) -> Result<()> {
     let mut seen = std::collections::HashSet::new();
     d.assets = std::mem::take(&mut d.assets)
@@ -112,6 +132,14 @@ pub fn tidy(d: &mut AssetsDraft) -> Result<()> {
                 .collect();
             c.desc = c.desc.trim().chars().take(MAX_DESC).collect();
             if c.name.is_empty() || c.desc.is_empty() {
+                return None;
+            }
+            // 占位词不立成资产。
+            //
+            // 走查里模板剧本有一行 `待定场景 · 待定时间`，模型照单全收，
+            // 提取出了两个资产：「待定场景」和「待定时间」，分组「场景」。
+            // 输入是占位符，输出就不该是资产 —— 人还得手动去删。
+            if is_placeholder(&c.name) {
                 return None;
             }
             // 同一分组里同名的算一个
@@ -252,6 +280,34 @@ mod tests {
     #[test]
     fn 一个都不剩时报错_不给一个空产物() {
         let mut d = draft(vec![cand("人物", "王姐", "四十岁")]);
+        assert!(tidy(&mut d).is_err());
+    }
+
+    #[test]
+    fn 占位词不立成资产_走查里那两个就是这么进来的() {
+        // 模板剧本里那行 `待定场景 · 待定时间`，模型照单全收提出了两个资产
+        let mut d = draft(vec![
+            cand("场景", "待定场景", "一个场景"),
+            cand("场景", "待定时间", "某个时间"),
+            cand("角色", "TBD", "待补"),
+            cand("角色", "未命名", "某人"),
+            cand("场景", "旧公寓客厅", "深夜，堆着纸箱"),
+        ]);
+        tidy(&mut d).unwrap();
+        assert_eq!(d.assets.len(), 1, "只有真实那一条该留下");
+        assert_eq!(d.assets[0].name, "旧公寓客厅");
+    }
+
+    #[test]
+    fn 描述里出现待定是正常的_只看名字() {
+        let mut d = draft(vec![cand("场景", "客厅", "一间待定风格的客厅")]);
+        tidy(&mut d).unwrap();
+        assert_eq!(d.assets.len(), 1);
+    }
+
+    #[test]
+    fn 全是占位词时报错_不给一个空产物() {
+        let mut d = draft(vec![cand("场景", "待定场景", "x"), cand("角色", "todo", "y")]);
         assert!(tidy(&mut d).is_err());
     }
 

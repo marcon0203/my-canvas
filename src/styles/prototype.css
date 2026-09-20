@@ -569,6 +569,14 @@ body { background: var(--color-bg-canvas); overflow: hidden; }
 .mhint b { font-variant-numeric: tabular-nums; }
 .mhint__go { margin-left: auto; flex: 0 0 auto; align-self: center; font-size: 12px; font-weight: 600; color: var(--color-accent); white-space: nowrap; }
 
+/* 还没做的入口：视觉权重压下去，但仍然说得清它将来是什么 */
+.rail__b--todo .rail__n, .rail__b--todo svg { opacity: .6; }
+
+
+.mode-c--todo { opacity: .55; cursor: default; }
+.mode-c--todo:hover { transform: none; box-shadow: none; }
+.mode-c__soon { font-size: 11px; font-weight: 600; padding: 2px 7px; border-radius: 999px; background: var(--color-bg-muted); color: var(--color-text-tertiary); }
+
 /* 示例产物：与真产物在视觉上要一眼分得开 */
 .aprop--demo { border-style: dashed; }
 .aprop__demo { margin-left: auto; flex: 0 0 auto; font-size: 11px; font-weight: 600; padding: 2px 7px; border-radius: 999px; background: var(--color-bg-muted); color: var(--color-text-tertiary); white-space: nowrap; }

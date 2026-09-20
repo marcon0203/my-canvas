@@ -17,7 +17,9 @@ import { actOfBeat, allBeats, nextId } from '@/domain/story/model';
 import { readyProviders, useSettings } from '@/store/settings';
 import { makeShot, type Shot } from '@/domain/shots/model';
 import { AID_PREFIX, defaultRig, type AssetGroup } from '@/domain/assets/model';
-import { SIZE_EN, assetShell, beatsWithoutScript, beatsWithoutShots, shotsMissingPrompt } from '@/domain/agent/drafts';
+import {
+  SIZE_EN, assetShell, beatsWithoutScript, beatsWithoutShots, isRealScript, shotsMissingPrompt,
+} from '@/domain/agent/drafts';
 import { needsClip } from '@/domain/shots/usable';
 import { ctxAssets } from '@/domain/agent/context';
 
@@ -131,8 +133,10 @@ export async function* runAgent(
     return;
   }
   // 提取资产要有正文 —— 只送场次标题的话模型只能瞎猜人物长什么样
+  // 「有正文」要是真的正文 —— 只有占位符的剧本送进去，模型只能把
+  // 「待定场景」当成一个场景立出来（走查里就是这么发生的）
   if (isDesktop() && resolved === 'assets.extract'
-      && ctx.blocks.some((b) => b.type === 'text' && b.body.trim())) {
+      && ctx.blocks.some((b) => b.type === 'text' && isRealScript(b.body))) {
     yield* runAssetsOnDesktop(ctx, signal);
     return;
   }

@@ -239,6 +239,26 @@ export const beatsWithoutShots = (c: AgentContext): Beat[] =>
   allBeats(c.acts).filter((b) => !c.shots.some((s) => s.sceneKey === b.k));
 
 /**
+ * 占位词。与 Rust 侧 `agent/src/assets.rs::PLACEHOLDERS` 同一份
+ * （那边拦模型交回来的资产名，这边拦「这份剧本算不算写过」）。
+ */
+const PLACEHOLDER = /^(待定|待补|待填|未定|未命名|无|空|tbd|todo|n\/a|none|unknown|untitled|placeholder)/i;
+
+/**
+ * 这份正文算不算真写过。
+ *
+ * 只有占位符的正文不算 —— 走查里模板剧本那行 `待定场景 · 待定时间`
+ * 被当成了有效正文，于是资产提取真的跑了，提出两个叫「待定场景」
+ * 「待定时间」的资产。
+ */
+export const isRealScript = (body: string): boolean =>
+  body
+    .split('\n')
+    .map((l) => l.trim().replace(/^[#*\-•\s]+/, ''))
+    .filter(Boolean)
+    .some((l) => !PLACEHOLDER.test(l) && l.length > 2);
+
+/**
  * 还没有正文的场次。正文块的标签里带着场次键（`正文 · 场景3`）。
  *
  * 「写剧本」原来只写选中的那一场，然后流水线就往下走了 —— 六场大纲跑完
@@ -246,7 +266,7 @@ export const beatsWithoutShots = (c: AgentContext): Beat[] =>
  */
 export const beatsWithoutScript = (c: AgentContext): Beat[] =>
   allBeats(c.acts).filter((b) => !c.blocks.some(
-    (x) => x.type === 'text' && x.label.includes(b.k) && x.body.trim(),
+    (x) => x.type === 'text' && x.label.includes(b.k) && isRealScript(x.body),
   ));
 
 /**
