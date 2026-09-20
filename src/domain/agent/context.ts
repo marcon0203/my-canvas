@@ -11,6 +11,12 @@ import type { Modality, ModelRef } from '@/domain/providers/model';
  */
 export interface AgentContext {
   readonly proj: string;
+  /**
+   * 项目在磁盘上的 id。要跑真工具的那几步得把它传下去 ——
+   * 工具是在项目目录里落盘的，没有 id 就不知道往哪写。
+   * 空串 = 还没打开项目（首页），这时任何写盘的活都不该跑。
+   */
+  readonly projectId: string;
   readonly style: string;
   readonly stylePrompt: string;
   readonly styles: readonly string[];

@@ -71,8 +71,6 @@ export interface ProjectState {
   setVerdict: (shotId: string, v: Verdict, extraTakes?: number) => void;
   genKey: (shotId: string) => void;
   genAllKeys: () => void;
-  batchVidStart: () => void;
-  batchVidDone: () => void;
   expandAlts: (beatId: string, alts: string[]) => void;
   addShot: (sceneKey: string) => string | undefined;
   deleteShot: (id: string) => void;
@@ -239,18 +237,6 @@ export const useProject = create<ProjectState>()(
         for (const shot of s.shots) shot.key = true;
         s.credits = Math.max(0, s.credits - 10);
       }),
-      batchVidStart: () => set((s) => {
-        for (const shot of s.shots) {
-          if (shot.vid === 'none') { shot.vid = 'run'; shot.takes += 4; }
-        }
-        s.credits = Math.max(0, s.credits - 24);
-      }),
-      batchVidDone: () => set((s) => {
-        for (const shot of s.shots) {
-          if (shot.vid === 'run') { shot.vid = 'ok'; shot.key = true; }
-        }
-      }),
-
       expandAlts: (beatId, alts) => set((s) => { s.alts[beatId] = alts; }),
       addShot: (sceneKey) => {
         let id: string | undefined;
@@ -309,6 +295,16 @@ export const useProject = create<ProjectState>()(
               sh.takes += 1;
               delete sh.fail;
             }
+            // 失败也落库：一次失败是花掉的钱（takes 要加），而连续失败几次
+            // 和失败一次，下一步该做的事不一样
+            for (const f of patch.fails ?? []) {
+              const sh = s.shots.find((x) => x.id === f.id);
+              if (!sh) continue;
+              sh.takes += 1;
+              sh.fail = { n: (sh.fail?.n ?? 0) + 1, why: f.why };
+              // 回到「待转」，重试按钮才认得它
+              if (sh.vid === 'run') sh.vid = 'none';
+            }
             break;
           case 'assetLock': {
             const a = [...s.assets.角色, ...s.assets.场景, ...s.assets.道具]
@@ -346,9 +342,6 @@ export const useProject = create<ProjectState>()(
             break;
           case 'subtitles':
             s.subtitles = { lang: patch.subtitles.lang, cues: [...patch.subtitles.cues] };
-            break;
-          case 'run':
-            // 运行类产物不改内容，由 store 的既有动作执行（见 store/agent.ts）
             break;
         }
       }),

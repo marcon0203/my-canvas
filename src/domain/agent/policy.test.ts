@@ -62,8 +62,8 @@ describe('agent/policy · 自主执行的边界', () => {
   it('产物按补丁的实际后果判，不按谁发起的判', () => {
     // 摄影指导发起，但产物只是改几行字
     expect(riskOfProposal(prop({ t: 'shotPrompts', edits: [] }))).toBe('write');
-    // 同样是摄影指导，这个采纳下去就开始烧积分
-    expect(riskOfProposal(prop({ t: 'run', action: 'video.batch' }))).toBe('spend');
+    // 同样是摄影指导，这份产物背后是真花过钱的视频文件
+    expect(riskOfProposal(prop({ t: 'shotFiles', edits: [] }))).toBe('spend');
   });
 
   it('补形状照算花钱 —— 它就是出图', () => {
@@ -82,7 +82,7 @@ describe('agent/policy · 自主执行的边界', () => {
   });
 
   it('自动成片只是排时间线，不烧积分', () => {
-    expect(riskOfProposal(prop({ t: 'run', action: 'edit.autocut' }))).toBe('write');
+    expect(riskOfProposal(prop({ t: 'timeline', timeline: { clips: [] } }))).toBe('write');
   });
 
   it('出厂上限是「能改项目，不能花钱」', () => {

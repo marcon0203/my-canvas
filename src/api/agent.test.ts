@@ -16,7 +16,7 @@ function ctx(over: Partial<AgentContext> = {}): AgentContext {
   }
   for (const s of p.shots) s.rig ??= defaultRig(s.size);
   return {
-    proj: p.proj, style: p.style, stylePrompt: p.stylePrompt, styles: p.styles,
+    proj: p.proj, projectId: 'test-proj', style: p.style, stylePrompt: p.stylePrompt, styles: p.styles,
     ratio: p.ratio, credits: p.credits, budget: p.budget,
     acts: p.acts, blocks: p.blocks, assets: p.assets, shots: p.shots,
     sel: { step: 'storyboard', beatId: 'b3', assetId: 'c1', shotId: 's1-1', blockId: null },

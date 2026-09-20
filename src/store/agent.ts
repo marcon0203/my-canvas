@@ -106,7 +106,8 @@ function snapshot(input: string, agentId: AgentId): AgentContext {
   const p = useProject.getState();
   const u = useUi.getState();
   return {
-    proj: p.proj, style: p.style, stylePrompt: p.stylePrompt, styles: p.styles,
+    proj: p.proj, projectId: p.hydratedFor ?? '',
+    style: p.style, stylePrompt: p.stylePrompt, styles: p.styles,
     ratio: p.ratio, credits: p.credits, budget: p.budget,
     acts: p.acts, blocks: p.blocks, assets: p.assets, shots: p.shots,
     sel: {
@@ -385,19 +386,22 @@ function applyProposal(p: Proposal): void {
   // 必须在补丁落库前拍下来：落库后新旧场次就分不出来了
   const beatsBefore = new Set(project.acts.flatMap((a) => a.beats.map((b) => b.id)));
 
-  if (p.patch.t === 'run') {
-    if (p.patch.action === 'video.batch') {
-      project.batchVidStart();
-      ui.toast('批量转视频已排队，跑完逐镜判定');
-      setTimeout(() => useProject.getState().batchVidDone(), 1500);
-    } else {
-      ui.toast('已按场次顺序排好可用片段');
-    }
-  } else {
-    project.applyAgentPatch(p.patch);
-    if (p.cost) project.spend(p.cost);
-    ui.toast(p.cost ? `${p.title} · 消耗 ${p.cost} 积分` : p.title);
-  }
+  // 采纳**只写项目**，不再在这儿触发任何后台活儿。
+  //
+  // 原来这儿有一段：`video.batch` 的产物采纳后调 `batchVidStart()` 就立刻返回，
+  // 1500ms 后一个 setTimeout 把所有镜头置成可用。于是队列在活儿还没干完时
+  // 就推进到了下一步「自动成片」，而自动成片取的是已出片的镜头 —— 必然为空。
+  // 走查里第 6 步刚采纳「批量转视频 · 18 镜」，第 7 步就回「还没有可用的
+  // 视频片段」，就是这段代码。
+  //
+  // 现在真活儿在产物**产生之前**就干完了（见 runVideoBatchOnDesktop），
+  // 采纳拿到的是一份已经落盘的文件清单，同步写完即可，竞态不存在了。
+  project.applyAgentPatch(p.patch);
+  // 示例产物不扣分 —— 没调模型的东西不该记账
+  if (p.cost && !p.demo) project.spend(p.cost);
+  ui.toast(p.demo
+    ? `${p.title}（示例，未调用模型，不计费）`
+    : p.cost ? `${p.title} · 消耗 ${p.cost} 积分` : p.title);
 
   if (p.goto && p.goto !== ui.step) ui.setStep(p.goto as ReturnType<typeof useUi.getState>['step']);
   // 采纳了新资产/新镜头时把选中挪过去，人一眼能看见产物落在哪

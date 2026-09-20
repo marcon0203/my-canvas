@@ -46,7 +46,7 @@ describe('Rust 算出的补丁能被 store 应用', () => {
     const known: ProposalPatch['t'][] = [
       'acts', 'alts', 'blocks', 'blockBody', 'assets', 'assetsDraft',
       'assetViews', 'shots', 'shotPrompts', 'shotRig', 'style', 'assetLock',
-      'timeline', 'subtitles', 'run',
+      'timeline', 'subtitles', 'shotFiles',
     ];
     for (const [tool, p] of Object.entries(SAMPLES)) {
       expect(known, `${tool} 给的 t=${p.t}`).toContain(p.t);

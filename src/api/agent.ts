@@ -8,15 +8,17 @@ import { TOOLS, type ToolId } from '@/domain/agent/tools';
 import { secText } from '@/domain/clips/model';
 import {
   assetsExtract, isDesktop, outlineDraft, outlineExpand, scriptDraft, shotsGenerate, shotsPrompt,
+  toolCall,
   type AltsDraft, type AssetsCandDraft, type AssetsInput, type ExpandInput, type OutlineDraft,
   type PromptDraft, type RunEvent, type SceneBrief, type ScriptDraft, type ScriptInput,
-  type ShotBrief, type ShotsCandDraft, type ShotsInput,
+  type Outcome, type ShotBrief, type ShotsCandDraft, type ShotsInput,
 } from './desktop';
 import { actOfBeat, allBeats, nextId } from '@/domain/story/model';
-import { useSettings } from '@/store/settings';
+import { readyProviders, useSettings } from '@/store/settings';
 import { makeShot, type Shot } from '@/domain/shots/model';
 import { AID_PREFIX, defaultRig, type AssetGroup } from '@/domain/assets/model';
 import { SIZE_EN, assetShell, beatsWithoutShots, shotsMissingPrompt } from '@/domain/agent/drafts';
+import { needsClip } from '@/domain/shots/usable';
 import { ctxAssets } from '@/domain/agent/context';
 
 /**
@@ -139,13 +141,27 @@ export async function* runAgent(
     yield* runShotsOnDesktop(ctx, signal);
     return;
   }
+  // 批量转视频：桌面端 + 有待转的镜头 + 有项目目录可落盘。
+  // 三个条件缺一个都落到本地那条路去**说清做不了**，不再演一遍
+  if (isDesktop() && resolved === 'video.batch'
+      && ctx.projectId && ctx.shots.some(needsClip)) {
+    yield* runVideoBatchOnDesktop(ctx, signal);
+    return;
+  }
 
-  const p = plan(resolved, ctx);
+  // 走到这儿 = 本地模板那条路。
+  //
+  // 这一步**要说清自己是模板**。走查里两个完全不同的输入产出了一字不差的
+  // 同一份六场大纲，外面还包着流式打字、步骤卡和「消耗 2 积分」——
+  // 看起来和真跑一模一样，那是在骗人。
+  const raw = plan(resolved, ctx);
+  const p = markDemo(raw, resolved, ctx);
   // 先只下发步骤：产物等正文说完再交付
   yield { t: 'plan', plan: { ...p, proposal: undefined } };
 
   try {
-    if (!p.blocked) {
+    // 模板不走步骤动画：那几张卡是「正在干活」的意思，而它没在干活
+    if (!p.blocked && !p.proposal?.demo) {
       for (let i = 0; i < p.steps.length; i++) {
         await sleep(STEP_MS, signal);
         yield { t: 'step', index: i + 1 };
@@ -153,9 +169,14 @@ export async function* runAgent(
       if (p.steps.length) await sleep(240, signal);
     }
 
-    for (let i = 0; i < p.reply.length; i += CHARS_PER_TICK) {
-      await sleep(TICK_MS, signal);
-      yield { t: 'delta', text: p.reply.slice(i, i + CHARS_PER_TICK) };
+    if (p.proposal?.demo) {
+      // 模板正文一次吐完，不打字 —— 打字动画是「模型正在想」的视觉暗示
+      yield { t: 'delta', text: p.reply };
+    } else {
+      for (let i = 0; i < p.reply.length; i += CHARS_PER_TICK) {
+        await sleep(TICK_MS, signal);
+        yield { t: 'delta', text: p.reply.slice(i, i + CHARS_PER_TICK) };
+      }
     }
     if (p.proposal) {
       await sleep(160, signal);
@@ -183,6 +204,70 @@ export const SKILL_FOR_TASK: Partial<Record<IntentKind, string>> = {
   'assets.extract': 'extract-assets',
   'shots.generate': 'break-shots',
 };
+
+/**
+ * 给本地模板产出的东西盖上「示例」戳。
+ *
+ * # 判据
+ *
+ * 一件活只要在 `SKILL_FOR_TASK` 里（= 已经接了真模型），而这一轮却落到了
+ * 本地 `plan()`，那这份产物就**不是模型给的**。要么不在桌面端，要么前置
+ * 条件没满足。两种情况人都该知道。
+ *
+ * 不在这张表里的活（换画风、成本报告、自动成片）本来就是本地算的，
+ * 不叫示例 —— 它们如实就是规则的产物，各自的 note 里写着。
+ *
+ * # 盖了戳之后
+ *
+ * - 卡上标「示例 · 未调用模型」（store 的 toast 与 AgentPanel 都认这个字段）
+ * - 采纳不扣积分（`applyProposal` 里判的）
+ * - 正文不走打字动画，步骤卡不走
+ *
+ * # 桌面端缺模型时不是「示例」，是「去配一下」
+ *
+ * 桌面端落到这儿，多半是没接模型或没填密钥 —— 那是一句可操作的话，
+ * 不该拿一份模板糊过去，所以正文换成怎么配。
+ */
+function markDemo(p: Plan, kind: IntentKind, ctx: AgentContext): Plan {
+  if (p.blocked || !p.proposal) return p;
+  if (!(kind in SKILL_FOR_TASK)) return p;
+
+  if (isDesktop()) {
+    const miss = missingModel(ctx);
+    if (miss) {
+      // 前置条件是满的（否则 plan 会 blocked），所以只剩配置问题
+      return { ...p, blocked: miss, reply: miss, proposal: undefined };
+    }
+  }
+  return {
+    ...p,
+    // 步骤卡一起去掉。那几张卡的意思是「正在干这几件事」，而它没在干 ——
+    // 留着卡片、只是不播动画，界面上还是一副跑过一遍的样子
+    steps: [],
+    reply: `${DEMO_NOTE}\n\n${p.reply}`,
+    proposal: { ...p.proposal, demo: true },
+  };
+}
+
+const DEMO_NOTE = isDesktop()
+  ? '⚠️ 下面这份是**本地模板**，没有调模型 —— 所以它对任何输入都长一个样，不计费。'
+  : '⚠️ 下面这份是**本地模板**，没有调模型 —— 浏览器里没有模型链路，'
+    + '所以它对任何输入都长一个样，不计费。真跑要在桌面端。';
+
+/** 桌面端为什么落到了模板：缺文本模型，还是缺那家的密钥 */
+function missingModel(ctx: AgentContext): string | null {
+  const ref = ctx.agents[ctx.agentId]?.models?.text ?? ctx.globalModels.text;
+  if (!ref) {
+    return '还没有可用的文本模型 —— 去「设置 › 模型设置」接入一家供应商、加上一个文本模型，'
+      + '或在「智能体管理」里给这位单独指定一个。';
+  }
+  const ready = new Set(readyProviders(useSettings.getState()));
+  if (!ready.has(ref.provider)) {
+    return `模型指的是「${ref.provider}」，但这家还没接入 —— 去「设置 › 模型设置」把它的 api key 填上`
+      + `（存在工作空间的 providers/${ref.provider}.yaml 里）。`;
+  }
+  return null;
+}
 
 /* ---------------- 真模型：起草大纲 ---------------- */
 
@@ -567,6 +652,137 @@ export function shotsInput(ctx: AgentContext): ShotsInput {
       .map((a) => `${a.name}：${a.desc}`),
     idea: ctx.input,
   };
+}
+
+/* ---------------- 真跑：批量转视频 ---------------- */
+
+const BATCH_STEPS = [
+  { icon: 'video', label: '逐镜提交给视频模型' },
+  { icon: 'dl', label: '把出好的片段下载到项目目录' },
+  { icon: 'layers', label: '汇总成一份待采纳的清单' },
+] satisfies PlanStep[];
+
+/**
+ * 批量转视频 —— **真的逐镜调 `video.generate`**。
+ *
+ * # 原来这一步是演的
+ *
+ * 采纳后走 store 里的 `batchVidStart()`：把每一镜置成 `run`、`takes += 4`、
+ * 扣 24 积分，1500ms 后一个 setTimeout 全置成「出片」。没有请求、没有文件。
+ * 走查里点完这一步、界面说「消耗 24 积分」，然后下一步「自动成片」回
+ * 「还没有可用的视频片段」—— 因为从头到尾什么都没生成。
+ *
+ * # 为什么活儿干在产物**之前**
+ *
+ * 生成在这一轮里跑完，产物是一份**已经落盘**的文件清单，采纳只是把路径写回
+ * 镜头。这样：
+ * - 队列不会抢跑（采纳是同步的，下一步看到的是真数据）
+ * - 人能先看一眼成了几镜、哪几镜失败，再决定要不要收
+ * - 「项目内容只有一个写入者」这条没破 —— 落盘归工具，写项目归补丁
+ *
+ * # 计费
+ *
+ * 只对**真拿到文件**的那几镜计费。失败的镜头也写回项目（takes 要加，
+ * 失败原因要留着），但不进 cost —— 没拿到东西不该按成功价收。
+ */
+async function* runVideoBatchOnDesktop(
+  ctx: AgentContext,
+  signal: AbortSignal,
+): AsyncGenerator<AgentEvent> {
+  const pending = ctx.shots.filter(needsClip);
+  yield { t: 'plan', plan: { kind: 'video.batch', steps: BATCH_STEPS, reply: '' } };
+  yield { t: 'delta', text: `${pending.length} 镜待转，逐镜提交。\n` };
+  yield { t: 'step', index: 1 };
+
+  const st = useSettings.getState();
+  const common = {
+    projectId: ctx.projectId,
+    autoMax: ctx.agents[ctx.agentId]?.autoMax,
+    // 批量里每一镜都单独问一次人是不可用的：自主闸门的判断已经在采纳
+    // 这一步做过了（产物卡是 spend 档，要人点头才写回项目）
+    approved: true,
+    cfg: ctx.agents[ctx.agentId],
+    globals: ctx.globalModels,
+    providers: st.providers,
+    workspace: st.workspace,
+  };
+
+  const edits: { id: string; file: string }[] = [];
+  const fails: { id: string; why: string }[] = [];
+
+  for (const [i, shot] of pending.entries()) {
+    if (signal.aborted) { yield { t: 'aborted' }; return; }
+    let out;
+    try {
+      out = await toolCall({ ...common, tool: 'video.generate', args: { shotId: shot.id, dur: shot.dur } });
+    } catch (e) {
+      const why = String((e as { message?: string })?.message ?? e);
+      fails.push({ id: shot.id, why });
+      yield { t: 'delta', text: `· ${shot.id} 失败：${why}\n` };
+      continue;
+    }
+    if (out.t === 'patch') {
+      const pt = out.patch as { t?: string; edits?: { id: string; file: string }[] };
+      const file = pt.edits?.[0]?.file;
+      if (file) {
+        edits.push({ id: shot.id, file });
+        yield { t: 'delta', text: `· ${shot.id} 出片 → ${file}\n` };
+      } else {
+        fails.push({ id: shot.id, why: '工具回了补丁但没有文件路径' });
+        yield { t: 'delta', text: `· ${shot.id} 失败：没拿到文件\n` };
+      }
+    } else if (out.t === 'needsSetup') {
+      // 缺模型/密钥是**整批**的问题，不是这一镜的问题 —— 第一镜就停，
+      // 不要拿同一个配置错误把 18 镜各撞一次
+      yield { t: 'delta', text: `\n停下了：${out.missing}\n` };
+      yield { t: 'done' };
+      return;
+    } else if (out.t === 'notImplemented') {
+      yield { t: 'delta', text: `\n停下了：${out.blockedBy}\n` };
+      yield { t: 'done' };
+      return;
+    } else {
+      fails.push({ id: shot.id, why: whyOf(out) });
+      yield { t: 'delta', text: `· ${shot.id} 失败：${whyOf(out)}\n` };
+    }
+    if (i === 0) yield { t: 'step', index: 2 };
+  }
+
+  yield { t: 'step', index: 3 };
+  const cost = edits.length * 4;
+  yield {
+    t: 'delta',
+    text: `\n${edits.length} 镜出片${fails.length ? `，${fails.length} 镜失败` : ''}。`
+      + (edits.length ? `采纳后写回镜头并记 ${cost} 积分。跑完要逐镜判定可用/重摇，命中率才算得出来。` : ''),
+  };
+  yield {
+    t: 'proposal',
+    proposal: {
+      title: fails.length
+        ? `批量转视频 · 成 ${edits.length} 镜 / 失败 ${fails.length} 镜`
+        : `批量转视频 · ${edits.length} 镜`,
+      rows: [
+        ...edits.slice(0, 8).map((e) => ({ k: e.id, v: e.file })),
+        ...fails.slice(0, 6).map((f) => ({ k: `${f.id} 失败`, v: f.why })),
+      ],
+      patch: { t: 'shotFiles' as const, edits, ...(fails.length ? { fails } : {}) },
+      cost,
+      goto: 'storyboard',
+    },
+  };
+  yield { t: 'done' };
+}
+
+/** 工具没成时那句给人看的话 */
+function whyOf(out: Outcome): string {
+  switch (out.t) {
+    case 'needsApproval': return `要人点头才能跑：${out.why}`;
+    case 'needsSetup': return out.missing;
+    case 'notImplemented': return out.blockedBy;
+    case 'elsewhere': return '这个工具不在 Rust 侧跑';
+    case 'ok': return '工具回了成功，但没有可用的文件';
+    default: return '没说原因';
+  }
 }
 
 async function* runShotsOnDesktop(

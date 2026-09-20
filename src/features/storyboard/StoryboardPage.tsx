@@ -13,7 +13,8 @@ import { compileShot, segmentsText } from '@/domain/prompt/compile';
 import { STYLES } from '@/domain/prompt/vocabulary';
 import { submitGen, type GenTask } from '@/api/generation';
 import type { Shot, Verdict } from '@/domain/shots/model';
-import { awaitingCall, countAwaiting, countUsable, usable } from '@/domain/shots/usable';
+import { awaitingCall, countAwaiting, countUsable, needsClip, usable } from '@/domain/shots/usable';
+import { useAgent } from '@/store/agent';
 
 /** 分镜控制台：左树（TreeGroup/TreeItem）+ 右单镜工作台（RunBar/TakeGrid/VerdictToggle/PromptBox） */
 export function StoryboardPage() {
@@ -23,6 +24,8 @@ export function StoryboardPage() {
   const assets = useAssetList();
   const usableN = countUsable(shots);
   const awaitingN = countAwaiting(shots);
+  const pendingN = shots.filter(needsClip).length;
+  const sendToAgent = useAgent((s) => s.send);
   const tries = shots.reduce((n, s) => n + s.takes, 0);
   const hit = tries ? Math.round((usableN / tries) * 100) : 0;
 
@@ -106,15 +109,14 @@ export function StoryboardPage() {
           <Button onClick={() => { useProject.getState().genAllKeys(); toast('生成关键帧 · 消耗 10 积分'); }}>
             <Icon name="image" />生成缺失关键帧
           </Button>
-          <Button variant="primary" style={{ height: 34, fontSize: 13 }} onClick={() => {
-            useProject.getState().batchVidStart();
-            toast('批量生成视频 · 消耗 24 积分');
-            setTimeout(() => {
-              useProject.getState().batchVidDone();
-              toast('批量生成完成 — 还需要逐镜判定可用/重摇，命中率才算得出来');
-            }, 1500);
-          }}>
-            <Icon name="video" />一键批量生成视频
+          {/* 交给 Agent 真去逐镜调视频模型，而不是在这儿改几个状态位。
+              页面按钮自己写一遍会绕开撤销和权限那两道 —— 原来这儿正是
+              `batchVidStart()` + setTimeout，扣 24 积分却什么都没生成 */}
+          <Button variant="primary" style={{ height: 34, fontSize: 13 }}
+            disabled={pendingN === 0}
+            title={pendingN === 0 ? '所有镜头都出过片了' : `${pendingN} 镜待转`}
+            onClick={() => sendToAgent(`把还没出片的 ${pendingN} 镜转成视频`, 'video.batch')}>
+            <Icon name="video" />一键批量生成视频{pendingN ? ` · ${pendingN} 镜` : ''}
           </Button>
         </>}
       />

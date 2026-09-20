@@ -102,7 +102,7 @@ export const max = (a: Risk, b: Risk): Risk => (ORDER[a] >= ORDER[b] ? a : b);
  * 一份产物的风险。
  *
  * **按补丁的实际后果判，不按发起它的活儿判** —— 这是能真正拦住东西的那一层。
- * 「批量转视频」的产物是 `run/video.batch`，采纳下去就开始烧积分；
+ * 「批量转视频」的产物是 `shotFiles`，采纳前那几段视频已经真的生成并落盘了；
  * 而「补写提示词」虽然归摄影指导管，产物只是改几行字。
  *
  * **不按「有没有标消耗」判**：这个应用里几乎每一轮都要花一两个积分（文字
@@ -113,7 +113,8 @@ export const max = (a: Risk, b: Risk): Risk => (ORDER[a] >= ORDER[b] ? a : b);
 export function riskOfProposal(p: Proposal): Risk {
   // 出图、出视频是那两件「跑完退不回」的事
   if (p.patch.t === 'assetViews') return 'spend';
-  if (p.patch.t === 'run') return p.patch.action === 'video.batch' ? 'spend' : 'write';
+  // 出视频：`shotFiles` 一定是真花过钱才拿到的文件
+  if (p.patch.t === 'shotFiles') return 'spend';
   return 'write';
 }
 

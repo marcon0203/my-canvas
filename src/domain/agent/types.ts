@@ -55,12 +55,22 @@ export type ProposalPatch =
    * **这一条是「拿到成片」那条链上原来断掉的一环** —— 生成跑完只把厂商那串
    * URL 当文字甩出来，没有任何东西写回镜头，于是拼片那步永远找不到片段。
    */
-  | { t: 'shotFiles'; edits: { id: string; file: string }[] }
+  | {
+      t: 'shotFiles';
+      edits: { id: string; file: string }[];
+      /**
+       * 这一轮真发出去却没成的镜头。
+       *
+       * 失败也要**写回项目**：一次失败是花掉的钱（takes 要加），而连续失败
+       * 几次和失败一次，下一步该做的事不一样（前者多半是提示词或引用有问题）。
+       * 只在会话里说一句「3 镜失败」，刷新页面就什么都不剩了。
+       */
+      fails?: { id: string; why: string }[];
+    }
   /** `edit.timeline` 的产物：整条时间线换掉（顺序与时长是一起算出来的） */
   | { t: 'timeline'; timeline: Timeline }
   /** `edit.subtitle` 的产物 */
-  | { t: 'subtitles'; subtitles: Subtitles }
-  | { t: 'run'; action: 'video.batch' | 'edit.autocut' };
+  | { t: 'subtitles'; subtitles: Subtitles };
 
 /** 产物预览行：采纳前给人看的 diff 摘要 */
 export interface PreviewRow {
@@ -77,6 +87,14 @@ export interface Proposal {
   readonly cost: number;
   /** 采纳后跳转到哪个环节（可选） */
   readonly goto?: string;
+  /**
+   * 这份产物是本地模板算出来的，**没有调过模型**。
+   *
+   * 走查里两个完全不同的输入产出了一字不差的同一份六场大纲，外面还包着
+   * 流式打字、步骤卡和「消耗 2 积分」—— 看起来和真跑一模一样。
+   * 带上这个标记之后：卡上写明「示例」、不扣积分、正文不走打字动画。
+   */
+  readonly demo?: true;
 }
 
 /** 计划里的一步：界面上是一张会自己走完的工具卡 */

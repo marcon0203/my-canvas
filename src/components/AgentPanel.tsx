@@ -360,11 +360,15 @@ function ProposalCard({ msgId, p, verdict, hold, kind }: {
   const loose = !queued && kind ? nextAfter(projectKind, kind) : undefined;
 
   return (
-    <div className={`aprop aprop--${verdict}`}>
+    <div className={`aprop aprop--${verdict}${p.demo ? ' aprop--demo' : ''}`}>
       <div className="aprop__h">
         <Icon name="layers" />
         <span className="aprop__t">{p.title}</span>
-        {!!p.cost && <span className="aprop__cost"><Icon name="bolt" />{p.cost}</span>}
+        {/* 模板产物必须在卡上就看得出来 —— 走查里它和真产物长得一模一样，
+            连「消耗 2 积分」都照挂。标了之后费用那一栏也不再显示 */}
+        {p.demo
+          ? <span className="aprop__demo">示例 · 未调用模型</span>
+          : !!p.cost && <span className="aprop__cost"><Icon name="bolt" />{p.cost}</span>}
       </div>
       <div className="aprop__rows">
         {p.rows.map((r, i) => (

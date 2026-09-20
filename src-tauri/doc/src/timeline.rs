@@ -62,11 +62,15 @@ pub struct Subtitles {
 /// 超了就按标点切成几条，而不是塞一长条让界面自己截断。
 pub const MAX_CUE_CHARS: usize = 18;
 
-/// 判定可用的镜头才进时间线。
+/// 能入片的镜头才进时间线：**出过片，且没被判成「重摇」**。
 ///
-/// **不是「有视频的」而是「判定可用的」**：重摇过好几版都不满意的镜头
-/// 也有视频文件，把它排进片子里等于把废片交出去。
-fn usable(shot: &Value) -> bool {
+/// 判过「重摇」的排除掉 —— 那几版都不满意的镜头也有视频文件，
+/// 把它排进片子里等于把废片交出去。
+///
+/// 但**未判定的算数**：刚跑完一批视频的人点自动成片不该得到空时间线，
+/// 他没做错任何事。与前端 `domain/shots/usable.ts::cutReady` 同一套口径
+/// （原来这里的文档写成「判定可用的」，和代码不一致）。
+fn cut_ready(shot: &Value) -> bool {
     shot.get("vid").and_then(Value::as_str) == Some("ok")
         && shot.get("verdict").and_then(Value::as_str) != Some("redo")
 }
@@ -96,7 +100,7 @@ fn sort_key(shot: &Value) -> (u32, u32) {
 /// 对齐用四舍五入而不是向上取整：向上取整会让每一段都变长，
 /// 二十段之后片子比预期长一截。最少留一个卡点 —— 对齐成 0 长度等于丢掉这段。
 pub fn plan(shots: &[Value], beat_ms: Option<u32>) -> Timeline {
-    let mut list: Vec<&Value> = shots.iter().filter(|s| usable(s)).collect();
+    let mut list: Vec<&Value> = shots.iter().filter(|s| cut_ready(s)).collect();
     list.sort_by_key(|s| sort_key(s));
 
     let mut at = 0u32;

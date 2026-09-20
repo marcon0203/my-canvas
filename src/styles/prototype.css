@@ -569,6 +569,10 @@ body { background: var(--color-bg-canvas); overflow: hidden; }
 .mhint b { font-variant-numeric: tabular-nums; }
 .mhint__go { margin-left: auto; flex: 0 0 auto; align-self: center; font-size: 12px; font-weight: 600; color: var(--color-accent); white-space: nowrap; }
 
+/* 示例产物：与真产物在视觉上要一眼分得开 */
+.aprop--demo { border-style: dashed; }
+.aprop__demo { margin-left: auto; flex: 0 0 auto; font-size: 11px; font-weight: 600; padding: 2px 7px; border-radius: 999px; background: var(--color-bg-muted); color: var(--color-text-tertiary); white-space: nowrap; }
+
 .mstep { padding: 13px 0 12px; }
 .mstep--line { border-bottom: 1px solid var(--color-border-subtle); }
 .mstep__n { font-size: 14px; font-weight: 600; width: 150px; flex: 0 0 auto; display: flex; align-items: baseline; gap: 8px; }

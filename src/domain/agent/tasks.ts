@@ -9,8 +9,17 @@ export type TaskId = Exclude<IntentKind, 'chat'>;
 
 /** 这件任务现在是**真的调模型**，还是本地拿项目数据算一版草稿 */
 export type Impl =
-  /** 桌面端走 Rust + Rig，真发请求。括号里是那个模块 */
+  /** 桌面端走 Rust + Rig，真发请求让模型写东西。括号里是那个模块 */
   | { readonly by: 'model'; readonly module: string; readonly note: string }
+  /**
+   * 真跑、真花钱，但不是让模型写文字，而是**逐个调工具**（出图、出视频）。
+   *
+   * 与 `model` 分开是因为这类任务**没有 SKILL.md**，也不该有：它不是一段
+   * 给模型看的操作说明，是一个循环。原来只有 model / local 两档，于是
+   * 「两张表对得上」那条测试会要求它也有一份 skill —— 那是为了迁就分类
+   * 去造一个文件。
+   */
+  | { readonly by: 'tool'; readonly module: string; readonly note: string }
   /**
    * 还没接模型：产物在前端本地生成，形状与真产物一致。
    *
@@ -129,16 +138,18 @@ export const TASKS: readonly TaskSpec[] = [
   {
     id: 'video.batch', ...INTENT_META['video.batch'],
     summary: '把尚未生成视频的镜头排入队列批量转换。',
-    needs: '存在尚未生成过视频的镜头。',
-    patch: 'run', goto: 'storyboard',
-    impl: { by: 'local', note: '排期本地算，真跑要接上视频模型。' },
+    needs: '存在尚未生成过视频的镜头，且接入了视频模型。',
+    patch: 'shotFiles', goto: 'storyboard',
+    impl: { by: 'tool', module: 'tools/src/tools.rs',
+      note: '逐镜调 video.generate，落盘之后交一份 shotFiles 补丁；失败的镜头写回失败原因。只对真拿到文件的那几镜计费。' },
   },
   {
     id: 'edit.autocut', ...INTENT_META['edit.autocut'],
     summary: '把判定可用的片段按节拍排进时间线。',
-    needs: '有判定为可用的视频片段。',
-    patch: 'run', goto: 'editing',
-    impl: { by: 'local', note: '排序本地算，还没接模型。' },
+    needs: '有能入片的视频片段（出过片且没判成重摇）。',
+    patch: 'timeline', goto: 'editing',
+    impl: { by: 'local',
+      note: '顺序与时长本地按场次号累加，不调模型，不花钱。产物是真的时间线，会写进项目。' },
   },
   {
     id: 'cost.report', ...INTENT_META['cost.report'],

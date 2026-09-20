@@ -10,7 +10,8 @@ import {
   draftShotPrompt, draftShots, extractCandidates, polishBody, shotsMissingPrompt, ungeneratedViews,
 } from './drafts';
 import type { IntentKind, Plan, PlanStep, PreviewRow, Proposal } from './types';
-import { cutReady, cutReadyDur, needsClip } from '@/domain/shots/usable';
+import { awaitingCall, cutReady, cutReadyDur, needsClip } from '@/domain/shots/usable';
+import { planTimeline } from '@/domain/clips/model';
 
 /**
  * 意图 → 计划。每个计划都是纯函数 (ctx) => Plan：
@@ -199,21 +200,23 @@ function planStyleTransfer(c: AgentContext): Plan {
   };
 }
 
+/**
+ * 批量转视频 —— 到这儿的都是**跑不了**的情况。
+ *
+ * 真跑那条路在 `api/agent.ts::runVideoBatchOnDesktop`：逐镜调 `video.generate`，
+ * 拿到文件之后交一份 `shotFiles` 补丁。
+ *
+ * 原来这儿返回的是 `{ t: 'run', action: 'video.batch' }`，采纳下去执行的是
+ * store 里的 `batchVidStart()` —— 改三个状态位、扣 24 积分、1500ms 后全置成
+ * 「可用」。没有请求、没有文件。那段已经删掉了。
+ */
 function planVideoBatch(c: AgentContext): Plan {
   const pending = c.shots.filter(needsClip);
   if (!pending.length) return blocked('video.batch', '没有待转的镜头了，都出过视频。');
-  const cost = pending.length * 4;
-  return {
-    kind: 'video.batch',
-    steps: [step('video', `排队 ${pending.length} 镜`), step('bolt', `预估消耗 ${cost} 积分`)],
-    reply: `${pending.length} 镜待转，预估 ${cost} 积分（余额 ${c.credits}）。跑完要逐镜判定可用/重摇。不判定就算不出命中率。`,
-    proposal: {
-      title: `批量转视频 · ${pending.length} 镜`,
-      rows: [{ k: '待转', v: `${pending.length} 镜` }, { k: '预估', v: `${cost} 积分` }, { k: '余额', v: `${c.credits} 积分` }],
-      patch: { t: 'run', action: 'video.batch' },
-      cost: 0, goto: 'storyboard',
-    },
-  };
+  // 走到这儿 = 不在桌面端。浏览器里没有 Rust，出视频这件事就是做不了，
+  // 不能再拿个假动画糊过去
+  return blocked('video.batch',
+    `${pending.length} 镜待转，但出视频要在桌面端跑 —— 浏览器里没有本地生成与落盘那条链路。`);
 }
 
 function planAutocut(c: AgentContext): Plan {
@@ -227,14 +230,27 @@ function planAutocut(c: AgentContext): Plan {
       : '所有出过片的镜头都被判成了「重摇」，没有能入片的片段。改提示词重出，或把其中几镜改判可用。');
   }
   const dur = cutReadyDur(c.shots);
+  const timeline = planTimeline(c.shots);
+  const awaiting = c.shots.filter(awaitingCall).length;
   return {
     kind: 'edit.autocut',
-    steps: [step('scissors', `取 ${done.length} 段可用素材`), step('bolt', '按场次顺序与时长配平')],
-    reply: `按场次顺序排好了 ${done.length} 段，共 ${dur}s。判定为「重摇」的没进时间线。`,
+    steps: [step('scissors', `取 ${done.length} 段可入片素材`), step('bolt', '按场次顺序累加起点')],
+    reply: [
+      `按场次顺序排好了 ${done.length} 段，共 ${dur}s。判定为「重摇」的没进时间线。`,
+      // 排序是本地规则算的，不是模型剪的 —— 这件事要说出来，
+      // 否则人会以为有个模型在替他做剪辑判断
+      '顺序与时长是本地按场次号累加算的，没有调模型，这一步不花钱。',
+      awaiting ? `其中 ${awaiting} 段还没判定，先按可入片处理；判成「重摇」之后重排会把它去掉。` : '',
+    ].filter(Boolean).join('\n'),
     proposal: {
       title: `自动成片 · ${done.length} 段 / ${dur}s`,
-      rows: done.slice(0, 8).map((s) => ({ k: s.id, v: `${s.desc} · ${s.dur}s` })),
-      patch: { t: 'run', action: 'edit.autocut' },
+      rows: [
+        { k: '排法', v: '本地规则：按场次号与镜号累加，不调模型' },
+        ...done.slice(0, 8).map((s) => ({ k: s.id, v: `${s.desc} · ${s.dur}s` })),
+      ],
+      // 真的把时间线写进项目。原来这儿是 `{ t: 'run' }`，采纳下去只弹一句
+      // 「已按场次顺序排好可用片段」，**项目里什么都没变**
+      patch: { t: 'timeline', timeline },
       cost: 0, goto: 'editing',
     },
   };

@@ -152,7 +152,9 @@ export function TaskDetail({ id }: { id: TaskId }) {
         <header className="pcard__h">
           <span className="pcard__n">功能说明</span>
           <div className="spacer" />
-          {s.impl.by === 'model' ? <Chip tone="ok">调模型</Chip> : <Chip>本地生成</Chip>}
+          {s.impl.by === 'model' ? <Chip tone="ok">调模型</Chip>
+            : s.impl.by === 'tool' ? <Chip tone="ok">调工具</Chip>
+            : <Chip>本地生成</Chip>}
         </header>
         <p className="skdesc">{s.summary}</p>
         <Fields>
@@ -233,8 +235,10 @@ export function TaskDetail({ id }: { id: TaskId }) {
         </header>
         <p className="skdesc">
           {s.impl.by === 'model'
-            ? <>桌面端走 Rust + Rig 真发请求，实现在 <span className="mono">{s.impl.module}</span>。浏览器里没有这条链路，会回落到本地草稿。</>
-            : '还没接模型：结果在本地按规则生成，格式与接模型之后一致。具体依据见下面一行。'}
+            ? <>桌面端走 Rust + Rig 真发请求，实现在 <span className="mono">{s.impl.module}</span>。浏览器里没有这条链路，会回落到本地草稿（卡上会标「示例」，不计费）。</>
+            : s.impl.by === 'tool'
+              ? <>真跑、真花钱，但不是让模型写文字 —— 逐个调工具，实现在 <span className="mono">{s.impl.module}</span>。只在桌面端跑得起来。</>
+              : '不调模型：结果在本地按规则算，不花钱。具体依据见下面一行。'}
         </p>
         <p className="skdesc dim">{s.impl.note}</p>
       </section>

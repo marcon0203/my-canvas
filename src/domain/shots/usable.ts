@@ -1,6 +1,14 @@
 import type { Shot } from './model';
 
 /**
+ * 判定这几件事只要这三个字段。
+ *
+ * 收成结构类型而不是 `Shot`，是为了让排时间线那份纯函数也能用同一套口径 ——
+ * 它对着 Rust 侧的 `Value` 做 parity，手上只有这几个字段。
+ */
+type Judged = Pick<Shot, 'vid' | 'verdict'>;
+
+/**
  * 「可用」这个词在这个产品里有三个不同的意思，页面上曾经都写成「可用」，
  * 于是数据页说「可用镜头 0」而剪辑页同时说「18 段可用」—— 两边各数了一个字段：
  * 数据页数 `verdict === 'ok'`，剪辑页数 `vid === 'ok'`，而出完视频只会置 `vid`。
@@ -17,10 +25,10 @@ import type { Shot } from './model';
  */
 
 /** 出过片：磁盘上有这一镜的视频 */
-export const hasClip = (s: Shot): boolean => s.vid === 'ok';
+export const hasClip = (s: Judged): boolean => s.vid === 'ok';
 
 /** 出过片但人还没判定 —— 这些就是命中率上不去的原因 */
-export const awaitingCall = (s: Shot): boolean => hasClip(s) && s.verdict === null;
+export const awaitingCall = (s: Judged): boolean => hasClip(s) && s.verdict === null;
 
 /**
  * 能进时间线：出过片，且没被判「重摇」。
@@ -28,19 +36,19 @@ export const awaitingCall = (s: Shot): boolean => hasClip(s) && s.verdict === nu
  * 未判定的也算 —— 否则一个刚跑完 18 镜的人点自动成片会得到空时间线，
  * 而他并没有做错任何事。判过「重摇」的才排除。
  */
-export const cutReady = (s: Shot): boolean => hasClip(s) && s.verdict !== 'redo';
+export const cutReady = (s: Judged): boolean => hasClip(s) && s.verdict !== 'redo';
 
 /** 人判定为可用。命中率、单条成本都只认这个 */
-export const usable = (s: Shot): boolean => s.verdict === 'ok';
+export const usable = (s: Judged): boolean => s.verdict === 'ok';
 
 /** 还没出过片，批量转视频要转的就是这些 */
-export const needsClip = (s: Shot): boolean => s.vid === 'none' || s.vid === 'redo';
+export const needsClip = (s: Judged): boolean => s.vid === 'none' || s.vid === 'redo';
 
-export const countClips = (shots: readonly Shot[]): number => shots.filter(hasClip).length;
-export const countAwaiting = (shots: readonly Shot[]): number => shots.filter(awaitingCall).length;
-export const countCutReady = (shots: readonly Shot[]): number => shots.filter(cutReady).length;
-export const countUsable = (shots: readonly Shot[]): number => shots.filter(usable).length;
+export const countClips = (shots: readonly Judged[]): number => shots.filter(hasClip).length;
+export const countAwaiting = (shots: readonly Judged[]): number => shots.filter(awaitingCall).length;
+export const countCutReady = (shots: readonly Judged[]): number => shots.filter(cutReady).length;
+export const countUsable = (shots: readonly Judged[]): number => shots.filter(usable).length;
 
 /** 能进时间线的总时长，秒 */
-export const cutReadyDur = (shots: readonly Shot[]): number =>
+export const cutReadyDur = (shots: readonly (Judged & { dur: number })[]): number =>
   shots.filter(cutReady).reduce((n, s) => n + s.dur, 0);

@@ -47,6 +47,19 @@ describe('store/agent', () => {
     expect(m.verdict).toBe('pending');
   });
 
+  it('浏览器里的产物一律标成示例：没有步骤卡、不扣分、正文里说清没调模型', async () => {
+    const before = useProject.getState().credits;
+    useAgent.getState().send('按大纲拆镜');
+    await settle();
+    const m = lastAi();
+    expect(m.proposal!.demo).toBe(true);
+    // 步骤卡是「正在干这几件事」的意思 —— 没干就不该有
+    expect(m.steps).toEqual([]);
+    expect(m.text).toContain('没有调模型');
+    useAgent.getState().accept(m.id);
+    expect(useProject.getState().credits).toBe(before);
+  });
+
   it('不采纳就不动项目', async () => {
     const before = useProject.getState().shots.length;
     useAgent.getState().send('按大纲拆镜');
@@ -67,7 +80,8 @@ describe('store/agent', () => {
 
     const after = useProject.getState();
     expect(after.shots.length).toBeGreaterThan(shotsBefore);
-    expect(after.credits).toBe(creditsBefore - msg.proposal!.cost);
+    // 浏览器里这一份是模板，标了 demo 就不计费 —— 产物照样写进项目
+    expect(after.credits).toBe(msg.proposal!.demo ? creditsBefore : creditsBefore - msg.proposal!.cost);
     expect(lastAi().verdict).toBe('accepted');
 
     useProject.temporal.getState().undo();
@@ -150,12 +164,15 @@ describe('store/agent · 转交', () => {
     expect(handed?.handoff).toMatchObject({ from: 'writer', to: 'dp', kind: 'video.batch' });
     expect(handed?.agentId).toBe('writer');       // 转交的话是编剧说的
 
-    // 转交后：当班换人、界面跳到分镜、并且真的把活儿干了
+    // 转交后：当班换人、界面跳到分镜、并且接手方真的接着跑了这一轮
     expect(useAgent.getState().agentId).toBe('dp');
     expect(useUi.getState().step).toBe('storyboard');
     const last = [...useAgent.getState().messages].reverse().find((m) => m.who === 'ai')!;
     expect(last.agentId).toBe('dp');
-    expect(last.proposal).toBeTruthy();
+    // 出视频要在桌面端跑，测试环境里没有 Rust —— 接手方如实说做不了，
+    // **而不是给一份假产物**。原来这儿断言的是 proposal 存在，靠的就是
+    // 那份「扣 24 积分、什么都不生成」的假批量
+    expect(last.text).toContain('桌面端');
   });
 
   it('转交不丢上下文：交接前后的消息都留在同一条会话里', async () => {

@@ -22,7 +22,7 @@ function ctx(over: Partial<AgentContext> = {}): AgentContext {
   }
   for (const s of p.shots) s.rig ??= defaultRig(s.size);
   return {
-    proj: p.proj, style: p.style, stylePrompt: p.stylePrompt, styles: p.styles,
+    proj: p.proj, projectId: 'test-proj', style: p.style, stylePrompt: p.stylePrompt, styles: p.styles,
     ratio: p.ratio, credits: p.credits, budget: p.budget,
     acts: p.acts, blocks: p.blocks, assets: p.assets, shots: p.shots,
     sel: { step: 'outline', beatId: 'b3', assetId: 'c1', shotId: 's1-1', blockId: 'd1' },
@@ -81,7 +81,14 @@ describe('agent/skills · 注册表不能是装饰', () => {
     }
   });
 
-  it('三种上下文合起来要把 12 件活全核到 —— 不能有谁在哪儿都被跳过', () => {
+  /**
+   * 只有出视频这一件在浏览器里一定跑不了（没有 Rust 就没有生成与落盘）。
+   * 单独列出来而不是从 ALL 里悄悄减掉 —— 哪天又多一件只能桌面跑的活，
+   * 这条测试要能让人看见清单变长了。
+   */
+  const DESKTOP_ONLY = ['video.batch'];
+
+  it('三种上下文合起来要把其余的活全核到 —— 不能有谁在哪儿都被跳过', () => {
     const covered = new Set<string>();
     // seed 里每一镜都有提示词，空项目又没有镜头 —— 补写提示词在两边都会被挡住，
     // 所以第三种上下文是「有镜头但提示词空着」
@@ -90,7 +97,7 @@ describe('agent/skills · 注册表不能是装饰', () => {
     for (const c of [ctx(), ctx({ acts: [], blocks: [], shots: [] }), noPrompt]) {
       for (const s of TASKS) if (!plan(s.id, c).blocked) covered.add(s.id);
     }
-    expect([...covered].sort()).toEqual([...ALL].sort());
+    expect([...covered].sort()).toEqual([...ALL].filter((k) => !DESKTOP_ONLY.includes(k)).sort());
   });
 
   /**
@@ -114,9 +121,19 @@ describe('agent/skills · 注册表不能是装饰', () => {
     }
   });
 
-  it('两张表对得上：有 skill 的就是接了模型的，反之也成立', () => {
+  it('两张表对得上：有 skill 的就是让模型写东西的，反之也成立', () => {
     const wired = TASKS.filter((s) => s.impl.by === 'model').map((s) => s.id).sort();
     expect(Object.keys(SKILL_FOR_TASK).sort()).toEqual(wired);
+  });
+
+  it("by: 'tool' 的指 Rust 模块但不该有 skill —— 它是个循环，不是一段说明", () => {
+    const loops = TASKS.filter((s) => s.impl.by === 'tool');
+    expect(loops.length).toBeGreaterThan(0);
+    for (const s of loops) {
+      const mod = (s.impl as { module: string }).module;
+      expect(existsSync(join(process.cwd(), 'src-tauri', mod)), `缺 ${mod}`).toBe(true);
+      expect(SKILL_FOR_TASK[s.id], `${s.id} 不该有 skill`).toBeUndefined();
+    }
   });
 
   it('标了 by: local 的不指任何 Rust 模块 —— 那会让人以为它接上了', () => {
