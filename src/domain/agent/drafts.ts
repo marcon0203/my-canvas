@@ -77,18 +77,34 @@ export function draftAlts(beat: Beat): string[] {
   ];
 }
 
+/**
+ * 占位词。与 Rust 侧 `agent/src/assets.rs::PLACEHOLDERS` 同一份
+ * （那边拦模型交回来的资产名，这边拦本地模板与提取）。
+ */
+const PLACEHOLDER = /^(待定|待补|待填|未定|未命名|无|空|tbd|todo|n\/a|none|unknown|untitled|placeholder)/i;
+
+/** 名字是不是个占位词。只看名字 —— 描述里出现「待定」是正常的 */
+export const isPlaceholder = (name: string): boolean => {
+  const t = name.trim();
+  return !t || PLACEHOLDER.test(t) || /(待定|待补|待填|未定)$/.test(t);
+};
+
 /* ---------------- 剧本 ---------------- */
 
 /** 一场 → 一个正文块。带场次标题、环境、动作、旁白的骨架 */
 export function draftScriptBlock(c: AgentContext, beat: Beat, act: Act | undefined): DocBlock {
   const leads = ctxAssets(c).filter((a) => c.assets.角色.includes(a)).slice(0, 2);
-  const place = c.assets.场景[0]?.name ?? '待定场景';
+  // **没有场景资产就不写这一行**。原来这儿填的是「待定场景 · 待定时间」，
+  // 而下一步的资产提取按 `·` 切行、把两半都立成场景资产 ——
+  // 走查里那两个叫「待定场景」「待定时间」的资产就是这么来的。
+  // 自己产出的占位符喂给自己的下一步，是这条流水线上最没必要的一种脏数据
+  const place = c.assets.场景[0]?.name;
   const who = leads.map((a) => a.name.replace(/\s*\(.*\)/, '')).join(' 与 ') || '主角';
   const body = [
     `# ${act ? act.t : '未归幕'}`,
     '',
     `**${beat.k}**`,
-    `${place} · 待定时间`,
+    ...(place ? [`${place} · 白天`] : []),
     `${beat.t}。`,
     '',
     `${who} 进入这一场。动作先行，台词只留最必要的一句。`,
@@ -160,13 +176,16 @@ export function extractCandidates(c: AgentContext): AssetCandidate[] {
       if (sceneHead) { scene = sceneHead[1]!; continue; }
       if (line.includes('·')) {
         for (const seg of line.split('·').map((x) => x.trim())) {
-          if (!seg || TIME_WORDS.test(seg)) continue;
+          // 占位词不立成资产：输入是占位符，输出就不该是资产
+          if (!seg || TIME_WORDS.test(seg) || isPlaceholder(seg)) continue;
           push('场景', seg, scene);
         }
         continue;
       }
       const speaker = /^([^\s：:，。"]{2,8})[：:]/.exec(line);
-      if (speaker && speaker[1] !== '旁白') push('角色', speaker[1]!, scene);
+      if (speaker && speaker[1] !== '旁白' && !isPlaceholder(speaker[1]!)) {
+        push('角色', speaker[1]!, scene);
+      }
     }
   }
   return out;
@@ -184,7 +203,14 @@ export function candidateToAsset(cand: AssetCandidate, existing: readonly Asset[
     group: cand.group,
     aid: `${prefix}-${String(n).padStart(3, '0')}`,
     name: cand.name,
-    desc: `自剧本${cand.from}提取，待补描述`,
+    // **描述留空**，不塞一句「自剧本场景1提取，待补描述」。
+    //
+    // 那句话在界面上是废话，在提示词里是污染：分镜引用这个资产之后，
+    // `compileShot` 会把 desc 原样编进出图提示词 —— 走查里每一镜的提示词
+    // 都长成「full shot, 自剧本场景1提取, 待补描述, …」，等于拿一句元数据
+    // 去指导画面。空着的话 `compileShot` 的 `if (d)` 直接跳过，
+    // 界面也如实显示「还没有描述」。
+    desc: '',
   }, `${cand.name} 的%s，出自${cand.from}`);
 }
 
@@ -242,7 +268,7 @@ export const beatsWithoutShots = (c: AgentContext): Beat[] =>
  * 占位词。与 Rust 侧 `agent/src/assets.rs::PLACEHOLDERS` 同一份
  * （那边拦模型交回来的资产名，这边拦「这份剧本算不算写过」）。
  */
-const PLACEHOLDER = /^(待定|待补|待填|未定|未命名|无|空|tbd|todo|n\/a|none|unknown|untitled|placeholder)/i;
+
 
 /**
  * 这份正文算不算真写过。
@@ -254,9 +280,16 @@ const PLACEHOLDER = /^(待定|待补|待填|未定|未命名|无|空|tbd|todo|n\
 export const isRealScript = (body: string): boolean =>
   body
     .split('\n')
-    .map((l) => l.trim().replace(/^[#*\-•\s]+/, ''))
+    .map((l) => l.trim().replace(/^[#>*\-•\s]+/, '').replace(/[*\s]+$/, ''))
     .filter(Boolean)
-    .some((l) => !PLACEHOLDER.test(l) && l.length > 2);
+    // 场次标记（`**场景3**`）是结构，不是内容 —— 它由程序拼，
+    // 每一场都有，拿它当「写过了」的证据等于这个函数永远返回 true
+    .filter((l) => !/^场景\s*\d+$/.test(l))
+    // 「待定场景 · 待定时间」整行都是占位符。按 `·` 切开逐段看，
+    // 一段真内容都没有就不算写过
+    .some((l) => l.split('·').map((x) => x.trim()).some(
+      (seg) => seg.length > 2 && !PLACEHOLDER.test(seg) && !/(待定|待补|待填|未定)$/.test(seg),
+    ));
 
 /**
  * 还没有正文的场次。正文块的标签里带着场次键（`正文 · 场景3`）。

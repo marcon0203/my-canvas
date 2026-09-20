@@ -130,3 +130,26 @@ describe('采纳不再抢跑', () => {
     expect(useProject.getState().credits).toBe(before);
   });
 });
+
+/**
+ * 闸门不许被绕过。
+ *
+ * 第一版的批量转视频里我写了 `approved: true`，理由是「采纳卡会拦一次」——
+ * 那是错的，而且顺序是反的：钱在循环里就花掉了，采纳卡是之后才弹的，
+ * 那张卡管的是「要不要把文件写回镜头」，不是「要不要花这笔钱」。
+ * 拿后一个同意去顶前一个，闸门等于没有。
+ */
+describe('批量转视频不伪造同意', () => {
+  it('源码里这条链路只准传 approved: false', async () => {
+    const { readFileSync } = await import('node:fs');
+    const src = readFileSync('src/api/agent.ts', 'utf8');
+    const start = src.indexOf('async function* runVideoBatchOnDesktop');
+    const end = src.indexOf('function whyOf', start);
+    const body = src.slice(start, end);
+    expect(body).toContain('approved: false');
+    expect(body, 'approved 只在人真的点过同意时才为 true').not.toMatch(/approved:\s*true/);
+    // 被闸门拦下时要说清怎么办，而不是把它当成这一镜失败
+    expect(body).toContain("out.t === 'needsApproval'");
+    expect(body).toContain('自主上限');
+  });
+});

@@ -838,9 +838,19 @@ async function* runVideoBatchOnDesktop(
   const common = {
     projectId: ctx.projectId,
     autoMax: ctx.agents[ctx.agentId]?.autoMax,
-    // 批量里每一镜都单独问一次人是不可用的：自主闸门的判断已经在采纳
-    // 这一步做过了（产物卡是 spend 档，要人点头才写回项目）
-    approved: true,
+    /**
+     * **永远是 false。**
+     *
+     * `approved` 的语义是「人真的点过同意，且只对这一次调用」。批量里
+     * 自动置真就是伪造同意 —— 而且顺序是反的：钱在循环里就花掉了，
+     * 采纳卡是**之后**才弹的，那张卡管的是「要不要把文件写回镜头」，
+     * 不是「要不要花这笔钱」。拿后一个同意去顶前一个，闸门等于没有。
+     *
+     * 所以这一步能不能跑，只由这位 Agent 的自主上限决定：
+     * 上限到「花钱」就跑，否则第一镜就会回 needsApproval，整批停下并
+     * 说清该怎么办（见下面那个分支）。
+     */
+    approved: false,
     cfg: ctx.agents[ctx.agentId],
     globals: ctx.globalModels,
     providers: st.providers,
@@ -871,6 +881,18 @@ async function* runVideoBatchOnDesktop(
         fails.push({ id: shot.id, why: '工具回了补丁但没有文件路径' });
         yield { t: 'delta', text: `· ${shot.id} 失败：没拿到文件\n` };
       }
+    } else if (out.t === 'needsApproval') {
+      // 闸门拦下了，而且这是**整批**的事，不是这一镜的事 —— 第一镜就停。
+      // 不在这儿伪造一个同意：那个开关的意思是「人真的点过」
+      yield {
+        t: 'delta',
+        text: `\n停下了：${out.why}\n\n`
+          + '出视频是花钱的动作，默认要人一镜一镜点同意，批量跑不了。两条路：\n'
+          + '· 在「智能体管理」里把这位的自主上限调到「花钱」，然后重跑这一步；\n'
+          + '· 或者在分镜页点单镜生成 —— 那里每一镜都有同意卡。\n',
+      };
+      yield { t: 'done' };
+      return;
     } else if (out.t === 'needsSetup') {
       // 缺模型/密钥是**整批**的问题，不是这一镜的问题 —— 第一镜就停，
       // 不要拿同一个配置错误把 18 镜各撞一次

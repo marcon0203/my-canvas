@@ -66,7 +66,11 @@ export function AssetInspector({ asset, view }: { asset: Asset; view: AssetView 
 
       {/* 身份信息：设定 / 引用 / 音色 —— 属于这个资产本身，跟名称在一起 */}
       <div className="apv__meta">
-        <p className="apv__desc">{asset.desc}</p>
+        {/* 刚从剧本提取出来的资产没有描述。如实说「还没有」，
+            而不是塞一句「待补描述」—— 那句话会被编进出图提示词 */}
+        <p className={`apv__desc${asset.desc.trim() ? '' : ' dim'}`}>
+          {asset.desc.trim() || '还没有描述。定稿前补一句「它长什么样」，出图会用到这句。'}
+        </p>
         <div className="apv__facts">
           <span><Icon name="layers" />{users} 个镜头引用了 <span className="mono">{asset.aid}</span></span>
           {asset.voice && <span><Icon name="mic" />{asset.voice}</span>}

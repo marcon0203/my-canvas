@@ -70,7 +70,7 @@ describe('真实用量记账', () => {
   });
 
   it('老项目没有这几个字段，读回来是 0 而不是 NaN', () => {
-    const old = structuredClone(MOCK_PROJECTS['p1']!) as Record<string, unknown>;
+    const old = structuredClone(MOCK_PROJECTS['p1']!) as unknown as Record<string, unknown>;
     delete old.inputTokens;
     delete old.outputTokens;
     delete old.unreportedRuns;
