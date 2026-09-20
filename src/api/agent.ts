@@ -3,7 +3,7 @@ import { plan } from '@/domain/agent/plans';
 import { route } from '@/domain/agent/router';
 import { personaById } from '@/domain/agent/roster';
 import { canHandleConfigured, ownerOfConfigured } from '@/domain/agent/config';
-import type { Handoff, IntentKind, Plan, Proposal, ProposalPatch } from '@/domain/agent/types';
+import type { Handoff, IntentKind, Plan, PlanStep, Proposal, ProposalPatch } from '@/domain/agent/types';
 import { TOOLS, type ToolId } from '@/domain/agent/tools';
 import { secText } from '@/domain/clips/model';
 import {
@@ -190,7 +190,7 @@ const OUTLINE_STEPS = [
   { icon: 'spark', label: '读取灵感与现有结构' },
   { icon: 'map', label: '让模型出结构' },
   { icon: 'book', label: '编号并落成场次' },
-];
+] satisfies PlanStep[];
 
 /**
  * 桌面端的「起草大纲」：Rust 侧跑 Rig，事件经 Channel 回来。
@@ -232,7 +232,7 @@ const EXPAND_STEPS = [
   { icon: 'map', label: '读这一场与前后场次' },
   { icon: 'spark', label: '让模型给三条走向' },
   { icon: 'book', label: '收拾成可选的几条' },
-];
+] satisfies PlanStep[];
 
 /** 选中的那一场。没选就取第一场；一场都没有返回 undefined */
 export const selectedBeat = (ctx: AgentContext) =>
@@ -312,7 +312,7 @@ const PROMPT_STEPS = [
   { icon: 'text', label: '清点缺提示词的镜头' },
   { icon: 'users', label: '让模型按引用合成' },
   { icon: 'wand', label: '核对镜号并落回' },
-];
+] satisfies PlanStep[];
 
 /**
  * 桌面端的「补写提示词」。
@@ -385,7 +385,7 @@ const SCRIPT_STEPS = [
   { icon: 'book', label: '读这一场与前一场的结尾' },
   { icon: 'users', label: '让模型写正文' },
   { icon: 'text', label: '拼成正文块' },
-];
+] satisfies PlanStep[];
 
 /** 前一场正文的结尾几行。**这一场要接得上它** —— 见 Rust 侧 script.rs 的说明 */
 const PREV_TAIL_LINES = 6;
@@ -474,7 +474,7 @@ const ASSETS_STEPS = [
   { icon: 'book', label: '读剧本正文' },
   { icon: 'users', label: '让模型找出反复出现的人和地方' },
   { icon: 'layers', label: '比对资产库，建成草稿' },
-];
+] satisfies PlanStep[];
 
 /** 剧本正文送多少字。整本几万字送进去只是烧钱 —— 资产在前几场就出全了 */
 const SCRIPT_CHARS = 8000;
@@ -550,7 +550,7 @@ const SHOTS_STEPS = [
   { icon: 'map', label: '找出没镜头的场次' },
   { icon: 'layers', label: '让模型按这几场各自拆' },
   { icon: 'image', label: '编号并挂上资产引用' },
-];
+] satisfies PlanStep[];
 
 export function shotsInput(ctx: AgentContext): ShotsInput {
   const need = beatsWithoutShots(ctx);

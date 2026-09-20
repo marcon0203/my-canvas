@@ -13,6 +13,7 @@ import { compileShot, segmentsText } from '@/domain/prompt/compile';
 import { STYLES } from '@/domain/prompt/vocabulary';
 import { submitGen, type GenTask } from '@/api/generation';
 import type { Shot, Verdict } from '@/domain/shots/model';
+import { awaitingCall, countAwaiting, countUsable, usable } from '@/domain/shots/usable';
 
 /** 分镜控制台：左树（TreeGroup/TreeItem）+ 右单镜工作台（RunBar/TakeGrid/VerdictToggle/PromptBox） */
 export function StoryboardPage() {
@@ -20,7 +21,8 @@ export function StoryboardPage() {
   const acts = useProject((s) => s.acts);
   const stylePrompt = useProject((s) => s.stylePrompt);
   const assets = useAssetList();
-  const usableN = shots.filter((s) => s.verdict === 'ok').length;
+  const usableN = countUsable(shots);
+  const awaitingN = countAwaiting(shots);
   const tries = shots.reduce((n, s) => n + s.takes, 0);
   const hit = tries ? Math.round((usableN / tries) * 100) : 0;
 
@@ -95,8 +97,10 @@ export function StoryboardPage() {
       <StageBar
         title="Storyboard"
         pills={<>
-          <Chip>{usableN}/{shots.length} 可用</Chip>
-          <Chip tone={hit >= 25 ? 'ok' : 'warn'}><Icon name="bolt" />命中率 {hit}%</Chip>
+          <Chip>{usableN}/{shots.length} 判定可用</Chip>
+          {awaitingN > 0
+            ? <Chip tone="warn"><Icon name="eye" />{awaitingN} 段待判定，命中率暂时算不准</Chip>
+            : <Chip tone={hit >= 25 ? 'ok' : 'warn'}><Icon name="bolt" />命中率 {hit}%</Chip>}
         </>}
         actions={<>
           <Button onClick={() => { useProject.getState().genAllKeys(); toast('生成关键帧 · 消耗 10 积分'); }}>
@@ -128,7 +132,7 @@ export function StoryboardPage() {
               const byAid = (aid: string) => assets.find((a) => a.aid === aid);
               return (
                 <TreeGroup key={g} title={`${g}${beat ? ' · ' + beat.t : ''}`}
-                  count={`${list.filter((s) => s.verdict === 'ok').length}/${list.length} 可用`}>
+                  count={`${list.filter(usable).length}/${list.length} 判定可用`}>
                   {list.map((s) => {
                     const warn = unlockedRefs(s, byAid).length > 0 || driftedRefs(s, byAid).length > 0;
                     const running = runningIds.has(s.id);
@@ -139,7 +143,10 @@ export function StoryboardPage() {
                       : s.verdict === 'ok' ? { text: '可用', color: 'var(--color-success)' }
                       : s.verdict === 'redo' ? { text: '重摇', color: 'var(--color-warning)' }
                       : s.vid === 'run' ? { text: '生成中', color: 'var(--color-accent)' }
-                      : { text: '未判定', color: 'var(--color-text-tertiary)' };
+                      // 「出过片但没判」和「还没出片」曾经都显示成「未判定」，
+                      // 于是人分不清该去判定还是该去生成
+                      : awaitingCall(s) ? { text: '待判定', color: 'var(--color-accent)' }
+                      : { text: '未出片', color: 'var(--color-text-tertiary)' };
                     return (
                       <TreeItem key={s.id} asset selected={s.id === cur?.id}
                         onClick={() => selectShot(s.id)}

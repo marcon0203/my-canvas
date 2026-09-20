@@ -1,3 +1,4 @@
+import type { IconName } from '@/ui/Icon';
 import type { Asset, AssetGroup, Rig } from '@/domain/assets/model';
 import type { Shot } from '@/domain/shots/model';
 import type { Act, DocBlock } from '@/domain/story/model';
@@ -80,7 +81,7 @@ export interface Proposal {
 
 /** 计划里的一步：界面上是一张会自己走完的工具卡 */
 export interface PlanStep {
-  readonly icon: string;
+  readonly icon: IconName;
   readonly label: string;
   /** 这步结束时补一句说明，没有则不显示 */
   readonly note?: string;

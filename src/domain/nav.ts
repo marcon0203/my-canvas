@@ -1,3 +1,4 @@
+import type { IconName } from '@/ui/Icon';
 /**
  * 导航结构：一级（图标栏）+ 二级（子菜单）。
  * 纯数据，路由与界面都从这里取，避免两处各写一份对不上。
@@ -10,14 +11,14 @@ export type SectionId = 'workbench' | 'resources' | 'settings';
 export interface SubItem {
   readonly k: string;
   readonly n: string;
-  readonly icon: string;
+  readonly icon: IconName;
   readonly hint?: string;
 }
 
 export interface Section {
   readonly id: SectionId;
   readonly n: string;
-  readonly icon: string;
+  readonly icon: IconName;
   /** 二级菜单。工作台的二级随项目走，在界面里拼 */
   readonly sub?: readonly SubItem[];
   /** 还没实现：入口在，点进去说明白 */

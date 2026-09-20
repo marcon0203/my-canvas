@@ -6,6 +6,7 @@ import { useProject } from '@/store/project';
 import { useUi } from '@/store/ui';
 import { useAgent } from '@/store/agent';
 import { secText, totalMs, type Cue } from '@/domain/clips/model';
+import { countAwaiting, cutReady, cutReadyDur, hasClip } from '@/domain/shots/usable';
 
 /** 剪辑页：原型 viewEdit 同构（.player + .tl 三轨 + 右侧 .blk） */
 export function EditingPage() {
@@ -23,8 +24,11 @@ export function EditingPage() {
   if (!cur) {
     return <div className="stage"><div className="stage__body"><p className="t-cap dim">还没有镜头 — 先去分镜添加。</p></div></div>;
   }
-  const done = shots.filter((s) => s.vid === 'ok');
-  const okDur = done.reduce((n, s) => n + s.dur, 0);
+  // 「可入片」而不是「可用」：出过片就能排进时间线，但可用是人判定出来的。
+  // 这两个曾经在界面上都写作「可用」，于是剪辑页说 18 段、数据页说 0 段
+  const ready = shots.filter(cutReady);
+  const readyDur = cutReadyDur(shots);
+  const awaiting = countAwaiting(shots);
   // 排过时间线就按它画；没排过就按分镜顺序预览 —— 两者要看得出区别，
   // 否则「排时间线」这一步跑没跑过，界面上完全一样
   const planned = timeline.clips.length > 0;
@@ -42,9 +46,12 @@ export function EditingPage() {
     <div className="stage">
       <StageBar
         title="Editing"
-        pills={planned
-          ? <Chip tone="ok">已排 {timeline.clips.length} 段 · {secText(filmMs)}{timeline.beatMs ? ` · 卡点 ${timeline.beatMs}ms` : ''}</Chip>
-          : <Chip>{done.length} 段可用 · {okDur}s（还没排时间线）</Chip>}
+        pills={<>
+          {planned
+            ? <Chip tone="ok">已排 {timeline.clips.length} 段 · {secText(filmMs)}{timeline.beatMs ? ` · 卡点 ${timeline.beatMs}ms` : ''}</Chip>
+            : <Chip>{ready.length} 段可入片 · {readyDur}s（还没排时间线）</Chip>}
+          {awaiting > 0 && <Chip tone="warn">{awaiting} 段待判定</Chip>}
+        </>}
         actions={<>
           <Button onClick={() => runTool('edit.timeline')}>
             <Icon name="scissors" />排时间线
@@ -63,7 +70,7 @@ export function EditingPage() {
       <div className="stage__body"><div className="edit">
         <div>
           <div className="player">
-            {cur.vid === 'ok'
+            {hasClip(cur)
               ? <video src={vidUrl(cur.id)} poster={imgUrlFor(cur.id, 'tall')} autoPlay muted loop playsInline />
               : <img className="ph" src={imgUrlFor(cur.id, 'tall')} alt={cur.id} />}
           </div>
@@ -82,7 +89,7 @@ export function EditingPage() {
                       style={{ width: wOf(ms), background: 'var(--color-bg-muted)' }}
                       onClick={() => setUi('clipSel', id)}
                       onKeyDown={(e) => { if (e.key === 'Enter') setUi('clipSel', id); }}>
-                      {sh?.vid === 'ok' && <img className="ph" src={imgUrlFor(id, 'wide')} alt="" />}
+                      {sh && hasClip(sh) && <img className="ph" src={imgUrlFor(id, 'wide')} alt="" />}
                       <span>{secText(ms)}</span>
                     </div>
                   );

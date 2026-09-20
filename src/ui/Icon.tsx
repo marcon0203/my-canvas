@@ -1,8 +1,14 @@
 import type { ReactNode } from 'react';
 import { cn } from '@/lib/cn';
 
-/** 线性图标注册表：24 viewBox、stroke 1.8、currentColor */
-const PATHS: Record<string, ReactNode> = {
+/**
+ * 线性图标注册表：24 viewBox、stroke 1.8、currentColor。
+ *
+ * 用 `satisfies` 而不是 `: Record<string, ReactNode>` —— 后者会把
+ * `keyof typeof PATHS` 压成 `string`，于是 `IconName` 形同虚设，
+ * 打错的图标名一个都拦不住（首页那三张卡就是这么漏过去的）。
+ */
+const PATHS = {
   home: <><path d="M3 10.5 12 3l9 7.5" /><path d="M5 9.5V21h14V9.5" /></>,
   grid: <><rect x="3" y="3" width="7.5" height="7.5" rx="1.5" /><rect x="13.5" y="3" width="7.5" height="7.5" rx="1.5" /><rect x="3" y="13.5" width="7.5" height="7.5" rx="1.5" /><rect x="13.5" y="13.5" width="7.5" height="7.5" rx="1.5" /></>,
   bolt: <path d="M13 2 4.5 13.5H11L10 22l8.5-11.5H13z" />,
@@ -36,16 +42,27 @@ const PATHS: Record<string, ReactNode> = {
   trash: <><path d="M4 6h16M9 6V4h6v2M6.5 6 8 21h8l1.5-15" /><path d="M10 10.5v6M14 10.5v6" /></>,
   undo: <><path d="M4 9h9a6 6 0 0 1 0 12H8" /><path d="M8 5 4 9l4 4" /></>,
   redo: <><path d="M20 9h-9a6 6 0 0 0 0 12h5" /><path d="m16 5 4 4-4 4" /></>,
-};
+  eye: <><path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12" /><circle cx="12" cy="12" r="3" /></>,
+  /** 手柄：互动影像（FMV）入口 */
+  game: <><rect x="2.5" y="7" width="19" height="10" rx="4.5" /><path d="M7 10v4M5 12h4" /><circle cx="16" cy="11" r="1" /><circle cx="18.5" cy="13.5" r="1" /></>,
+  /** 笑脸：梗图短剧入口 */
+  smile: <><circle cx="12" cy="12" r="9" /><path d="M8.5 14.5a4.5 4.5 0 0 0 7 0" /><path d="M9 9.5v.01M15 9.5v.01" /></>,
+} satisfies Record<string, ReactNode>;
 
 export type IconName = keyof typeof PATHS;
 
-export function Icon({ name, size = 18, className }: { name: string; size?: number; className?: string }) {
+/**
+ * `name` 收成 `IconName` 而不是 `string` —— 走查时发现首页三张模式卡分别写了
+ * `game` / `smile`，两个名字都不在表里，于是三张卡都静默回退成 `PATHS.image`，
+ * 看起来一模一样。宽松的 `string` 让这种错一路滑到界面上。
+ * 现在打错名字是编译错误。
+ */
+export function Icon({ name, size = 18, className }: { name: IconName; size?: number; className?: string }) {
   return (
     <svg viewBox="0 0 24 24" width={size} height={size} fill="none" aria-hidden="true"
       stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"
       className={cn('shrink-0', className)}>
-      {PATHS[name] ?? PATHS.image}
+      {PATHS[name]}
     </svg>
   );
 }

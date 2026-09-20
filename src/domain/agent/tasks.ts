@@ -1,3 +1,4 @@
+import type { IconName } from '@/ui/Icon';
 import { RULES, ACT, TOPIC } from './router';
 import { INTENT_META } from './roster';
 import { TOOLS_FOR_INTENT } from './tools';
@@ -22,7 +23,7 @@ export type Impl =
 export interface TaskSpec {
   readonly id: TaskId;
   readonly name: string;
-  readonly icon: string;
+  readonly icon: IconName;
   /** 一句话：这件任务到底做什么 */
   readonly summary: string;
   /** 前置条件。不满足时 Agent 明说不行，而不是假装做了 */

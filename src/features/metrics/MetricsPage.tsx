@@ -2,7 +2,8 @@ import { Icon } from '@/ui/Icon';
 import { AttributionBar, MetricCard } from '@/components/MetricCard';
 import { Chip } from '@/ui';
 import { StageBar } from '@/components/StageBar';
-import { byModel, bySize, hitRate, totalTries, usableShots } from '@/domain/metrics/model';
+import { byModel, bySize, hitRate, totalTries } from '@/domain/metrics/model';
+import { countAwaiting, countUsable, usable as isUsable } from '@/domain/shots/usable';
 import { useProject, useAssetList } from '@/store/project';
 import { useUi, type Step } from '@/store/ui';
 
@@ -19,8 +20,11 @@ export function MetricsPage() {
   const spent = budget - credits;
   const hit = hitRate(shots);
   const tries = totalTries(shots);
-  const usable = usableShots(shots);
-  const okDur = shots.filter((s) => s.verdict === 'ok').reduce((n, s) => n + s.dur, 0);
+  const usable = countUsable(shots);
+  // 出过片但没判定的数量。命中率为 0 多半是因为它不为零 —— 界面要说出这件事，
+  // 不能只把 0% 摆着让人以为模型很差
+  const awaiting = countAwaiting(shots);
+  const okDur = shots.filter(isUsable).reduce((n, s) => n + s.dur, 0);
   const totalDur = shots.reduce((n, s) => n + s.dur, 0);
   const lockedN = assets.filter((a) => a.status === 'locked').length;
 
@@ -31,8 +35,12 @@ export function MetricsPage() {
     ['剧情大纲', 'Plot outline', `${acts.length} 幕 · ${acts.flatMap((a) => a.beats).length} 场`, 1, 'outline'],
     ['剧本', 'Script', `${blocks.length} 个块`, 1, 'script'],
     ['资产', 'Assets', `${lockedN}/${assets.length} 已定稿`, assets.length ? lockedN / assets.length : 0, 'assets'],
-    ['分镜', 'Storyboard', `${usable}/${shots.length} 可用 · 命中率 ${hit}%`, shots.length ? usable / shots.length : 0, 'storyboard'],
-    ['剪辑', 'Editing', `${okDur}s / ${totalDur}s 可用素材`, totalDur ? okDur / totalDur : 0, 'editing'],
+    ['分镜', 'Storyboard',
+      awaiting
+        ? `${usable}/${shots.length} 判定可用 · ${awaiting} 段待判定`
+        : `${usable}/${shots.length} 判定可用 · 命中率 ${hit}%`,
+      shots.length ? usable / shots.length : 0, 'storyboard'],
+    ['剪辑', 'Editing', `${okDur}s / ${totalDur}s 判定可用`, totalDur ? okDur / totalDur : 0, 'editing'],
   ];
 
   return (
@@ -64,9 +72,20 @@ export function MetricsPage() {
             </div>
             <div className="mstats">
               <MetricCard label="累计生成" value={tries} />
-              <MetricCard label="可用镜头" value={usable} />
+              <MetricCard label="判定可用" value={usable} />
               <MetricCard label="单条可用成本" value={usable ? (spent / usable).toFixed(1) : '—'} unit="积分" />
             </div>
+            {awaiting > 0 && (
+              <button className="mhint" onClick={() => setStep('storyboard')}>
+                <Icon name="eye" />
+                <span>
+                  还有 <b>{awaiting}</b> 段出过片但没判定
+                  {usable === 0 && ' —— 命中率因此是 0%，不是模型不行'}。
+                  逐镜判定「可用 / 重摇」之后这里才算得准。
+                </span>
+                <span className="mhint__go">去分镜页判定</span>
+              </button>
+            )}
           </div>
         </div></div>
 

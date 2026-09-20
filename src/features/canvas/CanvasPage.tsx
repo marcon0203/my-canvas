@@ -1,7 +1,7 @@
 import { useCallback, useRef, useState } from 'react';
 import { StageBar } from '@/components/StageBar';
 import { Chip } from '@/ui';
-import { Icon } from '@/ui/Icon';
+import { Icon , type IconName} from '@/ui/Icon';
 import { imgUrlFor } from '@/lib/media';
 import { useProject } from '@/store/project';
 import { useUi } from '@/store/ui';
@@ -23,7 +23,7 @@ interface CvNode {
 }
 
 const NH: Record<CvNode['k'], number> = { idea: 68, story: 68, image: 150, video: 150 };
-const KIND: Record<CvNode['k'], [string, string, string]> = {
+const KIND: Record<CvNode['k'], [IconName, string, string]> = {
   idea: ['spark', 'Idea', 'var(--color-data-1)'],
   story: ['book', 'Story', 'var(--color-data-2)'],
   image: ['image', 'Image', 'var(--color-data-3)'],

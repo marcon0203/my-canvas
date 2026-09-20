@@ -1,3 +1,4 @@
+import type { IconName } from '@/ui/Icon';
 import type { ReactNode } from 'react';
 import { cn } from '@/lib/cn';
 import { Icon } from './Icon';
@@ -6,7 +7,7 @@ import { Icon } from './Icon';
 export function IconButton({
   icon, label, round = false, active = false, className, size = 18, children, ...rest
 }: {
-  icon: string;
+  icon: IconName;
   label: string;
   round?: boolean;
   active?: boolean;

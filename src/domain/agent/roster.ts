@@ -1,3 +1,4 @@
+import type { IconName } from '@/ui/Icon';
 import type { IntentKind } from './types';
 
 /**
@@ -24,7 +25,7 @@ export interface Persona {
   readonly custom?: boolean;
   readonly name: string;
   readonly en: string;
-  readonly icon: string;
+  readonly icon: IconName;
   /** 一句专长，显示在侧栏抬头 */
   readonly tagline: string;
   /** 主场环节。第一个是转交时要跳过去的那个 */
@@ -215,7 +216,7 @@ export const canHandle = (p: Persona, kind: IntentKind): boolean =>
 /* ---------------- 新建一位 ---------------- */
 
 /** 可以给自定义 Agent 挑的图标。都是界面上已有的那套，不另引一套 */
-export const AGENT_ICONS: readonly string[] = [
+export const AGENT_ICONS: readonly IconName[] = [
   'users', 'book', 'video', 'scissors', 'bolt', 'wand', 'map', 'layers', 'image', 'spark',
 ];
 
@@ -238,6 +239,11 @@ export function nextAgentId(existing: readonly AgentId[]): AgentId {
 export interface NewAgent {
   readonly name: string;
   readonly tagline: string;
+  /**
+   * 表单里填的、或是从旧版配置里读出来的 —— 所以这层收 `string`，
+   * 在 `makeCustomPersona` 里归一到 `AGENT_ICONS`。
+   * 界面往下传的 `Persona.icon` 才是 `IconName`。
+   */
   readonly icon: string;
   readonly preamble: string;
   readonly owns: readonly IntentKind[];
@@ -256,7 +262,7 @@ export function makeCustomPersona(id: AgentId, a: NewAgent): Persona {
     custom: true,
     name: a.name.trim() || id,
     en: '',
-    icon: AGENT_ICONS.includes(a.icon) ? a.icon : 'users',
+    icon: (AGENT_ICONS as readonly string[]).includes(a.icon) ? (a.icon as IconName) : 'users',
     tagline: a.tagline.trim(),
     steps: [],
     owns: [...a.owns],
@@ -282,13 +288,13 @@ export function copyOfPersona(src: Persona, id: AgentId, name?: string): Persona
 /* ---------------- 技能卡 ---------------- */
 
 export interface Skill {
-  readonly icon: string;
+  readonly icon: IconName;
   readonly name: string;
   readonly kind: IntentKind;
 }
 
 /** 意图的展示元数据。技能卡与转交提示共用同一份，避免两处措辞打架 */
-export const INTENT_META: Record<Exclude<IntentKind, 'chat'>, { icon: string; name: string }> = {
+export const INTENT_META: Record<Exclude<IntentKind, 'chat'>, { icon: IconName; name: string }> = {
   'outline.draft': { icon: 'spark', name: '从一句灵感起草大纲' },
   'outline.expand': { icon: 'map', name: '延展这一场的剧情走向' },
   'script.draft': { icon: 'text', name: '为选中场次写正文' },

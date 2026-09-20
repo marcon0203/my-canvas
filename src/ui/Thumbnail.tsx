@@ -1,3 +1,4 @@
+import type { IconName } from '@/ui/Icon';
 import type { ReactNode } from 'react';
 import { cn } from '@/lib/cn';
 import { Icon } from './Icon';
@@ -20,7 +21,7 @@ export function Thumbnail({ src, ratio = 'tall', selected = false, alt = '',
   alt?: string;
   badge?: ReactNode;
   /** 未生成时的空态图标名 */
-  empty?: string;
+  empty?: IconName;
   onClick?: () => void;
   className?: string;
   imgClass?: string;

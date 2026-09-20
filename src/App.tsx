@@ -1,3 +1,4 @@
+import type { IconName } from '@/ui/Icon';
 import { useEffect } from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { createBrowserRouter, RouterProvider, Navigate, useParams, useNavigate } from 'react-router';
@@ -91,7 +92,7 @@ function Shell({ section, sub, onSub, top = false, children, aside }: {
     title: string;
     meta?: React.ReactNode;
     back?: { label: string; onClick: () => void };
-    items: readonly { k: string; n: string; icon: string; hint?: string }[];
+    items: readonly { k: string; n: string; icon: IconName; hint?: string }[];
     active: string;
     footer?: React.ReactNode;
   };

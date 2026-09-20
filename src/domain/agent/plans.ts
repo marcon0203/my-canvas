@@ -1,3 +1,4 @@
+import type { IconName } from '@/ui/Icon';
 import { hitRate, totalTries, usableShots } from '@/domain/metrics/model';
 import { STYLES } from '@/domain/prompt/vocabulary';
 import { STYLEMAP } from '@/domain/prompt/vocabulary';
@@ -9,6 +10,7 @@ import {
   draftShotPrompt, draftShots, extractCandidates, polishBody, shotsMissingPrompt, ungeneratedViews,
 } from './drafts';
 import type { IntentKind, Plan, PlanStep, PreviewRow, Proposal } from './types';
+import { cutReady, cutReadyDur, needsClip } from '@/domain/shots/usable';
 
 /**
  * 意图 → 计划。每个计划都是纯函数 (ctx) => Plan：
@@ -16,7 +18,7 @@ import type { IntentKind, Plan, PlanStep, PreviewRow, Proposal } from './types';
  * 前置条件不满足时返回 blocked —— Agent 说不行，而不是假装做了。
  */
 
-const step = (icon: string, label: string, note?: string): PlanStep => ({ icon, label, note });
+const step = (icon: IconName, label: string, note?: string): PlanStep => ({ icon, label, note });
 
 const blocked = (kind: IntentKind, why: string): Plan => ({ kind, steps: [], reply: why, blocked: why });
 
@@ -198,7 +200,7 @@ function planStyleTransfer(c: AgentContext): Plan {
 }
 
 function planVideoBatch(c: AgentContext): Plan {
-  const pending = c.shots.filter((s) => s.vid === 'none');
+  const pending = c.shots.filter(needsClip);
   if (!pending.length) return blocked('video.batch', '没有待转的镜头了，都出过视频。');
   const cost = pending.length * 4;
   return {
@@ -215,9 +217,16 @@ function planVideoBatch(c: AgentContext): Plan {
 }
 
 function planAutocut(c: AgentContext): Plan {
-  const done = c.shots.filter((s) => s.vid === 'ok');
-  if (!done.length) return blocked('edit.autocut', '还没有可用的视频片段。先批量转视频，再逐镜判定。');
-  const dur = done.reduce((n, s) => n + s.dur, 0);
+  // 「能入片」而不是「判定可用」：刚跑完 18 镜的人点自动成片不该得到空时间线，
+  // 他没做错任何事。判过「重摇」的才排除
+  const done = c.shots.filter(cutReady);
+  if (!done.length) {
+    const pending = c.shots.filter(needsClip).length;
+    return blocked('edit.autocut', pending
+      ? `还没有能入片的片段 —— ${pending} 镜还没出过视频，先批量转视频。`
+      : '所有出过片的镜头都被判成了「重摇」，没有能入片的片段。改提示词重出，或把其中几镜改判可用。');
+  }
+  const dur = cutReadyDur(c.shots);
   return {
     kind: 'edit.autocut',
     steps: [step('scissors', `取 ${done.length} 段可用素材`), step('bolt', '按场次顺序与时长配平')],

@@ -1,3 +1,4 @@
+import type { IconName } from '@/ui/Icon';
 import { Icon } from './Icon';
 
 /**
@@ -9,7 +10,7 @@ import { Icon } from './Icon';
  * 图片格子里的那种覆盖层继续用 `.card__none` 裸写在格子旁边，那儿父容器是确定的。
  */
 export function EmptyState({ icon = 'image', text }: {
-  icon?: string;
+  icon?: IconName;
   text?: string;
 }) {
   return (

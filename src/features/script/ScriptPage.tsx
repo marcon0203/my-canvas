@@ -1,7 +1,7 @@
 import { useRef } from 'react';
 import { Button, Segmented } from '@/ui';
 import { StageBar } from '@/components/StageBar';
-import { Icon } from '@/ui/Icon';
+import { Icon , type IconName} from '@/ui/Icon';
 import { useProject } from '@/store/project';
 import { useUi } from '@/store/ui';
 import { useAgent } from '@/store/agent';
@@ -12,7 +12,7 @@ const TABS = [
   { k: 'text', n: '正文' },
 ] as const;
 
-const TYPE_ICON: Record<string, string> = { character: 'users', outline: 'book', text: 'text' };
+const TYPE_ICON: Record<string, IconName> = { character: 'users', outline: 'book', text: 'text' };
 
 /** 剧本页：原型 viewScript 同构（.segwrap/.seg 分区 + .doc/.blk 文档块，双击编辑） */
 export function ScriptPage() {
